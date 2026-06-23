@@ -1,5 +1,5 @@
 /*Disease considered: mMelanoma
-Diagnosis Code (ICD 10): '%IC43%', '%IC77%', '%IC78%', '%IC79%'
+Diagnosis Code (ICD 10): '%C43%', '%C77%', '%C78%', '%C79%'
 Drugs Considered:
 Yervoy (Ipilimumab) - per NDC guidelines
 Opdualag (nivolumab & relatlimab-rmbw) - per NDC guidelines
@@ -39,8 +39,8 @@ FROM
     COMPILE_CLAIMS.OPEN_CLAIMS.IOV2501_MEDICAL_CLAIMS
 WHERE 
     D_PATIENT_ID <> 'XXX - HIDDEN'
-    AND D_DIAGNOSIS_CODE_ALL ILIKE ANY ('%IC43%')
-    AND D_DIAGNOSIS_CODE_ALL ILIKE ANY ('%IC77%', '%IC78%', '%IC79%')
+    AND D_DIAGNOSIS_CODE_ALL ILIKE ANY ('%C43%')
+    AND D_DIAGNOSIS_CODE_ALL ILIKE ANY ('%C77%', '%C78%', '%C79%')
     AND YEAR(DATE_OF_SERVICE) in (2021, 2022, 2023, 2024, 2025)   --CONFIRM: 5yr window (was 2024,2025)
 ),
 
@@ -204,8 +204,8 @@ FROM
     COMPILE_CLAIMS.OPEN_CLAIMS.IOV2501_MEDICAL_CLAIMS
 WHERE 
     D_PATIENT_ID <> 'XXX - HIDDEN'
-    AND D_DIAGNOSIS_CODE_ALL ILIKE ANY ('%IC43%')
-    AND D_DIAGNOSIS_CODE_ALL ILIKE ANY ('%IC77%', '%IC78%', '%IC79%')
+    AND D_DIAGNOSIS_CODE_ALL ILIKE ANY ('%C43%')
+    AND D_DIAGNOSIS_CODE_ALL ILIKE ANY ('%C77%', '%C78%', '%C79%')
     AND YEAR(DATE_OF_SERVICE) in (2021, 2022, 2023, 2024, 2025)
 ),
 
