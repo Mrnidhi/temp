@@ -155,3 +155,34 @@ GROUP BY
 ORDER BY 
     PATIENTS DESC
 ;
+
+
+
+/* 
+
+I have an Excel file open with our Authorized Treatment Center (ATC) list. I need to describe its structure precisely to a colleague who will use it to join against medical claims data in Snowflake. Please look at the file and tell me:
+
+1. SHEET NAMES: List every tab/sheet in the workbook. For each, one line on what it appears to contain.
+
+2. For the main ATC tab (the one with the list of treatment centers), give me:
+   a. The exact column headers, in order, written exactly as they appear (including any spaces, slashes, or parentheses).
+   b. For each column, what it contains and an example value or two from the data rows.
+   c. The total number of ATC rows (centers) listed.
+
+3. ID COLUMNS — this is the most important part: Identify any column that looks like an identifier that could join to claims data. I'm specifically looking for:
+   - An HCO "compile ID" (a long numeric or alphanumeric internal ID)
+   - An NPI (10-digit number)
+   - Anything labeled "McKesson", "Compile", "HCO", or "ID"
+   For each such column, give the header name exactly and 2-3 example values.
+
+4. STATUS: Is there a column indicating whether each center is "Authorized" vs "Planned" (or similar)? Give the exact column name and list all the distinct values that appear in it, with a rough count of each.
+
+5. PARENT vs SITE: Does the list represent individual treatment centers (sites), or parent organizations, or both? For example, is something like "Texas Oncology" or "Florida Cancer" shown as one single row (a parent), or as many separate rows (individual locations)? Tell me which, and point to any column that distinguishes parent from site.
+
+6. NAME COLUMNS: List any columns containing center names, and note if there's both a full/legal name and a short/abbreviated name.
+
+7. Anything else notable — extra columns (region, CTAM/RAD assignment, state, etc.), blank/missing values, or anything that looks inconsistent.
+
+Please present this as plain text I can copy, not a summary paragraph. Exact column names matter most.
+
+*/
