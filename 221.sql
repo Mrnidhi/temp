@@ -1,3 +1,35 @@
+/* ============================================================================
+   Diagnosed & Treated Patients - ATC vs Non-ATC Split
+
+   Business question:
+       For metastatic melanoma patients diagnosed and treated with Yervoy or
+       Opdualag from 2021-2025, what share of patients were treated at an
+       Authorized Treatment Center versus a non-ATC site of care?
+
+   Outputs:
+
+   BASE TABLES
+       ATC_CLASSIFIED_FINAL    one row per patient, hybrid classification
+       ATC_PATIENT_HCO_YEAR    patient x HCO x year (trend, overlap)
+       ATC_TREATMENT_CLAIMS    claim level with dates and drug (journey, timing)
+       STATE_REGION_MAP        state to region lookup
+
+   INSIGHTS
+       1  Headline split (ATC vs Non-ATC)
+       2  Classification confidence
+       3  ATC share by treatment year
+       4  ATC-assigned patients with non-ATC activity
+       5  Leakage concentration by account
+       6  Community network share of leakage
+       7  Regional ATC penetration
+       8  Patient journey (first vs last treatment site)
+       9  Treatment persistence by starting site
+      10  Time from diagnosis to first treatment
+      11  Drug mix (Yervoy vs Opdualag)
+      12  ATC performance profile
+   ============================================================================ */
+
+
 SET fallback_state_limit = 2;
 
 
