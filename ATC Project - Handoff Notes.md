@@ -155,3 +155,66 @@ differences. Tidy them (in the loaded table or via a small mapping) so they matc
 See the companion file: `Diagnosised & Treated Patients - Site of Care Split.sql`.
 It contains the main split query plus CHECK A (unmatched names) and CHECK B (blank-parent
 count). Update the loaded-table name in all three spots before running.
+
+
+
+
+-----------------
+
+Good approach. One-shot prompts mean they have to be complete and unambiguous, no room for the tool to guess. Let me think about what kills these prompts: vague layout, missing exact numbers, no styling direction, and leaving the tool to invent data. I'll lock all of that down. I'm writing them so the numbers, positions, and text are fully specified, and matching the Iovance template you already have (navy and lime green, that visual identity).
+One thing I'm deliberately building in: explicit instruction not to invent or add anything, because that's the single biggest failure mode with slide generators, they pad with plausible-sounding extra stats. Your numbers are validated; a hallucinated one would undo all the work.
+Here are the two prompts.
+
+PROMPT — SLIDE 1
+Create a single professional corporate slide for a pharmaceutical leadership presentation. Use a clean navy-blue and lime-green color scheme (corporate biotech style). Do not invent, add, or modify any numbers beyond exactly what I provide.
+
+TITLE (top left, bold, dark navy):
+Non-ATC Settings Drive the Majority of Patient Care
+
+KICKER above title (small, lime-green caps): MARKET STRUCTURE
+
+LEFT HALF — a clean 3-column table titled "Site of Care | Patients | %":
+ATC | 7,584 | 46.7%
+Non-ATC: Hospital-affiliated | 5,488 | 33.8%
+Non-ATC: Physician-owned | 2,012 | 12.4%
+Non-ATC: Private practice | 1,295 | 8.0%
+Use alternating row shading. Bold the ATC row.
+
+RIGHT HALF — three short bullet points:
+- ~53% of patients are treated outside ATCs
+- Hospital-affiliated systems drive the largest share of non-ATC care
+- Non-ATC volume is concentrated in a few large systems with a long tail
+
+BOTTOM — one full-width takeaway bar (lime-green tint) with bold text:
+Most patients are treated outside ATCs, with no consistent pathway routing them into ATC care.
+
+FOOTNOTE (small grey text, bottom edge):
+Source: Komodo medical claims, 2021–2025. Metastatic melanoma patients treated with Yervoy or Opdualag. ATC classified by authorized provider NPI.
+
+Keep it minimal, lots of white space, one slide only, 16:9. No charts, no extra commentary, no added statistics.
+
+PROMPT — SLIDE 2
+Create a single professional corporate slide for a pharmaceutical leadership presentation, matching the same navy-blue and lime-green corporate biotech style as the previous slide. Do not invent, add, or modify any numbers beyond exactly what I provide.
+
+TITLE (top left, bold, dark navy):
+ATCs Deliver Higher Treatment Intensity but Remain Underutilized
+
+KICKER above title (small, lime-green caps): ATC UTILIZATION
+
+LEFT HALF — a clean comparison table with columns "Metric | ATC | Non-ATC":
+Patients | 7,584 | 8,662
+% Patients | 46.7% | 53.3%
+Total Claims | 50,778 | 51,933
+Avg Claims per Patient | 6.7 | 6.0
+Use alternating row shading. Bold the "Avg Claims per Patient" row.
+
+RIGHT HALF — four short bullet points:
+- ATC patients receive higher treatment intensity (6.7 vs 6.0 claims per patient)
+- ATCs deliver similar total treatment volume despite fewer patients
+- Some patients receive care at both ATC and non-ATC sites, pointing to referral activity
+- Non-ATC volume concentrates in a few large systems and community networks, creating targeted expansion opportunities
+
+BOTTOM — one full-width takeaway bar (lime-green tint) with bold text:
+ATCs are the highest-value treatment setting but remain underutilized, with clear opportunity to improve referral pathways and expand access.
+
+Keep it minimal, lots of white space, one slide only, 16:9. No charts, no extra commentary, no added statistics.
