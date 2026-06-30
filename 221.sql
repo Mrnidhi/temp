@@ -107,7 +107,30 @@ LEFT JOIN auth_npi   n ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI
 GROUP BY 1, 2, 3;
 
 
--- Headline split
+-- State to region map (Mid-Atlantic added for VA/MD/DC/DE; merge into
+-- Northeast or Southeast if the business prefers)
+CREATE OR REPLACE TRANSIENT TABLE COMPILE_DEV.PUBLIC.STATE_REGION_MAP AS
+SELECT * FROM VALUES
+    ('CA','West'),('WA','West'),('OR','West'),('NV','West'),('AZ','West'),
+    ('UT','West'),('CO','West'),('ID','West'),('MT','West'),('WY','West'),
+    ('NM','West'),('AK','West'),('HI','West'),
+    ('TX','Central'),('OK','Central'),('KS','Central'),('NE','Central'),
+    ('SD','Central'),('ND','Central'),('AR','Central'),
+    ('IL','Great Lakes'),('MI','Great Lakes'),('WI','Great Lakes'),
+    ('MN','Great Lakes'),('IA','Great Lakes'),('MO','Great Lakes'),
+    ('OH','Ohio Valley'),('IN','Ohio Valley'),('KY','Ohio Valley'),
+    ('TN','Ohio Valley'),('WV','Ohio Valley'),
+    ('FL','Southeast'),('GA','Southeast'),('SC','Southeast'),
+    ('NC','Southeast'),('AL','Southeast'),('MS','Southeast'),('LA','Southeast'),
+    ('NY','Northeast'),('NJ','Northeast'),('PA','Northeast'),
+    ('MA','Northeast'),('CT','Northeast'),('RI','Northeast'),
+    ('NH','Northeast'),('ME','Northeast'),('VT','Northeast'),
+    ('VA','Mid-Atlantic'),('MD','Mid-Atlantic'),('DC','Mid-Atlantic'),
+    ('DE','Mid-Atlantic')
+AS T(STATE, REGION);
+
+
+-- Insight 1: Headline split (ATC vs Non-ATC)
 SELECT
     CLASS_FINAL,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
@@ -127,7 +150,18 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- ATC share by treatment year
+-- Insight 2: Classification confidence (how the ATC count is built)
+SELECT
+    CLASS_HYBRID,
+    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
+    ROUND(100.0 * COUNT(DISTINCT D_PATIENT_ID)
+          / SUM(COUNT(DISTINCT D_PATIENT_ID)) OVER (), 1) AS PCT
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+-- Insight 3: ATC share by treatment year
 SELECT
     TX_YEAR,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS_TREATED,
@@ -139,29 +173,29 @@ GROUP BY 1
 ORDER BY 1;
 
 
--- Site overlap (patients seen at both ATC and non-ATC)
+-- Insight 4: ATC-assigned patients with non-ATC activity (referral / leakage signal)
 WITH pt AS (
     SELECT
         D_PATIENT_ID,
         MAX(IS_ATC_HCO)                                  AS HAS_ATC,
-        MAX(CASE WHEN IS_ATC_HCO = 0 THEN 1 ELSE 0 END)  AS HAS_NON_ATC
+        MAX(CASE WHEN IS_ATC_HCO = 0 THEN 1 ELSE 0 END)  AS HAS_NON_ATC,
+        SUM(CASE WHEN IS_ATC_HCO = 0 THEN CLAIMS ELSE 0 END) AS NON_ATC_CLAIMS
     FROM COMPILE_DEV.PUBLIC.ATC_PATIENT_HCO_YEAR
     GROUP BY 1
 )
 SELECT
-    CASE
-        WHEN HAS_ATC = 1 AND HAS_NON_ATC = 1 THEN 'Both (ATC + community)'
-        WHEN HAS_ATC = 1                     THEN 'ATC only'
-        ELSE 'Non-ATC only'
-    END AS PATIENT_PATTERN,
+    CASE WHEN HAS_NON_ATC = 1 THEN 'ATC + non-ATC activity'
+         ELSE 'ATC only' END AS PATTERN,
     COUNT(*) AS PATIENTS,
-    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT
+    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT_OF_ATC,
+    SUM(NON_ATC_CLAIMS) AS NON_ATC_CLAIMS
 FROM pt
+WHERE HAS_ATC = 1
 GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Leakage concentration by parent account
+-- Insight 5: Leakage concentration by parent account
 WITH leak AS (
     SELECT
         HCO_PARENT_NAME,
@@ -187,7 +221,7 @@ ORDER BY PATIENTS DESC
 LIMIT 25;
 
 
--- Community network share of leakage
+-- Insight 6: Community network share of leakage
 SELECT
     COALESCE(HCO_COMMUNITY_NETWORK, 'Independent / Other') AS NETWORK,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
@@ -199,18 +233,22 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Classification confidence breakdown
+-- Insight 7: Regional ATC penetration
 SELECT
-    CLASS_HYBRID,
-    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
-    ROUND(100.0 * COUNT(DISTINCT D_PATIENT_ID)
-          / SUM(COUNT(DISTINCT D_PATIENT_ID)) OVER (), 1) AS PCT
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+    COALESCE(r.REGION, 'Unmapped') AS REGION,
+    COUNT(DISTINCT a.D_PATIENT_ID) AS TOTAL_PATIENTS,
+    COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC' THEN a.D_PATIENT_ID END) AS ATC_PATIENTS,
+    COUNT(DISTINCT CASE WHEN a.CLASS_FINAL <> 'ATC' THEN a.D_PATIENT_ID END) AS NON_ATC_PATIENTS,
+    ROUND(100.0 * COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC' THEN a.D_PATIENT_ID END)
+          / NULLIF(COUNT(DISTINCT a.D_PATIENT_ID), 0), 1) AS PCT_ATC
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
+LEFT JOIN COMPILE_DEV.PUBLIC.STATE_REGION_MAP r
+    ON a.PRIMARY_HCO_NPI_STATE = r.STATE
 GROUP BY 1
-ORDER BY 2 DESC;
+ORDER BY TOTAL_PATIENTS DESC;
 
 
--- Authorized account list, rolled to parent
+-- Reference: authorized account list, rolled to parent
 SELECT
     HCO_PARENT_NAME,
     COUNT(DISTINCT D_PATIENT_ID)             AS PATIENTS,
@@ -222,7 +260,7 @@ WHERE CLASS_FINAL = 'ATC'
 GROUP BY 1
 ORDER BY PATIENTS DESC;
 
--- Authorized account list, site level
+-- Reference: authorized account list, site level
 SELECT
     PRIMARY_HCO_NPI_NAME AS ACCOUNT_NAME,
     HCO_PARENT_NAME,
