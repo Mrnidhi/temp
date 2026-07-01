@@ -151,6 +151,13 @@ WITH auth_npi AS (
       AND "NPI" IS NOT NULL
       AND TRIM("NPI") NOT IN ('0', '', 'NPI')
 ),
+auth_parent AS (
+    SELECT DISTINCT UPPER(TRIM("ATC HCO Parent Name (McKesson Claims)")) AS PARENT
+    FROM COMPILE_DEV.PUBLIC.CTAM_ATC_ALIGNMENT_2026
+    WHERE UPPER(TRIM("Status")) = 'AUTHORIZED'
+      AND "ATC HCO Parent Name (McKesson Claims)" IS NOT NULL
+      AND TRIM("ATC HCO Parent Name (McKesson Claims)") NOT IN ('', 'null')
+),
 diagnosed AS (
     SELECT D_PATIENT_ID, MIN(DATE_OF_SERVICE) AS FIRST_DX_DATE
     FROM COMPILE_CLAIMS.OPEN_CLAIMS.IOV2501_MEDICAL_CLAIMS
@@ -166,6 +173,8 @@ treated AS (
         DATE_OF_SERVICE,
         D_PRIMARY_HCO_NPI,
         D_PRIMARY_HCO_COMPILE_ID,
+        HCO_PARENT_NAME,
+        HCO_COMMUNITY_NETWORK,
         CASE
             WHEN D_PROCEDURE_CODE = 'J9228'
                  OR D_NDC_CODE IN ('00003232711', '00003232822') THEN 'Yervoy'
@@ -186,10 +195,19 @@ SELECT
     t.D_PRIMARY_HCO_COMPILE_ID,
     t.DRUG,
     d.FIRST_DX_DATE,
-    CASE WHEN n.NPI IS NOT NULL THEN 1 ELSE 0 END AS IS_ATC_HCO
+    -- Hybrid ATC flag: authorized by NPI or by parent name, and not a community network
+    CASE
+        WHEN t.HCO_COMMUNITY_NETWORK IN (
+                'THE US ONCOLOGY NETWORK', 'ONE ONCOLOGY', 'AMERICAN ONCOLOGY NETWORK')
+            THEN 0
+        WHEN n.NPI IS NOT NULL  THEN 1
+        WHEN ap.PARENT IS NOT NULL THEN 1
+        ELSE 0
+    END AS IS_ATC_HCO
 FROM treated t
 INNER JOIN diagnosed d ON t.D_PATIENT_ID = d.D_PATIENT_ID
-LEFT JOIN auth_npi   n ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI;
+LEFT JOIN auth_npi    n  ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI
+LEFT JOIN auth_parent ap ON UPPER(TRIM(t.HCO_PARENT_NAME)) = ap.PARENT;
 
 
 -- State to region map (6 regions; VA/MD/DC/DE in Northeast; AK/HI unmapped by design)
@@ -295,12 +313,11 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 6b: Time spent in each setting for the migration cohort
--- Days at Non-ATC before first ATC treatment, and days at ATC after
+-- Insight 6b: Speed of migration - how many Non-ATC treatments before switching to ATC
+-- (migration cohort only: started Non-ATC, classified ATC overall)
 WITH ordered AS (
     SELECT
         t.D_PATIENT_ID,
-        t.DATE_OF_SERVICE,
         t.IS_ATC_HCO,
         ROW_NUMBER() OVER (PARTITION BY t.D_PATIENT_ID
                            ORDER BY t.DATE_OF_SERVICE, t.D_PRIMARY_HCO_COMPILE_ID) AS RN
@@ -309,25 +326,31 @@ WITH ordered AS (
         ON t.D_PATIENT_ID = c.D_PATIENT_ID
     WHERE c.CLASS_FINAL = 'ATC'
 ),
-firsts AS (
+first_atc AS (
     SELECT
         D_PATIENT_ID,
-        MAX(CASE WHEN RN = 1 THEN IS_ATC_HCO END) AS FIRST_ATC,
-        MIN(DATE_OF_SERVICE)                             AS FIRST_TX_DATE,
-        MIN(CASE WHEN IS_ATC_HCO = 1 THEN DATE_OF_SERVICE END) AS FIRST_ATC_DATE,
-        MAX(DATE_OF_SERVICE)                             AS LAST_TX_DATE
+        MAX(CASE WHEN RN = 1 THEN IS_ATC_HCO END) AS STARTED_ATC,
+        MIN(CASE WHEN IS_ATC_HCO = 1 THEN RN END) AS FIRST_ATC_RN
     FROM ordered
     GROUP BY 1
+),
+migrants AS (
+    SELECT D_PATIENT_ID, FIRST_ATC_RN - 1 AS NON_ATC_TX_BEFORE_SWITCH
+    FROM first_atc
+    WHERE STARTED_ATC = 0 AND FIRST_ATC_RN IS NOT NULL
 )
 SELECT
-    COUNT(*) AS MIGRATION_PATIENTS,
-    ROUND(AVG(DATEDIFF('day', FIRST_TX_DATE, FIRST_ATC_DATE)), 0)  AS AVG_DAYS_NON_ATC_BEFORE_ATC,
-    ROUND(MEDIAN(DATEDIFF('day', FIRST_TX_DATE, FIRST_ATC_DATE)), 0) AS MEDIAN_DAYS_NON_ATC_BEFORE_ATC,
-    ROUND(AVG(DATEDIFF('day', FIRST_ATC_DATE, LAST_TX_DATE)), 0)   AS AVG_DAYS_IN_ATC_AFTER,
-    ROUND(MEDIAN(DATEDIFF('day', FIRST_ATC_DATE, LAST_TX_DATE)), 0) AS MEDIAN_DAYS_IN_ATC_AFTER
-FROM firsts
-WHERE FIRST_ATC = 0
-  AND FIRST_ATC_DATE IS NOT NULL;
+    CASE
+        WHEN NON_ATC_TX_BEFORE_SWITCH = 1            THEN '1 (quick referral)'
+        WHEN NON_ATC_TX_BEFORE_SWITCH BETWEEN 2 AND 3 THEN '2-3'
+        WHEN NON_ATC_TX_BEFORE_SWITCH BETWEEN 4 AND 6 THEN '4-6'
+        ELSE '7+ (delayed access)'
+    END AS NON_ATC_TX_BEFORE_ATC,
+    COUNT(*) AS PATIENTS,
+    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT
+FROM migrants
+GROUP BY 1
+ORDER BY MIN(NON_ATC_TX_BEFORE_SWITCH);
 
 
 -- Insight 1: Headline split (ATC vs Non-ATC)
