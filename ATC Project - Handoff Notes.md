@@ -224,52 +224,50 @@ Keep it minimal, lots of white space, one slide only, 16:9. No charts, no extra 
 
 -------------------------------------------------------------------------------------------------------
 
-Prompt for Slide 1:
-Create one slide, 16:9 widescreen, white background. Do not add any content beyond what I specify. Do not invent numbers.
+Slide 1 prompt:
+Create one slide, 16:9, white background. Do not invent or change any numbers. Use only what I give you.
 
-Top bar: a dark navy rectangle (hex 16394F) spanning the full width, about 0.6 inches tall, flush to the top. Inside it on the left, the text "IOVANCE" in bold white followed by "BIOTHERAPEUTICS" in smaller lime-green (hex B4C424). On the right side of the same bar, the text "SITE OF CARE ANALYSIS" in lime-green, small, letter-spaced.
+Theme: olive/moss green (hex 6B8E23) as the primary color, cream and white surfaces, dark charcoal text (hex 222222). Clean corporate consulting look, flat, no gradients except where noted, no drop shadows.
 
-Below the bar, left aligned: a small olive-green (hex 7A9A1E) all-caps label "MARKET STRUCTURE". Under it, a bold navy (16394F) title in a serif font: "Most metastatic melanoma patients are still treated outside Authorized Treatment Centers, but ATC share is rising".
+Title area: a small olive-green (6B8E23) all-caps kicker "MARKET STRUCTURE". Below it a bold dark-charcoal title in a clean sans font: "Most metastatic melanoma patients are treated outside ATCs, though ATC share is growing". Place a small olive-green square accent at the top-left of the title and one at the top-right corner of the slide.
 
-Left half, a table with a navy (16394F) header row with white text, columns "Site of care", "Patients", "%". Rows exactly:
-ATC | 6,935 | 42.7%   (shade this row light green, hex EEF2E0, and bold it)
+Left side: a table. Header row filled olive-green (6B8E23) with white bold text, columns "Site of Care", "Patients", "%". Body rows with alternating white and light-cream (hex F2F1E8) shading. Rows exactly, do not alter:
+ATC | 6,935 | 42.7%   (make this row bold)
 Non-ATC: Hospital | 7,100 | 43.7%
 Non-ATC: Community network | 1,317 | 8.1%
 Non-ATC: Other | 894 | 5.5%
-Total | 16,246 | 100%   (bold this row)
+Total | 16,246 | 100%   (make this row bold)
 
-Right half, three stacked stat callouts, each a big bold number with a small caption under it:
-1. "57.3%" in navy, caption "of patients treated outside ATCs"
-2. "19% to 24%" in olive-green, caption "ATC share rising, 2021 to 2025"
-3. "85.7%" in navy, caption "of non-ATC volume is independent or community, a long tail of accounts"
+Right side: three concise bullet points in dark charcoal, each with a small olive-green bullet marker:
+- About 57% of patients are treated outside ATCs
+- ATC share rose from 19% to 24% between 2021 and 2025
+- Non-ATC volume is mostly independent or community sites, a long tail of many small accounts
 
-Near the bottom, a full-width light-green (EEF2E0) band with a thin lime (B4C424) border containing: bold "Bottom line:" then "The majority of treatment happens outside ATCs today, but ATC share is growing every year and non-ATC care is fragmented across many small accounts."
+Near the bottom: a full-width band with a soft olive-to-cream horizontal gradient, containing one bold dark-charcoal line: "Most treatment happens outside ATCs today, but ATC share has grown steadily each year."
 
-Very bottom, a thin lime-green (B4C424) footer bar with navy text "ADVANCING IMMUNO-ONCOLOGY" on the left and the page number "1" on the right.
+Below the band, small gray source text: "Source: Komodo medical claims, 2021 to 2025. Metastatic melanoma patients treated with Yervoy or Opdualag. ATC classified by authorized provider NPI and parent name. Percentages may not sum to 100 due to rounding."
 
-Just above the footer, tiny gray source text: "Source: Komodo medical claims, 2021 to 2025. Metastatic melanoma patients treated with Yervoy or Opdualag. ATC classified by authorized provider NPI and parent name. Percentages may not sum to 100 due to rounding."
+Bottom-left, tiny gray text: "© 2025, Iovance Biotherapeutics, Inc. | Confidential for Internal Use Only". Bottom-right: the wordmark "IOVANCE" with the page number "1" beside it.
 
-Use Calibri for body text and a serif like Cambria for the title. Keep it clean and flat, no gradients or shadows.
-Prompt for Slide 2:
-Create one slide, 16:9 widescreen, white background. Do not add any content beyond what I specify. Do not invent numbers.
+Use a clean sans font like Calibri or Arial throughout. Keep generous white space.
+Slide 2 prompt:
+Create one slide, 16:9, white background. Do not invent or change any numbers. Use only what I give you. Match the same theme as my previous slide: olive/moss green (hex 6B8E23) primary, cream and white surfaces, dark charcoal text (222222), flat and clean, no drop shadows.
 
-Top bar: a dark navy rectangle (hex 16394F) spanning the full width, about 0.6 inches tall, flush to the top. Inside it on the left, "IOVANCE" in bold white followed by "BIOTHERAPEUTICS" in smaller lime-green (hex B4C424). On the right, "THE OPPORTUNITY" in lime-green, small, letter-spaced.
+Title area: a small olive-green (6B8E23) all-caps kicker "PATIENT JOURNEY". Below it a bold dark-charcoal title: "Patients often reach ATCs through the community, and some regions remain underserved". Small olive-green square accent at the top-left of the title and at the top-right corner of the slide.
 
-Below the bar, left aligned: a small olive-green (hex 7A9A1E) all-caps label "REFERRAL AND UTILIZATION". Under it, a bold navy (16394F) serif title: "ATCs grow by pulling patients in from the community and deliver more treatment once they arrive".
+Upper section: three side-by-side stat cards, each filled light-cream (hex F2F1E8), each with a large bold olive-green or charcoal number and a short caption below. Use these exact numbers:
+Card 1: "3,701" then caption "ATC patients first treated in the community and later classified ATC, over half of all ATC patients"
+Card 2: "6.7 vs 6.0" then caption "claims per patient at ATC versus non-ATC sites"
+Card 3: "26%" then caption "ATC share in the Central region, versus about 48% in the Northeast and Southeast"
 
-A row of three equal rounded cards, each filled light green (hex EEF2E0), each with a big bold number and a caption below:
-Card 1: "3,701" in navy, caption "ATC patients started in the community and migrated in, over half of all ATC patients".
-Card 2: "6.7 vs 6.0" in olive-green, caption "claims per patient, ATC versus non-ATC. Patients get more treatment at ATCs".
-Card 3: "26%" in navy, caption "ATC share in Central region versus about 48% in Northeast and Southeast, clear white space".
+Middle section: a small bold charcoal heading "ATC penetration by region", then a column bar chart with these exact bars and values in this order:
+Southeast 49.9, Northeast 48.9, Ohio Valley 43.3, West 42.3, Great Lakes 40.3, Central 26.1
+Color the Southeast and Northeast bars olive-green (6B8E23), the Ohio Valley, West, and Great Lakes bars dark charcoal (222222), and the Central bar a muted red (hex C0392B). Show the value above each bar. Hide the vertical axis and all gridlines.
 
-Below the cards, a small bold navy heading "ATC penetration by region", then a column bar chart with these exact bars and values, in this order:
-Southeast 49.9, Northeast 48.9, Ohio Valley 43.3, West 42.3, Great Lakes 40.3, Central 26.1.
-Color the Southeast and Northeast bars olive-green (7A9A1E), the Ohio Valley, West, and Great Lakes bars navy (16394F), and the Central bar red (C0392B). Show the value on top of each bar. Hide the vertical axis and gridlines.
+Near the bottom: a full-width band with a soft olive-to-cream horizontal gradient, one bold charcoal line: "Referral pathways and regional coverage appear to shape where patients receive care."
 
-Near the bottom, a full-width light-green (EEF2E0) band with a thin lime (B4C424) border containing: bold "Recommendation:" then "Prioritize referral pathways from community sites into ATCs, and target under-penetrated regions such as Central, rather than treating community and ATC as separate patient pools."
+Below the band, small gray source text: "Source: Komodo medical claims, 2021 to 2025. Migration and claims-per-patient based on NPI-confirmed ATC sites. Regional shares based on hybrid classification."
 
-Very bottom, a thin lime-green (B4C424) footer bar with navy text "ADVANCING IMMUNO-ONCOLOGY" on the left and page number "2" on the right.
+Bottom-left, tiny gray text: "© 2025, Iovance Biotherapeutics, Inc. | Confidential for Internal Use Only". Bottom-right: the wordmark "IOVANCE" with the page number "2" beside it.
 
-Just above the footer, tiny gray source text: "Source: Komodo medical claims, 2021 to 2025. Migration and claims-per-patient based on NPI-confirmed ATC sites. Regional shares based on hybrid classification."
-
-Use Calibri for body text and a serif like Cambria for the title. Keep it clean and flat, no gradients or shadows.
+Use a clean sans font like Calibri or Arial throughout. Keep generous white space.
