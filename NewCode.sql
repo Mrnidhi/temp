@@ -174,7 +174,6 @@ treated AS (
         D_PRIMARY_HCO_NPI,
         D_PRIMARY_HCO_COMPILE_ID,
         HCO_PARENT_NAME,
-        HCO_COMMUNITY_NETWORK,
         CASE
             WHEN D_PROCEDURE_CODE = 'J9228'
                  OR D_NDC_CODE IN ('00003232711', '00003232822') THEN 'Yervoy'
@@ -195,12 +194,9 @@ SELECT
     t.D_PRIMARY_HCO_COMPILE_ID,
     t.DRUG,
     d.FIRST_DX_DATE,
-    -- Hybrid ATC flag: authorized by NPI or by parent name, and not a community network
+    -- Hybrid ATC flag: authorized by NPI or by parent name
     CASE
-        WHEN t.HCO_COMMUNITY_NETWORK IN (
-                'THE US ONCOLOGY NETWORK', 'ONE ONCOLOGY', 'AMERICAN ONCOLOGY NETWORK')
-            THEN 0
-        WHEN n.NPI IS NOT NULL  THEN 1
+        WHEN n.NPI IS NOT NULL     THEN 1
         WHEN ap.PARENT IS NOT NULL THEN 1
         ELSE 0
     END AS IS_ATC_HCO
