@@ -218,3 +218,58 @@ BOTTOM — one full-width takeaway bar (lime-green tint) with bold text:
 ATCs are the highest-value treatment setting but remain underutilized, with clear opportunity to improve referral pathways and expand access.
 
 Keep it minimal, lots of white space, one slide only, 16:9. No charts, no extra commentary, no added statistics.
+
+
+
+
+-------------------------------------------------------------------------------------------------------
+
+Prompt for Slide 1:
+Create one slide, 16:9 widescreen, white background. Do not add any content beyond what I specify. Do not invent numbers.
+
+Top bar: a dark navy rectangle (hex 16394F) spanning the full width, about 0.6 inches tall, flush to the top. Inside it on the left, the text "IOVANCE" in bold white followed by "BIOTHERAPEUTICS" in smaller lime-green (hex B4C424). On the right side of the same bar, the text "SITE OF CARE ANALYSIS" in lime-green, small, letter-spaced.
+
+Below the bar, left aligned: a small olive-green (hex 7A9A1E) all-caps label "MARKET STRUCTURE". Under it, a bold navy (16394F) title in a serif font: "Most metastatic melanoma patients are still treated outside Authorized Treatment Centers, but ATC share is rising".
+
+Left half, a table with a navy (16394F) header row with white text, columns "Site of care", "Patients", "%". Rows exactly:
+ATC | 6,935 | 42.7%   (shade this row light green, hex EEF2E0, and bold it)
+Non-ATC: Hospital | 7,100 | 43.7%
+Non-ATC: Community network | 1,317 | 8.1%
+Non-ATC: Other | 894 | 5.5%
+Total | 16,246 | 100%   (bold this row)
+
+Right half, three stacked stat callouts, each a big bold number with a small caption under it:
+1. "57.3%" in navy, caption "of patients treated outside ATCs"
+2. "19% to 24%" in olive-green, caption "ATC share rising, 2021 to 2025"
+3. "85.7%" in navy, caption "of non-ATC volume is independent or community, a long tail of accounts"
+
+Near the bottom, a full-width light-green (EEF2E0) band with a thin lime (B4C424) border containing: bold "Bottom line:" then "The majority of treatment happens outside ATCs today, but ATC share is growing every year and non-ATC care is fragmented across many small accounts."
+
+Very bottom, a thin lime-green (B4C424) footer bar with navy text "ADVANCING IMMUNO-ONCOLOGY" on the left and the page number "1" on the right.
+
+Just above the footer, tiny gray source text: "Source: Komodo medical claims, 2021 to 2025. Metastatic melanoma patients treated with Yervoy or Opdualag. ATC classified by authorized provider NPI and parent name. Percentages may not sum to 100 due to rounding."
+
+Use Calibri for body text and a serif like Cambria for the title. Keep it clean and flat, no gradients or shadows.
+Prompt for Slide 2:
+Create one slide, 16:9 widescreen, white background. Do not add any content beyond what I specify. Do not invent numbers.
+
+Top bar: a dark navy rectangle (hex 16394F) spanning the full width, about 0.6 inches tall, flush to the top. Inside it on the left, "IOVANCE" in bold white followed by "BIOTHERAPEUTICS" in smaller lime-green (hex B4C424). On the right, "THE OPPORTUNITY" in lime-green, small, letter-spaced.
+
+Below the bar, left aligned: a small olive-green (hex 7A9A1E) all-caps label "REFERRAL AND UTILIZATION". Under it, a bold navy (16394F) serif title: "ATCs grow by pulling patients in from the community and deliver more treatment once they arrive".
+
+A row of three equal rounded cards, each filled light green (hex EEF2E0), each with a big bold number and a caption below:
+Card 1: "3,701" in navy, caption "ATC patients started in the community and migrated in, over half of all ATC patients".
+Card 2: "6.7 vs 6.0" in olive-green, caption "claims per patient, ATC versus non-ATC. Patients get more treatment at ATCs".
+Card 3: "26%" in navy, caption "ATC share in Central region versus about 48% in Northeast and Southeast, clear white space".
+
+Below the cards, a small bold navy heading "ATC penetration by region", then a column bar chart with these exact bars and values, in this order:
+Southeast 49.9, Northeast 48.9, Ohio Valley 43.3, West 42.3, Great Lakes 40.3, Central 26.1.
+Color the Southeast and Northeast bars olive-green (7A9A1E), the Ohio Valley, West, and Great Lakes bars navy (16394F), and the Central bar red (C0392B). Show the value on top of each bar. Hide the vertical axis and gridlines.
+
+Near the bottom, a full-width light-green (EEF2E0) band with a thin lime (B4C424) border containing: bold "Recommendation:" then "Prioritize referral pathways from community sites into ATCs, and target under-penetrated regions such as Central, rather than treating community and ATC as separate patient pools."
+
+Very bottom, a thin lime-green (B4C424) footer bar with navy text "ADVANCING IMMUNO-ONCOLOGY" on the left and page number "2" on the right.
+
+Just above the footer, tiny gray source text: "Source: Komodo medical claims, 2021 to 2025. Migration and claims-per-patient based on NPI-confirmed ATC sites. Regional shares based on hybrid classification."
+
+Use Calibri for body text and a serif like Cambria for the title. Keep it clean and flat, no gradients or shadows.
