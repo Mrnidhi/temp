@@ -3,8 +3,8 @@
 
    Business question:
        For metastatic melanoma patients diagnosed and treated with Yervoy or
-       Opdualag from 2021-2025, what share of patients were treated at an
-       Authorized Treatment Center versus a non-ATC site of care?
+       Opdualag from 2021 to 2025, what share were treated at an Authorized
+       Treatment Center versus a non-ATC site of care?
 
    Outputs:
 
@@ -32,10 +32,12 @@
    ============================================================================ */
 
 
+-- Controls how many states an ATC parent can span before we treat it as a
+-- broad hospital system rather than a single authorized center. 2 is current.
 SET fallback_state_limit = 2;
 
 
--- Base classification (one row per patient)
+-- Step 1: classify every patient as ATC or non-ATC. One row per patient.
 CREATE OR REPLACE TRANSIENT TABLE COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL AS
 WITH auth_npi AS (
     SELECT DISTINCT TRIM("NPI") AS NPI
@@ -99,7 +101,7 @@ LEFT JOIN fallback_footprint f
     ON c.HCO_PARENT_NAME = f.HCO_PARENT_NAME;
 
 
--- Patient x HCO x year grain, for trend and overlap (NPI-confirmed flag)
+-- Step 2: one row per patient, site and year. Used for the trend and overlap views.
 CREATE OR REPLACE TRANSIENT TABLE COMPILE_DEV.PUBLIC.ATC_PATIENT_HCO_YEAR AS
 WITH auth_npi AS (
     SELECT DISTINCT TRIM("NPI") AS NPI
@@ -141,8 +143,8 @@ LEFT JOIN auth_npi   n ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI
 GROUP BY 1, 2, 3;
 
 
--- Claim-level treatment table with dates and drug, for journey / persistence / timing
--- NDC-to-drug mapping inferred from labeler; verify against internal code dictionary
+-- Step 3: one row per treatment claim, with dates and drug.
+-- Used for the journey and timing views. Drug is read from procedure and NDC codes.
 CREATE OR REPLACE TRANSIENT TABLE COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS AS
 WITH auth_npi AS (
     SELECT DISTINCT TRIM("NPI") AS NPI
@@ -194,7 +196,8 @@ INNER JOIN diagnosed d ON t.D_PATIENT_ID = d.D_PATIENT_ID
 LEFT JOIN auth_npi n ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI;
 
 
--- State to region map (6 regions; VA/MD/DC/DE in Northeast; AK/HI unmapped by design)
+-- Step 4: state to region lookup. Six regions. VA, MD, DC, DE sit in Northeast.
+-- Hawaii and Alaska are left unmapped on purpose.
 CREATE OR REPLACE TRANSIENT TABLE COMPILE_DEV.PUBLIC.STATE_REGION_MAP AS
 SELECT * FROM VALUES
     ('CA','West'),('WA','West'),('OR','West'),('NV','West'),('AZ','West'),
@@ -215,7 +218,7 @@ SELECT * FROM VALUES
 AS T(STATE, REGION);
 
 
--- Insight 8: Patient journey - first treatment site vs last treatment site  [PRIORITY]
+-- Insight 8: where each patient started treatment versus where they ended.
 WITH ranked AS (
     SELECT
         D_PATIENT_ID,
@@ -244,7 +247,7 @@ GROUP BY 1, 2
 ORDER BY 3 DESC;
 
 
--- Insight 9: Treatment persistence by starting site  [PRIORITY]
+-- Insight 9: how much treatment patients get, split by where they started.
 WITH ranked AS (
     SELECT
         D_PATIENT_ID,
@@ -273,8 +276,8 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 6a: Migration cohort - first treatment Non-ATC but classified ATC overall
--- (Kolin's ~3,500 patients: started community, moved into an ATC)
+-- Insight 6a: patients who started at a non-ATC site but are classified ATC overall.
+-- These are the patients who moved from community care into an ATC.
 WITH first_site AS (
     SELECT D_PATIENT_ID, IS_ATC_HCO AS FIRST_ATC
     FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
@@ -297,8 +300,8 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 6b: Referral source - of patients starting Non-ATC, which starting systems
--- send patients on to an ATC. Starting parent read from the patient's first claim.
+-- Insight 6b: for patients who start at a non-ATC site, which starting systems
+-- go on to send patients into an ATC. Read the caveat before using this one.
 WITH first_claim AS (
     SELECT
         D_PATIENT_ID,
@@ -330,7 +333,7 @@ ORDER BY PATIENTS_STARTED_HERE DESC
 LIMIT 25;
 
 
--- Insight 1: Headline split (ATC vs Non-ATC)
+-- Insight 1: the headline. Share of patients treated at ATC versus non-ATC.
 SELECT
     CLASS_FINAL,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
@@ -350,7 +353,7 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 2: Classification confidence (how the ATC count is built)
+-- Insight 2: how the ATC count is built, by match type. Shows how confident we are.
 SELECT
     CLASS_HYBRID,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
@@ -361,7 +364,7 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 3: ATC share by treatment year
+-- Insight 3: ATC share for each year, to see the trend over time.
 SELECT
     TX_YEAR,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS_TREATED,
@@ -373,7 +376,7 @@ GROUP BY 1
 ORDER BY 1;
 
 
--- Insight 4: ATC-assigned patients with non-ATC activity (referral / leakage signal)
+-- Insight 4: ATC patients who also have some non-ATC treatment activity.
 WITH pt AS (
     SELECT
         D_PATIENT_ID,
@@ -395,7 +398,7 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 5: Leakage concentration by parent account
+-- Insight 5: which non-ATC accounts hold the most patients, and how concentrated it is.
 WITH leak AS (
     SELECT
         HCO_PARENT_NAME,
@@ -421,7 +424,7 @@ ORDER BY PATIENTS DESC
 LIMIT 25;
 
 
--- Insight 7: Community network share of leakage
+-- Insight 7: how much non-ATC volume sits inside the large community networks.
 SELECT
     COALESCE(HCO_COMMUNITY_NETWORK, 'Independent / Other') AS NETWORK,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
@@ -433,7 +436,7 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 10: Regional ATC penetration
+-- Insight 10: ATC share by region.
 SELECT
     COALESCE(r.REGION, 'Unmapped') AS REGION,
     COUNT(DISTINCT a.D_PATIENT_ID) AS TOTAL_PATIENTS,
@@ -448,7 +451,7 @@ GROUP BY 1
 ORDER BY TOTAL_PATIENTS DESC;
 
 
--- Insight 11: Time from diagnosis to first treatment (context only; median diff is small)
+-- Insight 11: days from diagnosis to first treatment. Context only, the gap is small.
 WITH first_tx AS (
     SELECT
         D_PATIENT_ID,
@@ -470,7 +473,7 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 12: Drug mix - Yervoy vs Opdualag, share treated at ATC
+-- Insight 12: Yervoy versus Opdualag, and the ATC share of each.
 SELECT
     DRUG,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
@@ -483,7 +486,7 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 13: ATC performance profile (engagement by center, min 10 patients)
+-- Insight 13: ATC centers ranked by claims per patient, minimum 10 patients.
 SELECT
     PRIMARY_HCO_NPI_NAME AS ACCOUNT_NAME,
     HCO_PARENT_NAME,
@@ -499,7 +502,7 @@ HAVING COUNT(DISTINCT D_PATIENT_ID) >= 10
 ORDER BY CLAIMS_PER_PATIENT DESC;
 
 
--- Reference: authorized account list, rolled to parent
+-- Reference list: authorized ATC accounts rolled up to parent.
 SELECT
     HCO_PARENT_NAME,
     COUNT(DISTINCT D_PATIENT_ID)             AS PATIENTS,
@@ -511,7 +514,7 @@ WHERE CLASS_FINAL = 'ATC'
 GROUP BY 1
 ORDER BY PATIENTS DESC;
 
--- Reference: authorized account list, site level
+-- Reference list: authorized ATC accounts at the individual site level.
 SELECT
     PRIMARY_HCO_NPI_NAME AS ACCOUNT_NAME,
     HCO_PARENT_NAME,
