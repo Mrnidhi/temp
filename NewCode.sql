@@ -185,6 +185,7 @@ SELECT
     t.D_PATIENT_ID,
     t.DATE_OF_SERVICE,
     t.D_PRIMARY_HCO_COMPILE_ID,
+    t.HCO_PARENT_NAME,
     t.DRUG,
     d.FIRST_DX_DATE,
     CASE WHEN n.NPI IS NOT NULL THEN 1 ELSE 0 END AS IS_ATC_HCO
@@ -296,44 +297,37 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 6b: Speed of migration - how many Non-ATC treatments before switching to ATC
--- (migration cohort only: started Non-ATC, classified ATC overall)
-WITH ordered AS (
-    SELECT
-        t.D_PATIENT_ID,
-        t.IS_ATC_HCO,
-        ROW_NUMBER() OVER (PARTITION BY t.D_PATIENT_ID
-                           ORDER BY t.DATE_OF_SERVICE, t.D_PRIMARY_HCO_COMPILE_ID) AS RN
-    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS t
-    INNER JOIN COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL c
-        ON t.D_PATIENT_ID = c.D_PATIENT_ID
-    WHERE c.CLASS_FINAL = 'ATC'
-),
-first_atc AS (
+-- Insight 6b: Referral source - of patients starting Non-ATC, which starting systems
+-- send patients on to an ATC. Starting parent read from the patient's first claim.
+WITH first_claim AS (
     SELECT
         D_PATIENT_ID,
-        MAX(CASE WHEN RN = 1 THEN IS_ATC_HCO END) AS STARTED_ATC,
-        MIN(CASE WHEN IS_ATC_HCO = 1 THEN RN END) AS FIRST_ATC_RN
-    FROM ordered
-    GROUP BY 1
+        HCO_PARENT_NAME AS STARTING_PARENT,
+        IS_ATC_HCO      AS STARTED_ATC
+    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID
+                               ORDER BY DATE_OF_SERVICE, D_PRIMARY_HCO_COMPILE_ID) = 1
 ),
-migrants AS (
-    SELECT D_PATIENT_ID, FIRST_ATC_RN - 1 AS NON_ATC_TX_BEFORE_SWITCH
-    FROM first_atc
-    WHERE STARTED_ATC = 0 AND FIRST_ATC_RN IS NOT NULL
+starters AS (
+    SELECT
+        fc.D_PATIENT_ID,
+        COALESCE(fc.STARTING_PARENT, 'Unknown') AS STARTING_PARENT,
+        CASE WHEN c.CLASS_FINAL = 'ATC' THEN 1 ELSE 0 END AS MIGRATED
+    FROM first_claim fc
+    INNER JOIN COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL c
+        ON fc.D_PATIENT_ID = c.D_PATIENT_ID
+    WHERE fc.STARTED_ATC = 0
 )
 SELECT
-    CASE
-        WHEN NON_ATC_TX_BEFORE_SWITCH = 1            THEN '1 (quick referral)'
-        WHEN NON_ATC_TX_BEFORE_SWITCH BETWEEN 2 AND 3 THEN '2-3'
-        WHEN NON_ATC_TX_BEFORE_SWITCH BETWEEN 4 AND 6 THEN '4-6'
-        ELSE '7+ (delayed access)'
-    END AS NON_ATC_TX_BEFORE_ATC,
-    COUNT(*) AS PATIENTS,
-    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT
-FROM migrants
+    STARTING_PARENT,
+    COUNT(*) AS PATIENTS_STARTED_HERE,
+    SUM(MIGRATED) AS MIGRATED_TO_ATC,
+    ROUND(100.0 * SUM(MIGRATED) / NULLIF(COUNT(*), 0), 1) AS MIGRATION_RATE_PCT
+FROM starters
 GROUP BY 1
-ORDER BY MIN(NON_ATC_TX_BEFORE_SWITCH);
+HAVING COUNT(*) >= 30
+ORDER BY PATIENTS_STARTED_HERE DESC
+LIMIT 25;
 
 
 -- Insight 1: Headline split (ATC vs Non-ATC)
