@@ -151,13 +151,6 @@ WITH auth_npi AS (
       AND "NPI" IS NOT NULL
       AND TRIM("NPI") NOT IN ('0', '', 'NPI')
 ),
-auth_parent AS (
-    SELECT DISTINCT UPPER(TRIM("ATC HCO Parent Name (McKesson Claims)")) AS PARENT
-    FROM COMPILE_DEV.PUBLIC.CTAM_ATC_ALIGNMENT_2026
-    WHERE UPPER(TRIM("Status")) = 'AUTHORIZED'
-      AND "ATC HCO Parent Name (McKesson Claims)" IS NOT NULL
-      AND TRIM("ATC HCO Parent Name (McKesson Claims)") NOT IN ('', 'null')
-),
 diagnosed AS (
     SELECT D_PATIENT_ID, MIN(DATE_OF_SERVICE) AS FIRST_DX_DATE
     FROM COMPILE_CLAIMS.OPEN_CLAIMS.IOV2501_MEDICAL_CLAIMS
@@ -194,16 +187,10 @@ SELECT
     t.D_PRIMARY_HCO_COMPILE_ID,
     t.DRUG,
     d.FIRST_DX_DATE,
-    -- Hybrid ATC flag: authorized by NPI or by parent name
-    CASE
-        WHEN n.NPI IS NOT NULL     THEN 1
-        WHEN ap.PARENT IS NOT NULL THEN 1
-        ELSE 0
-    END AS IS_ATC_HCO
+    CASE WHEN n.NPI IS NOT NULL THEN 1 ELSE 0 END AS IS_ATC_HCO
 FROM treated t
 INNER JOIN diagnosed d ON t.D_PATIENT_ID = d.D_PATIENT_ID
-LEFT JOIN auth_npi    n  ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI
-LEFT JOIN auth_parent ap ON UPPER(TRIM(t.HCO_PARENT_NAME)) = ap.PARENT;
+LEFT JOIN auth_npi n ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI;
 
 
 -- State to region map (6 regions; VA/MD/DC/DE in Northeast; AK/HI unmapped by design)
