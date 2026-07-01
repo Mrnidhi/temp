@@ -276,32 +276,12 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 6a: patients who started at a non-ATC site but are classified ATC overall.
--- These are the patients who moved from community care into an ATC.
-WITH first_site AS (
-    SELECT D_PATIENT_ID, IS_ATC_HCO AS FIRST_ATC
-    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
-    QUALIFY ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID
-                               ORDER BY DATE_OF_SERVICE, D_PRIMARY_HCO_COMPILE_ID) = 1
-)
-SELECT
-    CASE
-        WHEN c.CLASS_FINAL = 'ATC' AND fs.FIRST_ATC = 0 THEN 'Migrated in (start Non-ATC, classified ATC)'
-        WHEN c.CLASS_FINAL = 'ATC' AND fs.FIRST_ATC = 1 THEN 'Stayed ATC (start and classified ATC)'
-        WHEN c.CLASS_FINAL <> 'ATC'                     THEN 'Non-ATC'
-        ELSE 'Other'
-    END AS PATIENT_GROUP,
-    COUNT(DISTINCT c.D_PATIENT_ID) AS PATIENTS,
-    ROUND(100.0 * COUNT(DISTINCT c.D_PATIENT_ID)
-          / SUM(COUNT(DISTINCT c.D_PATIENT_ID)) OVER (), 1) AS PCT
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL c
-INNER JOIN first_site fs ON c.D_PATIENT_ID = fs.D_PATIENT_ID
-GROUP BY 1
-ORDER BY 2 DESC;
+
+-- Insight 6b: referral source with the ATC parent they moved to.
+-- If STARTING_PARENT and MIGRATED_PARENT match, it is the same system (artifact).
+-- If they differ, it is a real move from one system into an ATC.
 
 
--- Insight 6b: for patients who start at a non-ATC site, which starting systems
--- go on to send patients into an ATC. Read the caveat before using this one.
 WITH first_claim AS (
     SELECT
         D_PATIENT_ID,
@@ -311,27 +291,39 @@ WITH first_claim AS (
     QUALIFY ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID
                                ORDER BY DATE_OF_SERVICE, D_PRIMARY_HCO_COMPILE_ID) = 1
 ),
+last_atc AS (
+    SELECT
+        D_PATIENT_ID,
+        HCO_PARENT_NAME AS MIGRATED_PARENT
+    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
+    WHERE IS_ATC_HCO = 1
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID
+                               ORDER BY DATE_OF_SERVICE DESC, D_PRIMARY_HCO_COMPILE_ID) = 1
+),
 starters AS (
     SELECT
-        fc.D_PATIENT_ID,
         COALESCE(fc.STARTING_PARENT, 'Unknown') AS STARTING_PARENT,
+        COALESCE(la.MIGRATED_PARENT, 'Unknown') AS MIGRATED_PARENT,
         CASE WHEN c.CLASS_FINAL = 'ATC' THEN 1 ELSE 0 END AS MIGRATED
     FROM first_claim fc
     INNER JOIN COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL c
         ON fc.D_PATIENT_ID = c.D_PATIENT_ID
+    LEFT JOIN last_atc la
+        ON fc.D_PATIENT_ID = la.D_PATIENT_ID
     WHERE fc.STARTED_ATC = 0
+      AND c.CLASS_FINAL = 'ATC'
 )
 SELECT
     STARTING_PARENT,
-    COUNT(*) AS PATIENTS_STARTED_HERE,
-    SUM(MIGRATED) AS MIGRATED_TO_ATC,
-    ROUND(100.0 * SUM(MIGRATED) / NULLIF(COUNT(*), 0), 1) AS MIGRATION_RATE_PCT
+    MIGRATED_PARENT,
+    COUNT(*) AS PATIENTS,
+    CASE WHEN UPPER(TRIM(STARTING_PARENT)) = UPPER(TRIM(MIGRATED_PARENT))
+         THEN 'Same system (artifact)'
+         ELSE 'Different system (real move)' END AS MOVE_TYPE
 FROM starters
-GROUP BY 1
-HAVING COUNT(*) >= 30
-ORDER BY PATIENTS_STARTED_HERE DESC
-LIMIT 25;
-
+GROUP BY 1, 2
+ORDER BY PATIENTS DESC
+LIMIT 30;
 
 -- Insight 1: the headline. Share of patients treated at ATC versus non-ATC.
 SELECT
