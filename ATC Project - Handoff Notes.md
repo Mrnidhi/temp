@@ -271,3 +271,37 @@ Below the band, small gray source text: "Source: Komodo medical claims, 2021 to 
 Bottom-left, tiny gray text: "© 2025, Iovance Biotherapeutics, Inc. | Confidential for Internal Use Only". Bottom-right: the wordmark "IOVANCE" with the page number "2" beside it.
 
 Use a clean sans font like Calibri or Arial throughout. Keep generous white space.
+
+
+
+
+----------------
+
+Add a new slide as Slide 3, right after the "Market Structure" slide.
+Match the existing slides in this deck exactly — same theme, fonts, colors,
+Iovance branding, green accent bars, the small uppercase section label in the
+top-left, the bold title style, the green bottom takeaway bar, the small gray
+footnote, the IOVANCE logo, and the confidentiality footer.
+
+Section label (small uppercase, top-left): METHODOLOGY
+Title (bold, same style as the Market Structure title): How patients are classified into each bucket
+
+Two-column layout.
+
+Left column — header "What's included in each bucket":
+- ATC — patients whose site rolls up to an authorized ATC parent (HCO parent), including satellite locations of that parent
+- Non-ATC: Hospital — independent hospital systems not on the authorized list
+- Non-ATC: Community Network — organized oncology networks (US Oncology, One Oncology, American Oncology)
+- Non-ATC: Other — sites that couldn't be cleanly matched
+
+Right column — header "How we characterize a patient":
+- Match the provider NPI to the authorized ATC list first (NPI-confirmed)
+- If no NPI match, fall back to the HCO parent name, which includes satellites of that parent, with a guard so large multi-state systems aren't over-counted
+- A patient seen at both ATC and non-ATC sites is counted once, at the site where they had the most claims
+
+Bottom takeaway bar (same green style as the Market Structure takeaway bar):
+ATC is defined at the HCO parent level, so satellites of an ATC parent are counted as ATC.
+
+Footnote (small gray text, same style as the source line): Because ATC is defined at the parent level, satellites of an ATC parent are currently included in ATC. A true-site vs. satellite split can be added as a follow-up.
+
+Keep it text-only — no stock images or icons unless they match the minimalist style of the existing slides.
