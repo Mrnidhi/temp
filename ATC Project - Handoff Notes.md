@@ -305,3 +305,54 @@ ATC is defined at the HCO parent level, so satellites of an ATC parent are count
 Footnote (small gray text, same style as the source line): Because ATC is defined at the parent level, satellites of an ATC parent are currently included in ATC. A true-site vs. satellite split can be added as a follow-up.
 
 Keep it text-only — no stock images or icons unless they match the minimalist style of the existing slides.
+
+
+
+
+
+------------------------------------
+
+Here's a paste-ready Copilot prompt for the methodology slide. It's written to be fully self-contained so Copilot can't improvise:
+
+---
+
+Edit the methodology slide (the last slide, "How patients are classified into each bucket"). Keep the existing layout: kicker, title, two columns, callout bar, footnote. Replace the text exactly as specified below — do not reword, do not add em-dashes, do not add new bullets.
+
+**Kicker (small label above title):** METHODOLOGY
+
+**Title — replace with:**
+ATC is defined at the HCO parent level and includes satellite locations
+
+**Left column heading — replace with:** What each bucket includes
+
+**Left column bullets — replace all four with:**
+- ATC: sites that roll up to an authorized ATC parent, including satellite locations of that parent
+- Non-ATC: Hospital: independent hospital systems not on the authorized list
+- Non-ATC: Community network: organized oncology networks such as US Oncology, One Oncology, and American Oncology
+- Non-ATC: Other: sites that could not be matched to a known system
+
+Bold only the bucket name before each colon (e.g. "ATC:", "Non-ATC: Hospital:").
+
+**Right column heading — replace with:** How each patient is assigned
+
+**Right column bullets — replace all three with:**
+- Provider NPI is matched against the authorized ATC list first
+- If there is no NPI match, the site is matched on HCO parent name, which is how satellites of an ATC parent are captured
+- A patient seen at both ATC and non-ATC sites is counted once, at the site with the most claims
+
+Bold only "NPI", "HCO parent name", and "counted once".
+
+**Callout bar — replace with:**
+Because ATC is defined at the parent level, satellites of an ATC parent are counted as ATC.
+
+**Footnote — replace with:**
+A true-site vs. satellite split is planned as a follow-up.
+
+Match the fonts, sizes, colors, and bullet styling already used on slides 2 and 3 of this deck (Bierstadt, sentence-case title, green column headings). Do not change the slide background, the IOVANCE footer, or the confidentiality line.
+
+---
+
+Two practical notes:
+
+- Copilot in PowerPoint is often unreliable at multi-part text replacement — if it mangles anything, it's honestly faster to paste each block manually into the text boxes since the layout already exists. The prompt above also works section-by-section if you feed it one block at a time.
+- After the edit, spot-check that no em-dashes crept back in and the title stayed sentence case — those are the two things Copilot most often "helpfully" reverts.
