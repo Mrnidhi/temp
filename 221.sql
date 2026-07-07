@@ -1,34 +1,8 @@
-/*
-ATC Follow-ups — closes out the remaining ATC vs Non-ATC asks
-(run after the base tables from "Diagnosed & Treated Patients - ATC vs Non-ATC Split.sql" exist)
-
-Asks covered:
-
-  A   Currently-active ATC check                     (Tim — confirm the analysis uses active ATCs only)
-  B1  True-site vs satellite split, headline         (Tim + Kolin — teased in the slide 4 footnote)
-  B2  Satellite share by parent (top parents)
-  B3  Sensitivity: headline split if satellites were excluded
-  C   ATC share by year, 2021-2025                   (feeds the 19%→24% growth chart)
-  D1  Central region drill-down by state             (why 26% vs ~48% elsewhere)
-  D2  ATC supply per region (site + parent counts)
-  D3  Where Central patients go instead (top non-ATC parents)
-  E   Sample patient journeys, migration cohort      (Kolin — 2-3 records, expect nulls)
-
-Depends on:
-  COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-  COMPILE_DEV.PUBLIC.ATC_PATIENT_HCO_YEAR
-  COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
-  COMPILE_DEV.PUBLIC.STATE_REGION_MAP
-  COMPILE_DEV.PUBLIC.CTAM_ATC_ALIGNMENT_2026
-*/
+-- ATC vs Non-ATC follow-ups
+-- Requires base tables from "Diagnosed & Treated Patients - ATC vs Non-ATC Split.sql"
 
 
--- ============================================================================
--- A: Currently-active ATC check
--- The classification already filters Status = 'AUTHORIZED'. This shows every
--- status in the roster so we can confirm AUTHORIZED = currently active and
--- see how many rows/NPIs sit in other statuses.
--- ============================================================================
+-- A: Roster status check
 SELECT
     UPPER(TRIM("Status")) AS STATUS,
     COUNT(*) AS ROSTER_ROWS,
@@ -38,8 +12,7 @@ FROM COMPILE_DEV.PUBLIC.CTAM_ATC_ALIGNMENT_2026
 GROUP BY 1
 ORDER BY 2 DESC;
 
--- If any status other than AUTHORIZED exists (e.g. terminated / pending),
--- check whether those NPIs picked up patients anyway (they should not have):
+-- A2: Patients at non-authorized roster NPIs
 WITH non_auth_npi AS (
     SELECT DISTINCT TRIM("NPI") AS NPI
     FROM COMPILE_DEV.PUBLIC.CTAM_ATC_ALIGNMENT_2026
@@ -56,14 +29,7 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- ============================================================================
--- B1: True-site vs satellite split (headline)
--- Within CLASS_FINAL = 'ATC', the CLASS_HYBRID tier already separates the two:
---   'ATC: NPI confirmed'  = the patient's primary site NPI is on the
---                           authorized list -> true ATC site
---   'ATC: name fallback'  = site NPI not on the list, matched via the ATC
---                           parent name -> satellite of an ATC parent
--- ============================================================================
+-- B1: True ATC site vs satellite, within ATC patients
 SELECT
     CASE
         WHEN CLASS_HYBRID = 'ATC: NPI confirmed' THEN 'True ATC site (NPI on authorized list)'
@@ -78,10 +44,7 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- ============================================================================
--- B2: Satellite share by parent — which ATC parents are satellite-heavy
--- (the "MSK satellite" concern from Meet 7, min 10 patients)
--- ============================================================================
+-- B2: Satellite share by ATC parent (min 10 patients)
 SELECT
     HCO_PARENT_NAME,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
@@ -100,11 +63,7 @@ ORDER BY SATELLITE_PATIENTS DESC
 LIMIT 25;
 
 
--- ============================================================================
--- B3: Sensitivity — what the headline split becomes if satellites are
--- treated as Non-ATC (answers "does the satellite rule overstate ATC?")
--- Current headline: 42.7 / 57.3. This shows the floor.
--- ============================================================================
+-- B3: Headline split with NPI-confirmed sites only
 SELECT
     CASE
         WHEN CLASS_HYBRID = 'ATC: NPI confirmed' THEN 'ATC (true sites only)'
@@ -118,10 +77,7 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- ============================================================================
--- C: ATC share by treatment year — data for the 19%→24% growth chart
--- (same as Insight 3; rerun to grab all five yearly values for the visual)
--- ============================================================================
+-- C: ATC share by treatment year
 SELECT
     TX_YEAR,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS_TREATED,
@@ -133,10 +89,7 @@ GROUP BY 1
 ORDER BY 1;
 
 
--- ============================================================================
--- D1: Central region drill-down — ATC share by state within Central
--- (is 26% uniform across TX/OK/KS/NE/SD/ND/AR, or driven by one state?)
--- ============================================================================
+-- D1: Central region, ATC share by state
 SELECT
     a.PRIMARY_HCO_NPI_STATE AS STATE,
     COUNT(DISTINCT a.D_PATIENT_ID) AS TOTAL_PATIENTS,
@@ -151,10 +104,7 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- ============================================================================
--- D2: ATC supply per region — is Central low because there are simply
--- fewer ATC sites there? (demand vs supply question)
--- ============================================================================
+-- D2: ATC site and parent counts by region
 SELECT
     COALESCE(r.REGION, 'Unmapped') AS REGION,
     COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC'
@@ -172,10 +122,7 @@ GROUP BY 1
 ORDER BY TOTAL_PATIENTS DESC;
 
 
--- ============================================================================
--- D3: Where Central patients go instead — top non-ATC parents in Central
--- (who is absorbing the volume; potential outreach / future-ATC candidates)
--- ============================================================================
+-- D3: Top non-ATC parents in Central
 SELECT
     a.HCO_PARENT_NAME,
     COUNT(DISTINCT a.D_PATIENT_ID) AS PATIENTS,
@@ -192,11 +139,7 @@ ORDER BY 2 DESC
 LIMIT 20;
 
 
--- ============================================================================
--- E: Sample patient journeys — 3 random patients from the migration cohort
--- (started Non-ATC, classified ATC). Full claim history per patient.
--- Kolin's note from Meet 5: expect null values on many fields.
--- ============================================================================
+-- E: Sample migration-cohort patient journeys (random 3)
 WITH first_site AS (
     SELECT D_PATIENT_ID, IS_ATC_HCO AS FIRST_ATC
     FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
@@ -222,4 +165,22 @@ SELECT
     DATEDIFF("day", t.FIRST_DX_DATE, t.DATE_OF_SERVICE) AS DAYS_SINCE_DX
 FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS t
 INNER JOIN sample_migrants s ON t.D_PATIENT_ID = s.D_PATIENT_ID
+ORDER BY t.D_PATIENT_ID, t.DATE_OF_SERVICE;
+
+
+-- E2: Same journeys, fixed to the 3 patients sampled on Jul 7
+SELECT
+    t.D_PATIENT_ID,
+    t.DATE_OF_SERVICE,
+    t.DRUG,
+    CASE WHEN t.IS_ATC_HCO = 1 THEN 'ATC' ELSE 'Non-ATC' END AS SITE_TYPE,
+    t.D_PRIMARY_HCO_COMPILE_ID,
+    t.FIRST_DX_DATE,
+    DATEDIFF("day", t.FIRST_DX_DATE, t.DATE_OF_SERVICE) AS DAYS_SINCE_DX
+FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS t
+WHERE t.D_PATIENT_ID IN (
+    '6f9979fa-d3ea-546e-a626-f8f1f5197c06',
+    'af1edc05-ab01-5c5d-ad24-42a1cc5287a1',
+    'f736b929-8ffb-5b4b-80ce-0faf319ce1b5'
+)
 ORDER BY t.D_PATIENT_ID, t.DATE_OF_SERVICE;
