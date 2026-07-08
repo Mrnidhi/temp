@@ -184,3 +184,31 @@ WHERE t.D_PATIENT_ID IN (
     'f736b929-8ffb-5b4b-80ce-0faf319ce1b5'
 )
 ORDER BY t.D_PATIENT_ID, t.DATE_OF_SERVICE;
+
+
+-- F: Start-site x End-classification 2x2 -- fills the four-bucket graphic on deck Slide 4
+-- START = site of the patient's FIRST treatment claim (IS_ATC_HCO, NPI-strict) -- the same
+--         definition already behind the 3,701 "moved to ATC" number (query E's first_site).
+-- END   = CLASS_FINAL (hybrid, parent-level) -- the deck's headline 42.7% definition.
+-- Built-in check: the 'Started Non-ATC' x 'Ended ATC' cell should return 3,701, and all
+-- cells (incl. any 'No treatment claim') must sum to 16,246. If not, something changed upstream.
+WITH first_site AS (
+    SELECT D_PATIENT_ID, IS_ATC_HCO AS FIRST_ATC
+    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID
+        ORDER BY DATE_OF_SERVICE, D_PRIMARY_HCO_COMPILE_ID) = 1
+)
+SELECT
+    CASE
+        WHEN fs.FIRST_ATC = 1 THEN 'Started ATC'
+        WHEN fs.FIRST_ATC = 0 THEN 'Started Non-ATC'
+        ELSE 'No treatment claim'
+    END AS START_SITE,
+    CASE WHEN c.CLASS_FINAL = 'ATC' THEN 'Ended ATC' ELSE 'Ended Non-ATC' END AS END_CLASS,
+    COUNT(DISTINCT c.D_PATIENT_ID) AS PATIENTS,
+    ROUND(100.0 * COUNT(DISTINCT c.D_PATIENT_ID)
+        / SUM(COUNT(DISTINCT c.D_PATIENT_ID)) OVER (), 1) AS PCT_OF_ALL
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL c
+LEFT JOIN first_site fs ON c.D_PATIENT_ID = fs.D_PATIENT_ID
+GROUP BY 1, 2
+ORDER BY 1, 2;
