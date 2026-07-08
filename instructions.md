@@ -1,167 +1,137 @@
-# PowerPoint Copilot — Slide-by-Slide Edit Instructions
+# PowerPoint Copilot — Slide-by-Slide Edit Instructions (v2: voice + final-slide rework)
 
-> **How to use**: Open the deck in PowerPoint Online → click **Copilot** → go to the slide → paste the prompt. Do them **in order** (Slides 5 and 6 are new).
+> **How to use**: Open the deck in PowerPoint Online → click **Copilot** → go to the slide → paste the prompt.
 >
-> Current deck: **4 slides** → Target deck: **6 slides**
+> **Deck stays at 6 slides.** This pass does two things: (1) strips the "AI voice" out of the copy so it reads like consulting-grade business analysis, and (2) rebuilds Slide 6 from a flat menu into a real "what this means" closer.
 >
-> **Authority for these changes:** Kolin's "Daily Connect (07/07)" recap email (Tue 2026-07-07) + Meet 10 detail. His three deck asks: (i) split the Methodology right-side bullets, (ii) split Patient Journey into two slides (journey + regional), (iii) add a slide listing the other data cuts explored. That takes the deck from 4 to 6 slides.
+> **Voice rules baked into every prompt below:** declarative, business-first, no em-dash-plus-explainer tics, no filler ("substantial portion", "points to opportunity", "underserved markets"), no hedging. Say the finding, then the "so what."
 
 ---
 
 ## Slide 1 — Title
-**Action: Manual edit (no Copilot needed)**
+**Action: Manual edit — still outstanding**
 
-- Change `June 2026` → `July 2026`. Nothing else.
+- Change `June 2026` → `July 2026`. (This never got made; it's the one mechanical fix left.)
 
 ---
 
 ## Slide 2 — Methodology Overview
-**Action: Copilot edit — split the RIGHT column only**
+**Action: Done — leave as-is (optional polish only)**
 
-> Kolin: "Split up bullet 1 & 2 as 'how ATCs are classified' & then last bullet mentions patient assignment." The top two bullets are about classifying the *centers*; the last is about assigning the *patients*.
+The right-column split ("How ATC centers are classified" / "How each patient is assigned") is already applied correctly. Copy is clean and factual. Only optional tweak, if you want it: vertically center the two columns so the big empty band at the bottom closes up. No wording change needed.
+
+---
+
+## Slide 3 — Market Structure
+**Action: Leave for Kolin — but flag one accuracy issue to him**
+
+Kolin is rewording the growth bullet himself, so don't overwrite. But raise this with him: the yellow callout says *"ATC share has grown steadily each year,"* which the yearly data contradicts — it was **flat 2021–2023 (19.0 / 18.9 / 19.1) then jumped in 2024–2025 (22.0 / 23.9).** It didn't grow steadily; it inflected recently. Suggested honest replacement (his call):
+
+> "Most metastatic melanoma treatment still happens outside our ATCs, but ATC share has climbed sharply since 2024."
+
+---
+
+## Slide 4 — Patient Journey
+**Action: Copilot edit — rewrite the TEXT only, keep the 2×2 layout, numbers, and colors**
+
+> The graphic is great; only the wording needs de-robotizing. Do NOT move boxes, change numbers, or restyle — only replace the text strings below.
 
 **Copilot prompt:**
 ```
-On the right side of this slide, split the three bullets under "How each patient is assigned" into two labelled groups, each with a bold sub-header. Keep the exact bullet wording.
+On this slide, keep the 2x2 grid, all four numbers (3,701 / 9,301 / 3,234 / 10), the percentages, the colors, and the box positions exactly as they are. Only replace the wording, as follows.
 
-Group 1 — bold sub-header: "How ATC centers are classified"
-• Provider NPI is matched against the authorized ATC list first
-• If there is no NPI match, the site is matched on HCO parent name, which is how satellites of an ATC parent are captured
+Title: "ATCs gain patients over the course of care, and almost never lose them"
 
-Group 2 — bold sub-header: "How each patient is assigned"
-• A patient seen at both ATC and non-ATC sites is counted once, at the site with the most claims
+Box wording (match by number):
+• 3,701 (23% of all patients): "Began outside the ATC network, then treated at an ATC. More than half of today's ATC patients arrived this way."
+• 9,301 (57% of all patients): "Treated entirely outside the ATC network."
+• 3,234 (20% of all patients): "Began and stayed at an ATC."
+• 10 (0.1% of all patients): "Began at an ATC, then left. Almost no one does."
 
-Keep the entire LEFT column ("What each site bucket includes") unchanged.
-Keep the yellow callout box, the source footnote, the slide title, and the section label unchanged.
+Keep the "6.7 vs 6.0 claims per patient at ATC versus non-ATC sites" line as-is.
+
+Bottom callout, replace with: "More than half of our ATC patients started somewhere else, and once patients reach an ATC they rarely leave. The network grows by pulling patients in over the course of their care."
+
+Leave the source footnote unchanged.
 ```
 
 ---
 
-## Slide 3 — Market Structure (Table + Takeaways)
-**Action: LEAVE AS-IS — no Copilot edit**
-
-> Kolin is rewording the ATC-share-growth bullet himself ("let me play with that a little bit"). The source already reads "McKesson (Compile)" and the growth bullet already says "where patients began treatment." Nothing for us to do here.
->
-> *(Optional, only if you personally want it: round the table to whole numbers — 42.7→43, 43.7→44, 8.1→8, 5.5→5. Not requested by Kolin; leave alone unless asked.)*
-
----
-
-## Slide 4 — Patient Journey → Migration (EDIT existing slide)
-**Action: Copilot edit — keep migration, remove the regional chart, add the 4-bucket graphic**
-
-> Kolin (email ii + Meet 10): Slide 4 does two things at once. Keep the migration story here; move the regional chart to its own new slide. Replace the chart with the four start→end buckets ("the four kind of buckets… start and end").
-> Numbers are confirmed from Snowflake query F (sum = 16,246; ended-ATC = 6,935).
+## Slide 5 — Regional View
+**Action: Copilot edit — rewrite the TEXT only, keep the bar chart untouched**
 
 **Copilot prompt:**
 ```
-Redesign this slide to focus ONLY on patient migration between ATC and non-ATC sites. Remove the regional bar chart and the "26%" stat box — those move to a new separate slide.
+On this slide, keep the bar chart, the six regions, the values (50/49/43/42/40/26), the axis, and the colors exactly as they are. Only replace the wording.
 
-Section label: "PATIENT JOURNEY"
-Title: "Migration into ATCs is almost entirely one-directional"
+Title: "Where a patient lives shapes whether they reach an ATC"
 
-Replace the stat boxes and bar chart with a clean 4-bucket start-to-end graphic (a 2x2 grid or simple flow). Use these exact figures:
+Replace the three bullets with:
+• In the Southeast and Northeast, about half of patients reach an ATC.
+• The Central region sits at just 26%, held down by states with no authorized ATC at all: Arkansas, South Dakota, and North Dakota.
+• This is a coverage gap, not a demand gap: patients in these states are being treated, they just aren't reaching an ATC.
 
-| Journey | Patients | Share |
-|---|---|---|
-| Started non-ATC → moved to ATC | 3,701 | 23% |
-| Started non-ATC → stayed non-ATC | 9,301 | 57% |
-| Started ATC → stayed ATC | 3,234 | 20% |
-| Started ATC → moved to non-ATC | 10 | 0.1% |
+Bottom callout, replace with: "A patient's region drives their odds of reaching an ATC, from 50% in the Southeast down to 26% in the Central."
 
-Visually emphasize the "3,701 — moved to ATC" bucket (it is over half of all ATC-classified patients) and the "10" bucket (once patients start at an ATC, almost none leave).
-
-Keep "6.7 vs 6.0 claims per patient at ATC versus non-ATC sites" as a small supporting callout near the bottom.
-
-Yellow callout: "Over half of ATC-classified patients began outside the ATC network — and once patients start at an ATC, they almost never leave."
-
-Source footnote: "Source: McKesson (Compile) medical claims (2021 to 2025). Start = site of first treatment claim (NPI-confirmed); end = final ATC classification. Patients may have activity across both ATC and Non-ATC settings."
-
-Use the same slide template, fonts, and color scheme as the rest of the deck.
+Leave the source footnote unchanged.
 ```
 
 ---
 
-## Slide 5 — Regional Penetration (NEW — insert after Slide 4)
-**Action: Copilot — create a new slide (the chart from old Slide 4)**
+## Slide 6 — What this means (REBUILD: from appendix menu → the strategic close)
+**Action: Copilot edit — replace the contents of the existing Slide 6 (do not add a new slide)**
 
-> Kolin (email ii + Meet 10): break the regional chart onto its own slide with a header that ATC/non-ATC distribution "is vastly different depending on what region."
+> This is the payoff slide, and it carries the deck's argument: because Amtagvi (TIL) can only be delivered at an ATC, the whole analysis is about therapy *reach*, not market share. The four takeaways ladder into one thesis — reach patients faster, and fix the places we can't reach them at all. **All four are backed by data already in hand; no new query needed.**
 
 **Copilot prompt:**
 ```
-Add a new slide after this one:
+Replace the contents of this slide (keep the deck template, section-label style, title style, and source line).
 
-Section label: "REGIONAL VIEW"
-Title: "ATC penetration varies vastly by region"
+Section label: "WHAT THIS MEANS"
+Title: "The lever is referral speed, not first-line capture"
 
-Main content: a vertical bar chart, "ATC penetration by region (% of Patients)", with a Y-axis label "% of Patients":
-- Southeast: 50
-- Northeast: 49
-- Ohio Valley: 43
-- West: 42
-- Great Lakes: 40
-- Central: 26
+Lay out four numbered takeaways, each a bold one-line headline followed by one or two supporting sentences:
 
-Use the same olive/dark-green bar color as the rest of the deck.
+1. The gap is about access, not quality.
+   Patients treated outside our ATCs reach treatment about as fast (roughly 40 days from diagnosis) and get comparable treatment volume (6.0 vs 6.7 claims per patient). They are not getting worse care. They are in settings that cannot offer a therapy only ATCs deliver.
 
-Bullets beside the chart:
-• Southeast and Northeast lead at ~50% ATC penetration
-• Central lags at 26% — a coverage gap (no authorized ATC in AR, SD, or ND)
-• Regional variation points to opportunity in underserved markets
+2. The referral engine already works, and it runs one way.
+   More than half of today's ATC patients (3,701) arrived from outside the network, and almost none leave (10). We do not need to win patients at diagnosis. We need to shorten the path in. Every month earlier is a month more of eligibility.
 
-Yellow callout: "The share of patients treated at ATCs ranges from 50% in the Southeast to 26% in the Central region."
+3. The trend has turned in our favor.
+   ATC share held flat near 19% for three years, then climbed to 24% across 2024 and 2025. The pull into ATCs is accelerating. The question is how much faster we can make it.
 
-Source footnote: "Source: McKesson (Compile) medical claims (2021 to 2025). Regional shares based on hybrid classification. Patients may have activity across both ATC and Non-ATC settings."
+4. Where we are weak, the cause is structural.
+   The Central region sits at 26% because Arkansas, South Dakota, and North Dakota have no authorized ATC at all, and one system (Texas Oncology) holds 28% of the region's off-ATC patients. That is a build-or-partner decision with a specific target, not a sales-effort problem.
 
-Match the same slide template, fonts, and color scheme as the rest of the deck.
+Bottom callout: "For a therapy only ATCs can deliver, the commercial lever is the speed of referral into the network, and coverage where it does not yet reach."
+
+Source footnote: "Source: McKesson (Compile) medical claims (2021 to 2025). Analysis by Iovance Sales Operations."
 ```
+
+**Optional depth (only if you want it):** takeaway 2 can name real referral lanes from **Insight 6b** (which non-ATC systems feed which ATCs); takeaway 4 can add a target list from **Insight 5** (top non-ATC accounts + `CUM_PCT_OF_LEAKAGE`). Both are already in `git/NewCode.sql`. The slide stands on its own at four; add these only if Kolin wants the extra specificity.
 
 ---
 
-## Slide 6 — Additional Analyses Available (NEW — insert after Slide 5)
-**Action: Copilot — create a simple list slide**
-
-> Kolin (email iii + Meet 10): "add one simple slide… a simple list of just like a high level what we looked at… additional analysis available on request." Every item below is an analysis already run — no new work.
-
-**Copilot prompt:**
-```
-Add a new slide:
-
-Section label: "APPENDIX"
-Title: "Additional analyses available on request"
-
-A clean, scannable bulleted list with bold topic names (no charts):
-• Satellite split — true ATC site vs satellite of an ATC parent (47% / 53%)
-• Classification sensitivity — strict NPI-only floor vs parent-level definition (20% ↔ 43%)
-• Year-over-year ATC share — starting-site share by year, 2021 to 2025 (19% → 24%)
-• Regional penetration — ATC share by region
-• Central region root cause — coverage-gap analysis by state
-• Claims intensity — average claims per patient, ATC vs non-ATC (6.7 vs 6.0)
-• Sample patient journeys — individual migration traces
-• Diagnosis-to-treatment timing — median days from diagnosis to first treatment (~39–44 days)
-
-Source footnote: "Source: McKesson (Compile) medical claims (2021 to 2025)."
-
-Match the same slide template as the rest of the deck.
-```
-
----
-
-# Final Deck Structure
+# Final Deck Structure (6 slides)
 
 | # | Section | Title | Status |
 |---|---------|-------|--------|
-| 1 | TITLE | ATC vs Non-ATC Site of Care Analysis — July 2026 | Manual (month fix) |
-| 2 | METHODOLOGY OVERVIEW | ATC is defined at the HCO parent level… | Copilot edit (split right side) |
-| 3 | MARKET STRUCTURE | A majority of patients are treated outside our ATCs | **Leave as-is** (Kolin rewords) |
-| 4 | PATIENT JOURNEY | Migration into ATCs is almost entirely one-directional | Copilot edit (4-bucket graphic, chart removed) |
-| 5 | REGIONAL VIEW | ATC penetration varies vastly by region | **NEW** (chart from old Slide 4) |
-| 6 | APPENDIX | Additional analyses available on request | **NEW** (simple list) |
+| 1 | TITLE | …July 2026 | Manual month fix (outstanding) |
+| 2 | METHODOLOGY | ATC is defined at the HCO parent level… | Done |
+| 3 | MARKET STRUCTURE | A majority of patients are treated outside our ATCs | Leave (Kolin) + flag "grown steadily" |
+| 4 | PATIENT JOURNEY | ATCs gain patients over the course of care… | Copilot: text-only rewrite |
+| 5 | REGIONAL VIEW | Where a patient lives shapes whether they reach an ATC | Copilot: text-only rewrite |
+| 6 | WHAT THIS MEANS | The lever is referral speed, not first-line capture | Copilot: full rebuild (all data in hand) |
 
 ---
 
-# Data backing (Snowflake, confirmed)
+# Data backing
 
-- **4-bucket graphic (query F, Jul 8):** 3,234 / 10 / 3,701 / 9,301 → Σ 16,246 ✓; ended-ATC 6,935 ✓; started-ATC 3,244 = 20.0% ✓.
-- **Table (Slide 3):** ATC 6,935 (42.7%) · Hospital 7,100 · Community 1,317 · Other 894 · Total 16,246.
-- **Regional (Slide 5):** SE 50 · NE 49 · OHV 43 · West 42 · GL 40 · Central 26.
-- **Appendix items** all correspond to queries already run (see `Memory/code_memory/atc_followups_runbook.md`).
+- **S4 four buckets (query F):** 3,701 / 9,301 / 3,234 / 10 → Σ 16,246 ✓.
+- **S6 #1 (access not quality):** dx-to-treatment ~39–44 days both settings (Insight 11); 6.0 vs 6.7 claims/patient (Insight 13). Therapy-only-at-ATC is the premise of NewCode.sql.
+- **S6 #2 (one-way referral engine):** 3,701 migrate in / 10 leave (query F). Optional named lanes = Insight 6b.
+- **S6 #3 (trend inflected):** yearly 19.0 / 18.9 / 19.1 / 22.0 / 23.9 (Insight 3). NB: the 2024 inflection coincides with Amtagvi's Feb-2024 approval — plausible driver, verify before asserting causation.
+- **S6 #4 (structural gap):** Central 26%; AR/SD/ND 0% ATC; Texas Oncology PA = 28.3% of Central off-ATC (D1–D3). Optional target list = Insight 5.
+
+> **Source-of-truth note:** `git/NewCode.sql` is the canonical/showcase pipeline (13 insights). The `Snowflake/ATC Follow-ups…` file is a scratch/test script. All deck numbers should trace back to NewCode.sql insights: S3 table → Insight 1; S4 buckets → query F (a Slide-4 variant of Insight 8); S5 regional → Insight 10; S6 → Insights 5 + 7.
