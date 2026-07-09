@@ -217,16 +217,4 @@ SELECT
 FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
 LEFT JOIN npi_terr    n ON TRIM(a.D_PRIMARY_HCO_NPI) = n.NPI
 LEFT JOIN parent_terr p ON UPPER(TRIM(a.HCO_PARENT_NAME)) = p.PARENT;
-
-
-/* =====================================================================
-   WHAT I'LL DO WITH THESE:
-     S1-S2  headline opportunity + regional spread
-     S3     confirms skew -> use median + quartile buckets
-     S4-S5  state + sales-region drilldown
-     S6-S7  territory footprint + how skewed it is (the fairness case)
-     S8     whether territory can come from claims or must wait on Infinity
-     S9     how much of ATC we can actually attribute -> reliability
-   Then: same S6/S7 method re-runs on Infinity enrollment-by-territory to
-   set the real baselines + buckets.
-   ===================================================================== */
+-- end of script (S1-S9 above)
