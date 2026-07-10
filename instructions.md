@@ -1,271 +1,185 @@
-# Enrollment Contest: Sheet Build Instructions
+# Enrollment Contest: Corrections to the Scoring Sheet
 
-Build a scoring sheet that ranks 28 sales territories on enrollment growth, fairly, despite large differences in territory size.
+Apply these changes to the existing `Contest Scoring` sheet. Four problems need fixing. They are listed in the order they should be applied, because later steps depend on earlier ones.
 
 ---
 
-## Key terms
+## Problem 1: The baseline and the contest window are different lengths
 
-**Enrollment.** A patient signed up for treatment at a center. This is the only thing the contest scores. It is not a referral.
+The baseline is an average of a **3 month quarter**. The contest runs for **2 months**, August and September.
 
-**ATC.** An individual treatment center. There are roughly 96 of them.
+Right now the sheet subtracts a 3 month baseline from a 2 month result. Every territory will show negative growth even when they performed above their normal pace.
 
-**Territory.** A sales patch. There are 28. Each territory contains between 3 and 10 ATCs.
+**Example.** A territory has a baseline of 12 per quarter, which is 4 per month. During the contest it enrolls 9 patients across 2 months, which is 4.5 per month, better than normal. The sheet calculates 9 minus 12 and reports -3, as though the territory declined.
 
-**Baseline.** What a normal quarter looks like for a given territory. Every score is measured against this.
+**The fix.** Scale the baseline down to the length of the contest window before comparing.
 
-The source data records enrollments at the ATC level. The contest is scored at the territory level. Rolling one up into the other is the first half of the job.
+Add a new column, `Adjusted Baseline`, immediately after `Baseline`. All growth calculations use the adjusted figure, never the raw quarterly one.
+
+Do not round the adjusted baseline to a whole number. A territory with a baseline of 2 scales to 1.3, and rounding that to 1 would hand it an unfairly low bar. Keep one decimal place.
+
+---
+
+## Problem 2: Four territories are missing
+
+The sheet contains 24 territories. There should be 28. The workbook's alignment data carries an older 24 territory mapping.
+
+**The fix.** Reload the roll up using the current 28 territory alignment. Do not proceed past this step until the validation check for territory count passes. Every bucket boundary and every rank depends on the full set being present.
+
+All cell ranges below assume 28 territories in rows 2 through 29. If only 24 are present, the ranges must read rows 2 through 25 instead, and the results should be treated as provisional.
+
+---
+
+## Problem 3: Territories of identical size are landing in different buckets
+
+Buckets are currently assigned by forcing an equal count into each tier. The cutoff lands in the middle of a tie.
+
+Two territories both have a baseline of 11. One sits in Tier 1, the other in Tier 2. The first now competes against a territory that does 18 a quarter, the second competes against much smaller ones. There is no defensible reason for the difference.
+
+**The fix.** Stop assigning buckets by position in a sorted list. Assign them by baseline **value**, using two cutoff numbers. Any two territories with the same baseline then always land in the same bucket.
+
+Accept that the groups will be uneven. Uneven groups are correct. Splitting a tie is not.
+
+**Choosing the cutoffs.** Sort the baselines, look for the natural gaps in the numbers, and place the two cutoffs there. Never place a cutoff between two identical values. Aim for roughly a third of the territories in each tier, but let the ties win when the two goals conflict.
+
+---
+
+## Problem 4: Empty contest results are being scored
+
+The `Contest Enrollments` column is empty because the contest has not run. The formulas are treating empty as zero, so every territory shows -100 percent growth, every growth rank shows 1, and the final scores and places are meaningless numbers that look real.
+
+**The fix.** Every calculated column must return blank when `Contest Enrollments` is blank. Nothing downstream should display a value until real results exist.
 
 ---
 
 ## Parameters
 
-These are the settings the build assumes. If any of them change, the formulas still hold.
+Put these in cells `R1:S4` on the `Contest Scoring` sheet, so the settings are visible and changeable without editing formulas.
 
-| Setting | Value |
-|---|---|
-| Baseline window | Last 4 completed quarters |
-| Number of buckets | 3 |
-| How buckets are split | By baseline size, using natural cutoffs |
-| Bucket sizes | Roughly 9 / 10 / 9 (28 does not divide evenly into 3) |
-| Paid places | Top 2 in each bucket, so 6 winners total |
-| Tiebreaker | Higher percent growth wins |
-| Contest window | August through September |
+| Cell | Label | Value |
+|---|---|---|
+| R1 / S1 | Contest window, months | 2 |
+| R2 / S2 | Baseline quarter, months | 3 |
+| R3 / S3 | Tier 1 cutoff | set from the data |
+| R4 / S4 | Tier 2 cutoff | set from the data |
 
----
-
-## Why the contest is scored this way
-
-Territory sizes are very uneven. Over a six quarter stretch, some territories record around 100 enrollments while others record about 13. If every territory competed in one shared pool, the largest ones would win every time and the smallest would never be in contention.
-
-Two design choices fix this:
-
-1. **Buckets.** Territories only compete against others of a similar size.
-2. **Two growth measures instead of one.** Volume growth rewards adding the most patients. Percent growth rewards improving the most relative to your own size. Scoring on both, equally weighted, means neither the big nor the small territories have a built in advantage.
+A territory lands in Tier 1 if its baseline is greater than or equal to the Tier 1 cutoff. It lands in Tier 2 if its baseline is greater than or equal to the Tier 2 cutoff. Otherwise it lands in Tier 3.
 
 ---
 
-## The build, end to end
+## Corrected sheet layout
 
-1. Load the enrollment data
-2. Roll ATC enrollments up into territories, by quarter
-3. Calculate each territory's baseline
-4. Sort territories into 3 buckets by baseline
-5. Count enrollments during the contest window
-6. Calculate volume growth and percent growth
-7. Rank each territory twice, within its own bucket
-8. Average the two ranks into a final score
-9. Assign places and pick winners
+A new column is inserted at H. Everything from the old H onward shifts one to the right.
 
-Steps 1 through 4 use historical data and can be built immediately. Steps 5 through 9 are formulas that populate once contest results exist. Build them up front so the sheet scores itself automatically.
-
----
-
-## Step 1: Load the data
-
-Source is the enrollment tab of the ATC performance workbook.
-
-Required fields:
-* **Column D** contains the territory
-* The ATC name
-* The enrollment date, or a field identifying which quarter the enrollment occurred in
-* A patient identifier
-
-Copy this into a sheet named `Raw Data` without modification.
+| Col | Field | Changed? |
+|---|---|---|
+| A | Territory | |
+| B | Bucket | now formula driven |
+| C | 3Q2025 enrollments | |
+| D | 4Q2025 enrollments | |
+| E | 1Q2026 enrollments | |
+| F | 2Q2026 enrollments | |
+| G | Baseline | |
+| H | **Adjusted Baseline** | **new** |
+| I | Contest Enrollments | |
+| J | Volume Growth | now uses H |
+| K | Percent Growth | now uses H |
+| L | Volume Rank | now blank safe |
+| M | Growth Rank | now blank safe |
+| N | Final Score | now blank safe |
+| O | Place | now blank safe |
 
 ---
 
-## Step 2: Roll ATCs up into territories
+## Corrected formulas
 
-Create a pivot table from `Raw Data`:
+Enter in row 2, fill down to row 29.
 
-* **Rows:** Territory
-* **Columns:** Quarter
-* **Values:** Count of enrollments
-
-Pull the last five to six quarters so the trend is visible, even though only four are used for the baseline.
-
-Paste the result into a new sheet named `Contest Scoring`.
-
-**Validation check:** all 28 territories must appear. If fewer appear, some ATCs failed to map to a territory and dropped out of the roll up. Resolve this before continuing, because every downstream number depends on it.
-
----
-
-## Step 3: Calculate the baseline
-
-The baseline answers: what does a normal quarter look like for this territory?
-
-Use the **last 4 completed quarters**, not all six. The most recent quarters ran unusually high, and including them would set a bar most territories cannot clear.
-
-```
-Baseline = ROUNDUP(AVERAGE(last 4 quarters), 0)
+**B2, Bucket, assigned by value so ties stay together**
+```excel
+=IF(G2>=$S$3,"Tier 1",IF(G2>=$S$4,"Tier 2","Tier 3"))
 ```
 
-Round up, so the bar is never set below a whole enrollment.
-
----
-
-## Step 4: Assign the 3 buckets
-
-1. Sort all 28 territories by baseline, largest first
-2. Split into three groups: **Tier 1** (largest), **Tier 2** (middle), **Tier 3** (smallest)
-3. Because 28 does not divide evenly, let the natural break points in the data decide. Expect roughly 9 / 10 / 9.
-
-Record the result in the `Bucket` column. Every territory must have a value. This column drives every ranking that follows.
-
----
-
-## Step 5: Count contest enrollments
-
-Once the contest window closes, rerun the Step 2 pivot filtered to the contest window only. Add the result as the `Contest Enrollments` column.
-
----
-
-## Step 6: The two growth measures
-
-Each territory gets both.
-
-**Volume growth** is how many extra enrollments were added:
-```
-Contest Enrollments - Baseline
-```
-
-**Percent growth** is how much the territory improved relative to its own size:
-```
-(Contest Enrollments - Baseline) / Baseline
-```
-
-Format percent growth as a percentage.
-
-**Worked example.** A large territory goes from a baseline of 90 to 97. That is +7 enrollments but only 8 percent growth. A small territory goes from 13 to 17. That is +4 enrollments but 31 percent growth. Volume alone crowns the first. Percent alone crowns the second. Using both is what makes the contest fair.
-
----
-
-## Step 7: Rank twice, within bucket only
-
-Two separate rankings. A territory is only ever compared against others in its own bucket, never against all 28.
-
-**Volume Rank.** Most enrollments added, where 1 is best.
-**Growth Rank.** Largest percent growth, where 1 is best.
-
-Excel has no built in function to rank within a group. Use `SUMPRODUCT` to count how many territories in the same bucket outperformed this one, then add 1.
-
----
-
-## Step 8: Blend the ranks
-
-```
-Final Score = AVERAGE(Volume Rank, Growth Rank)
-```
-
-**Lowest score wins.**
-
-A territory ranked 1st on volume and 3rd on percent scores 2.0. A territory ranked 3rd on volume and 1st on percent also scores 2.0. They tie, which is the intended behaviour. Neither can win on size alone.
-
----
-
-## Step 9: Assign places
-
-Rank the final scores within each bucket, lowest first. The placement formula in the next section resolves ties automatically by awarding the better place to the territory with higher percent growth.
-
-* 1st place in each bucket wins
-* 2nd place in each bucket is also paid
-* Six winners in total across the three buckets
-
----
-
-## Sheet layout
-
-Sheet name: `Contest Scoring`. Header in row 1. Data in rows 2 through 29 (28 territories).
-
-| Col | Field |
-|---|---|
-| A | Territory |
-| B | Bucket |
-| C | Quarter 1 enrollments (oldest) |
-| D | Quarter 2 enrollments |
-| E | Quarter 3 enrollments |
-| F | Quarter 4 enrollments (most recent completed) |
-| G | Baseline |
-| H | Contest Enrollments |
-| I | Volume Growth |
-| J | Percent Growth |
-| K | Volume Rank |
-| L | Growth Rank |
-| M | Final Score |
-| N | Place |
-
----
-
-## Formulas
-
-Enter these in row 2 and fill down to row 29.
-
-**G2, Baseline**
+**G2, Baseline, unchanged**
 ```excel
 =ROUNDUP(AVERAGE(C2:F2),0)
 ```
 
-**I2, Volume Growth**
+**H2, Adjusted Baseline, scaled to the contest window**
 ```excel
-=H2-G2
+=ROUND(G2*$S$1/$S$2,1)
 ```
 
-**J2, Percent Growth**
+**J2, Volume Growth**
 ```excel
-=IF(G2=0,"",(H2-G2)/G2)
+=IF(I2="","",I2-H2)
 ```
 
-**K2, Volume Rank within bucket**
+**K2, Percent Growth**
 ```excel
-=SUMPRODUCT(($B$2:$B$29=B2)*($I$2:$I$29>I2))+1
+=IF(OR(I2="",H2=0),"",(I2-H2)/H2)
 ```
 
-**L2, Growth Rank within bucket**
+**L2, Volume Rank within bucket**
 ```excel
-=SUMPRODUCT(($B$2:$B$29=B2)*($J$2:$J$29>J2))+1
+=IF(J2="","",SUMPRODUCT(($B$2:$B$29=B2)*($J$2:$J$29<>"")*($J$2:$J$29>J2))+1)
 ```
 
-**M2, Final Score**
+**M2, Growth Rank within bucket**
 ```excel
-=AVERAGE(K2,L2)
+=IF(K2="","",SUMPRODUCT(($B$2:$B$29=B2)*($K$2:$K$29<>"")*($K$2:$K$29>K2))+1)
 ```
 
-**N2, Place within bucket, with tiebreaker built in**
+**N2, Final Score**
 ```excel
-=SUMPRODUCT(($B$2:$B$29=B2)*(($M$2:$M$29<M2)+($M$2:$M$29=M2)*($J$2:$J$29>J2)))+1
+=IF(OR(L2="",M2=""),"",AVERAGE(L2,M2))
 ```
 
-The placement formula counts two things: territories in the same bucket with a better final score, plus territories with an identical final score but higher percent growth. That applies the tiebreaker without any manual step.
+**O2, Place within bucket, with a three level tiebreaker**
+```excel
+=IF(N2="","",SUMPRODUCT(($B$2:$B$29=B2)*($N$2:$N$29<>"")*(($N$2:$N$29<N2)+($N$2:$N$29=N2)*($K$2:$K$29>K2)+($N$2:$N$29=N2)*($K$2:$K$29=K2)*($J$2:$J$29>J2)))+1)
+```
+
+The `<>""` term in each ranking formula excludes blank rows from the comparison. Without it, Excel treats an empty text value as larger than any number and the ranks come out wrong.
+
+The place formula breaks ties in three stages. First on final score. If two territories are still level, the higher percent growth wins. If they are still level, the higher volume growth wins. If all three match, the two territories genuinely tie and share a place.
 
 ---
 
-## Example rows
+## Corrected validation checks
 
-Illustrative numbers only. The layout is what matters.
+Replace the fixed expected values. Tier counts are no longer expected to be equal, because ties are no longer split.
 
-| Territory | Bucket | Q1 | Q2 | Q3 | Q4 | Baseline | Contest | Vol Growth | % Growth | Vol Rank | Growth Rank | Final Score | Place |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| South FL | Tier 1 | 24 | 28 | 22 | 26 | 25 | 30 | 5 | 20% | 2 | 3 | 2.5 | 2 |
-| Rocky Mtn | Tier 3 | 3 | 4 | 2 | 3 | 3 | 5 | 2 | 67% | 1 | 1 | 1.0 | 1 |
+| Check | Formula | Expected |
+|---|---|---|
+| Territories present | `=COUNTA(A2:A29)` | 28 |
+| Blank buckets | `=COUNTBLANK(B2:B29)` | 0 |
+| Baselines above zero | `=COUNTIF(G2:G29,">0")` | 28 |
+| Adjusted baseline is smaller than baseline | `=SUMPRODUCT(--(H2:H29<G2:G29))` | 28 |
+| Tier counts sum correctly | `=COUNTIF(B:B,"Tier 1")+COUNTIF(B:B,"Tier 2")+COUNTIF(B:B,"Tier 3")` | 28 |
+| No baseline split across two tiers | `=SUMPRODUCT(--(COUNTIFS($G$2:$G$29,$G$2:$G$29,$B$2:$B$29,$B$2:$B$29)<>COUNTIF($G$2:$G$29,$G$2:$G$29)))` | 0 |
+
+The last check is the important new one. It compares, for every territory, how many others share its baseline against how many share both its baseline and its bucket. If those two counts ever differ, a tie was split across a boundary and the bucket cutoffs need moving.
+
+Tier counts should no longer be checked against 8. They will be uneven, and that is intended.
+
+Once contest results are loaded, add back the two place checks: each bucket should contain exactly one Place 1 and one Place 2.
 
 ---
 
-## Data quality guards
+## One thing to verify in the source data
 
-**Count each patient once.** A patient who enrolls, drops out, then enrolls again appears as two records. Left uncorrected, 27 patients can read as 28 enrollments. Deduplicate on the patient identifier before counting, not on the order or record. Without this, a territory's number can be inflated by the same person twice.
+The roll up formula filters `Raw Data` on a flag column equal to 1. Confirm that this flag marks **one row per patient** and not one row per order.
 
-**Only count enrollments that progress.** An enrollment that goes nowhere should not score. Restrict the count to enrollments that reach the next stage of the funnel. This prevents padding the number with patients who were never a real fit.
+A patient who enrolls, withdraws, then enrolls again produces two records. If the flag does not remove the duplicate, a territory can be credited twice for the same person. This is the single easiest way for the contest number to be inflated.
 
 ---
 
-## Validation checklist
+## Order of operations
 
-Before treating any result as final:
-
-- [ ] All 28 territories appear in the roll up
-- [ ] Every territory has a non blank bucket
-- [ ] Every baseline is greater than zero, so no percent growth divides by zero
-- [ ] Bucket counts total 28
-- [ ] Each bucket has exactly one territory in place 1 and one in place 2
-- [ ] Enrollments are deduplicated by patient
+1. Load the 28 territory alignment and confirm the territory count check passes
+2. Rebuild the quarterly roll up so all 28 territories carry enrollment numbers
+3. Set the two tier cutoffs from the new baselines, placing them at natural gaps rather than at fixed counts
+4. Insert the Adjusted Baseline column and apply the scaling
+5. Replace all formulas from column B and columns J through O
+6. Rerun the validation table and confirm every check passes except the two place checks, which stay pending until the contest runs
