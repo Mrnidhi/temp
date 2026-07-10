@@ -1,56 +1,60 @@
-# Enrollment Contest: Self-Updating Formula Guide
+# Enrollment Contest: Formula Guide
 
-A version that maintains itself. Each quarter you add one new column of enrollments, and the baseline, buckets and winners all recompute on their own. Built to run every quarter for years without editing a formula.
+Corrected version. The cutoffs still calculate themselves from the data. The quarter formulas are bounded to the actual quarter columns so there is no circular reference.
 
-Assumptions: 24 territories in **rows 2 to 25**, header in row 1, quarter columns starting at **C** and free to grow rightward toward column Z.
-
----
-
-## The three things that now calculate themselves
-
-1. **Baseline window slides.** It always averages the four quarters immediately before the most recent one, so you never re-edit the range.
-2. **Contest quarter is always the latest column.** Add a quarter, it becomes the one being scored.
-3. **Cutoffs derive from the data** as the 33rd and 67th percentiles (terciles), so the three size groups stay balanced no matter how the numbers drift.
+Layout: 24 territories in **rows 2 to 25**, header in row 1. Quarter columns are **C to L** (1Q2024 to 2Q2026). Scoring columns start at M.
 
 ---
 
-## Step 1: Helper block (all formulas, nothing typed by hand)
+## Why you saw a circular reference
 
-Put these below the table, starting at **A28**. They are calculations, not settings, so they update automatically.
+The earlier formulas used the range `C:Z`, which reaches past the quarters into the scoring columns. `Total = SUM($C2:$Z2)` was adding the Total cell to itself, and `COUNTA(C1:Z1)` counted the Baseline and Contest headers as if they were quarters, which is why "Quarters filled" read 19 instead of 10.
 
-| Cell | Label (col A) | Formula (col B) |
+The fix: point the quarter formulas only at **C to L**, the real quarter columns.
+
+---
+
+## Delete this first
+
+Remove the **Quarters filled** helper (the cell that reads 19). It is not needed and it was feeding the circular formulas. Keep the two cutoff cells below it.
+
+---
+
+## Cutoff cells (these calculate themselves)
+
+In your helper block:
+
+| Cell | Label | Formula |
 |---|---|---|
-| B28 | Quarters filled | `=COUNTA(C1:Z1)` |
-| B29 | Tier 1 cutoff | `=PERCENTILE($N$2:$N$25,2/3)` |
-| B30 | Tier 2 cutoff | `=PERCENTILE($N$2:$N$25,1/3)` |
+| B35 | Tier 1 cutoff | `=PERCENTILE($N$2:$N$25,2/3)` |
+| B36 | Tier 2 cutoff | `=PERCENTILE($N$2:$N$25,1/3)` |
 
-- **B28** counts how many quarter columns currently have a header. Everything else keys off this number.
-- **B29 / B30** are the tercile cutoffs. On today's data they return 10 and 6, the same numbers you had, but now they move with the data instead of being fixed.
+These derive the two size boundaries as the 33rd and 67th percentiles of the baselines. On today's data they return 10 and 6, and they re-derive on their own whenever the baselines change. No typing.
 
 ---
 
-## Step 2: Column formulas
+## Column formulas
 
-Type each into **row 2**, then fill down to row 25.
+Type into **row 2**, fill down to row 25.
 
-**M2 — Total.** All quarters, however many there are.
+**M2 — Total.** Only the quarter columns C to L.
 ```
-=SUM($C2:$Z2)
-```
-
-**N2 — Baseline.** Average of the four quarters before the latest one. `$B$28` is the quarter count, so this window slides forward on its own.
-```
-=AVERAGE(INDEX($C2:$Z2,1,$B$28-4):INDEX($C2:$Z2,1,$B$28-1))
+=SUM(C2:L2)
 ```
 
-**O2 — Contest metric.** The most recent quarter, whichever column that is.
+**N2 — Baseline.** Average of the four quarters before the contest quarter: 2Q2025, 3Q2025, 4Q2025, 1Q2026 (H to K).
 ```
-=INDEX($C2:$Z2,1,$B$28)
+=AVERAGE(H2:K2)
 ```
 
-**B2 — Bucket.** Reads the two cutoff cells from Step 1.
+**O2 — Contest metric.** The contest quarter, 2Q2026 (column L).
 ```
-=IF(N2>=$B$29,"Tier 1",IF(N2>=$B$30,"Tier 2","Tier 3"))
+=L2
+```
+
+**B2 — Bucket.** Reads the two cutoff cells.
+```
+=IF(N2>=$B$35,"Tier 1",IF(N2>=$B$36,"Tier 2","Tier 3"))
 ```
 
 **P2 — Volume Growth.**
@@ -78,39 +82,48 @@ Type each into **row 2**, then fill down to row 25.
 =AVERAGE(R2,S2)
 ```
 
-**U2 — Place** (within group, ties break on higher percent growth).
+**U2 — Place** (within group, ties break on percent growth).
 ```
 =SUMPRODUCT(($B$2:$B$25=B2)*(($T$2:$T$25<T2)+($T$2:$T$25=T2)*($Q$2:$Q$25>Q2)))+1
 ```
 
-**V2 — Result** (optional, flags top 2).
+**V2 — Result** (optional).
 ```
 =IF(U2<=2,"PAID","")
 ```
 
 ---
 
-## How you run it next quarter
+## What still updates on its own, and what does not
 
-1. Paste the new quarter's enrollments into the next empty column (the one just right of your latest quarter). Put the quarter label in row 1.
-2. Done. `Quarters filled` ticks up by one, the baseline slides to the new four-quarter window, the latest quarter becomes the contest quarter, and the cutoffs and winners recalculate.
+**Self-updating:** the cutoffs. Change any baseline and B35 and B36 re-derive. You never touch them.
 
-No formula changes, no re-typing cutoffs, ever.
+**Manual each quarter:** the baseline window and the contest quarter. Because your quarter columns sit directly next to the scoring columns, there is no empty space for them to grow into, so a fully automatic sliding window is not possible in this layout without a circular reference. That is the trade-off, and it is a small one.
 
 ---
 
-## Two things to keep in mind
+## Running it next quarter (3Q2026 and beyond)
 
-**Only add a quarter once it is complete.** A half-finished quarter would still become the contest quarter and would drag the baseline down. Add the column after the quarter closes.
+When a quarter closes:
 
-**Check the tier split after each new quarter.** A percentile can occasionally land exactly on a repeated baseline value and split two identical territories across a boundary. Drop this check somewhere and confirm it reads **0**:
+1. **Insert a column** just left of Total (between L and M). Put the new quarter's enrollments in it and the label in row 1.
+2. Update **Total** to include the new column, for example `=SUM(C2:M2)`.
+3. Update **Baseline** to the new last four quarters. When 3Q2026 lands in M, baseline becomes `=AVERAGE(I2:L2)` (3Q2025 to 2Q2026).
+4. Update **Contest metric** to the new quarter, for example `=M2`.
+
+That is three cell edits, filled down. The cutoffs, buckets, ranks and winners all recalculate on their own.
+
+If you want it to be fully automatic for years with no edits at all, the quarter history has to move to the far right of the sheet so it can grow into empty columns. That is a one-time restructure. Say the word and I will write it up, otherwise the three-edit routine above is reliable and safe.
+
+---
+
+## Check after any change
+
+- No circular reference warning
+- Bucket reads Tier 1 / 2 / 3, roughly 9 / 9 / 6
+- Percent Growth is a spread of positive and negative
+- Each tier has exactly one 1 and one 2 in Place
+- Tie-split check reads 0:
 ```
 =SUMPRODUCT(--(COUNTIFS($N$2:$N$25,$N$2:$N$25,$B$2:$B$25,$B$2:$B$25)<>COUNTIF($N$2:$N$25,$N$2:$N$25)))
 ```
-If it ever reads above 0, nudge one cutoff cell (B29 or B30) up or down by 0.5 to move the boundary onto a gap. That is the only manual touch the sheet ever needs, and only if that check fails.
-
----
-
-## Sanity check on today's numbers
-
-With 10 quarters filled, `Quarters filled` is 10, the baseline averages columns H to K (2Q2025 to 1Q2026), the contest metric reads column L (2Q2026), and the cutoffs come out at 10 and 6. Buckets land roughly 9 / 9 / 6, and the six paid positions are South FL, Mid-Atlantic, Desert Plains, Great South, North TX/OK, Carolinas.
