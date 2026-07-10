@@ -1,7 +1,18 @@
 # 3Q Enrollment Contest — Design Proposal
 
-**Prepared by:** Srinidhi Gowda · **For:** Kolin Knott → VP of Sales · **Window:** August–September 2026
-**Status:** Draft for review — two options sharing one scoring engine. Design + claims-based data analysis complete; awaiting the Infinity enrollment feed to finalize baselines. _(Updated 2026-07-09.)_
+**Prepared by:** Srinidhi Gowda · **For:** Kolin Knott → VP of Sales · **Window:** August 1 – September 30, 2026 (2 months)
+**Status:** Building the pitch deck off Kolin's template. Design + claims-based analysis complete; awaiting the Infinity enrollment feed to finalize baselines. _(Updated 2026-07-10 after Daily Connect.)_
+
+---
+
+## Locked after the 07/10 Daily Connect
+- **Deliverable is a PowerPoint proposal** built off Kolin's template (goal blurb → IC context → methodology → territory/baseline/tier table, color-coded → payout).
+- **28 territories** (not 24), split into 3 color-coded size tiers.
+- **Baseline = average monthly enrollments** (weekly optional), computed over the last **4 quarters** (6 not adopted), scaled to the 2-month window (≈ 2× the average month).
+- **Score:** 50/50 volume growth + % growth within tier. **Top 2 per tier paid.**
+- **RAT bucket:** the 6 Regional Account Teams compete as one single group (not split by size), same growth-over-baseline scoring.
+- **Conversion side prize (pull-through):** rewards enrollments that reach TTP. Conversion rate = enrollments reaching TTP ÷ total enrollments in the window; highest in a tier qualifies; minimum-enrollment floor so tiny counts don't skew it. Track days from enrollment to TTP. A rep can win both gross and conversion.
+- **Payout is a formula** with the budget as a variable (first > second). **Exact split still to confirm** — Kolin floated 65/35, then 70/30, then ~50/30 and per-tier percentages; the call audio was garbled here.
 
 ---
 
@@ -95,9 +106,10 @@ The **live leaderboard is the same Tableau dashboard** we're building for PPR au
 Everything scored/guarded/watched comes from the **Infinity/CARES enrollment feed** (the same access being set up for the PPR dashboard). **That feed is the only hard prerequisite** — the design is otherwise complete and ready to populate.
 
 ## Open decisions (Kolin / VP)
-- **Top 2 or 3** per group? (email says "top 2 or so")
-- **2 or 3** size buckets?
-- **Prize** — budget, cash vs. experiences, tiered vs. flat?
+- ~~**Top 2 or 3** per group?~~ → **Top 2 per tier** (locked 07/10).
+- ~~**2 or 3** size buckets?~~ → **3 tiers** (locked 07/10).
+- **Exact payout split** — first vs. second, and how the pot divides across tiers (garbled on the 07/10 call, confirm with Kolin).
+- **Prize** — budget still TBD; building as a formula for now.
 - **VP name** + when I present.
 
 ## Phase-2 add-on (optional)
