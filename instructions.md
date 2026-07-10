@@ -1,23 +1,39 @@
-# Setting the Bucket Cutoffs Properly
+# Enrollment Contest: Complete Formula Guide
 
-## The problem with the current formula
+Every formula for the Contest Scoring sheet, in order. Contest quarter is **2Q2026**.
 
-```
-=IF(N2>=10,"Tier 1",IF(N2>=6,"Tier 2","Tier 3"))
-```
-
-The numbers 10 and 6 are buried inside the formula, repeated across all 24 rows. Two things are wrong with that:
-
-1. **To change a cutoff you would have to edit every cell.** Miss one and the sheet is silently inconsistent.
-2. **Nobody reading the formula knows what 10 and 6 mean, where they came from, or that they are meant to be adjustable.** They look like magic numbers.
-
-The fix is to hold each cutoff in one labelled cell, give that cell a name, and point the formula at the name. One place to change, and the formula reads like a sentence.
+Assumptions: 24 territories in **rows 2 to 25**, Total in row 26, header in row 1. If your first territory is on a different row, shift the numbers to match.
 
 ---
 
-## Step 1: Build a small parameters box
+## Column layout
 
-Pick an empty area to the right of the table, for example starting at cell **Y1**. Enter:
+| Col | Header | Type |
+|---|---|---|
+| A | Territory | text |
+| B | Bucket | formula |
+| C–L | 1Q2024 … 2Q2026 | your quarterly data |
+| M | Total | formula |
+| N | Baseline | formula |
+| O | Adjusted Baseline | hide it, see note |
+| P | 2Q2026 Enrolled | formula |
+| Q | Volume Growth | formula |
+| R | Percent Growth | formula |
+| S | Volume Rank | formula |
+| T | Growth Rank | formula |
+| U | Final Score | formula |
+| V | Place | formula |
+| W | Result | formula |
+
+**Column O:** for a full-quarter demo there is nothing to scale, so the adjusted baseline equals the baseline and adds nothing. Right-click the O header and choose Hide. Do not delete it, deleting shifts every column left and breaks references.
+
+---
+
+## Step 1: Parameters box (do this first)
+
+Cutoff values do not belong inside formulas. Put them in labelled cells so there is one place to change them and the formula reads in plain words.
+
+In an empty area, for example starting at **Y1**:
 
 | Cell | Content |
 |---|---|
@@ -28,67 +44,121 @@ Pick an empty area to the right of the table, for example starting at cell **Y1*
 | Y3 | `Tier 2 cutoff (baseline >=)` |
 | Z3 | `6` |
 
-Put a border round it and bold the header so it reads as a settings block, not stray data.
+Then name the two value cells:
+
+1. Click **Z2**, click the Name Box (far left of the formula bar), type `Tier1_Cutoff`, press Enter.
+2. Click **Z3**, click the Name Box, type `Tier2_Cutoff`, press Enter.
+
+Names cannot contain spaces, hence the underscore.
 
 ---
 
-## Step 2: Name the two value cells
+## Step 2: The formulas
 
-Naming a cell lets you refer to it by a word instead of an address.
+Type each into **row 2**, press Enter, then double-click the small square at the cell's bottom-right corner to fill down to row 25.
 
-1. Click cell **Z2**.
-2. Click the **Name Box** (the small box on the far left of the formula bar, where it currently says `Z2`).
-3. Type `Tier1_Cutoff` and press Enter.
-4. Click cell **Z3**, click the Name Box, type `Tier2_Cutoff`, press Enter.
-
-Names cannot contain spaces, which is why they use an underscore.
-
----
-
-## Step 3: Rewrite the bucket formula
-
-In **B2**, enter:
-
+**B2 — Bucket.** Which size group the territory competes in.
 ```
 =IF(N2>=Tier1_Cutoff,"Tier 1",IF(N2>=Tier2_Cutoff,"Tier 2","Tier 3"))
 ```
 
-Fill down to B25.
+**M2 — Total.** All ten quarters, for reference only.
+```
+=SUM(C2:L2)
+```
 
-Now the formula states its own logic: a territory is Tier 1 if its baseline is at or above the Tier 1 cutoff, Tier 2 if at or above the Tier 2 cutoff, otherwise Tier 3. To move a boundary you change one cell, Z2 or Z3, and all 24 rows update at once.
+**N2 — Baseline.** A normal quarter, taken as the average of the four quarters before the contest: 2Q2025, 3Q2025, 4Q2025, 1Q2026 (columns H to K).
+```
+=AVERAGE(H2:K2)
+```
+
+**P2 — 2Q2026 Enrolled.** What the territory actually enrolled in the contest quarter (column L). Rename the header to `2Q2026 Enrolled` first.
+```
+=L2
+```
+
+**Q2 — Volume Growth.** Extra enrollments over a normal quarter.
+```
+=P2-N2
+```
+
+**R2 — Percent Growth.** The same gain as a share of the territory's own size. Format this column as a percentage.
+```
+=(P2-N2)/N2
+```
+
+**S2 — Volume Rank.** Rank on patients added, within the group only. 1 is best.
+```
+=SUMPRODUCT(($B$2:$B$25=B2)*($Q$2:$Q$25>Q2))+1
+```
+
+**T2 — Growth Rank.** Rank on percent growth, within the group only. 1 is best.
+```
+=SUMPRODUCT(($B$2:$B$25=B2)*($R$2:$R$25>R2))+1
+```
+
+**U2 — Final Score.** The two ranks weighted equally.
+```
+=AVERAGE(S2,T2)
+```
+
+**V2 — Place.** Position within the group. Lowest final score wins; ties break on higher percent growth.
+```
+=SUMPRODUCT(($B$2:$B$25=B2)*(($U$2:$U$25<U2)+($U$2:$U$25=U2)*($R$2:$R$25>R2)))+1
+```
+
+**W2 — Result.** Flags the paid positions, top 2 per group.
+```
+=IF(V2<=2,"PAID","")
+```
 
 ---
 
-## Where the values 10 and 6 actually come from
+## Step 3: Formatting
 
-They are not arbitrary, and this is worth being able to explain.
+- **R2:R25** → click the `%` button so growth shows as percentages.
+- **N2:N25** → 2 decimals, so baselines read cleanly.
+- Winners: six rows will show 1 or 2 in Place. Fill Place-1 rows gold and Place-2 rows grey by hand. They are South FL, Mid-Atlantic, Desert Plains, Great South, North TX/OK, Carolinas.
 
-Sort the 24 baselines from largest to smallest:
+---
+
+## Why the cutoffs are 10 and 6
+
+Not arbitrary, and worth being able to explain. Sort the 24 baselines largest to smallest:
 
 ```
 17.75  12.5  12  11.5  11  11  10.5  10 | 9.75  8.75  8  7.5  7.25  7.25  6  6 | 5.75  5.5  4.25  3.5  3  2.25  1.75  1.5
 ```
 
-To make three groups of eight, the boundaries fall after the 8th and 16th values.
+Three groups of eight put the boundaries after the 8th and 16th values.
 
-- The 8th value is **10** and the 9th is 9.75, so the Tier 1 cutoff sits at **10**.
-- The 16th value is **6** and the 17th is 5.75, so the Tier 2 cutoff sits at **6**.
+- 8th value is **10**, 9th is 9.75, so Tier 1 cutoff is **10**.
+- 16th value is **6**, 17th is 5.75, so Tier 2 cutoff is **6**.
 
-Both boundaries land between two **different** numbers. That matters: if a cutoff fell between two territories with the same baseline, those two identical territories would end up in different tiers, which is impossible to defend to whichever rep loses. The chosen values avoid that. Both 6.0 territories stay together in Tier 2; the 5.75 sits just below in Tier 3.
+Both boundaries fall between two **different** numbers. That is the point: if a cutoff split two territories with the same baseline, two identical territories would land in different tiers, which cannot be defended to the rep who loses. Both 6.0 territories stay in Tier 2; the 5.75 sits just below in Tier 3.
 
-Put a short note under the parameters box recording this, so the choice is documented on the sheet itself:
+Drop a note under the parameters box so the reasoning lives on the sheet:
 
-> Cutoffs set at the natural gaps in the sorted baselines (10 / 6), giving groups of 8 / 8 / 8 with no equal baselines split across a boundary.
+> Cutoffs set at the natural gaps in the sorted baselines (10 / 6), giving 8 / 8 / 8 with no equal baselines split across a boundary.
 
 ---
 
-## If the baselines change
+## When the real contest runs
 
-When the real contest runs, the baseline window moves and these numbers will shift. The method does not:
+The baseline window moves, so the numbers shift but the method does not.
 
-1. Sort the new baselines.
-2. Find the two gaps nearest the one-third and two-third marks.
-3. Move each cutoff onto a gap between two different values, never between two equal ones.
-4. Type the two results into Z2 and Z3.
+1. Change **N2** to `=AVERAGE(I2:L2)`, the four quarters ending 30 June 2026.
+2. Change **P2** to a count of enrollments dated 1 Aug to 30 Sep 2026 from the raw data, not `=L2`.
+3. Re-sort the new baselines, find the two natural gaps, and type the new cutoffs into **Z2** and **Z3**. Never place a cutoff between two equal baselines.
 
-The formula never changes. Only the two parameter cells do.
+Only three inputs change. Every formula stays exactly as written, because the cutoffs live in named cells and the ranks read from whatever the columns hold.
+
+---
+
+## Check it worked
+
+- No `#REF!` anywhere (hide column O if needed)
+- Bucket reads Tier 1 / 2 / 3, roughly 8 each
+- Percent Growth is a spread of positive and negative, not all the same value
+- Each tier has exactly one `1` and one `2` in Place
+- Exactly six rows show PAID
