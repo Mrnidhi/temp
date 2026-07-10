@@ -8,9 +8,9 @@ Assumptions: 24 territories in **rows 2 to 25**, Total in row 26, header in row 
 
 ## If you are seeing #NAME? errors
 
-`#NAME?` in the Bucket column means Excel does not recognise `Tier1_Cutoff` or `Tier2_Cutoff`, because those named cells have not been created yet. The Rank, Score and Place columns then inherit the error because they read from Bucket.
+`#NAME?` in the Bucket column means Excel does not recognise a word in the formula. The Rank, Score and Place columns then inherit the error because they read from Bucket.
 
-Do **Step 1** below first. Creating the two names clears every `#NAME?` on the sheet at once.
+This guide uses **direct cell references** (`$Y$2`, `$Y$3`) for the cutoffs, not named ranges. A plain cell reference cannot cause `#NAME?`. Just make sure cells Y2 and Y3 actually contain the numbers 10 and 6, per Step 1.
 
 ---
 
@@ -34,27 +34,22 @@ Do **Step 1** below first. Creating the two names clears every `#NAME?` on the s
 
 ---
 
-## Step 1: Parameters box (do this first)
+## Step 1: Parameters cells (do this first)
 
-Cutoff values do not belong inside formulas. Put them in labelled cells so there is one place to change them and the formula reads in plain words.
+Cutoff values do not belong inside formulas. Put them in two cells so there is one place to change them, and point the formula at those cells.
 
-In an empty area, for example starting at **X1**:
+In an empty area to the right of the table:
 
 | Cell | Content |
 |---|---|
-| X1 | `Parameter` |
-| Y1 | `Value` |
-| X2 | `Tier 1 cutoff (baseline >=)` |
+| X2 | `Tier 1 cutoff (baseline >=)` (label, optional) |
 | Y2 | `10` |
-| X3 | `Tier 2 cutoff (baseline >=)` |
+| X3 | `Tier 2 cutoff (baseline >=)` (label, optional) |
 | Y3 | `6` |
 
-Then name the two value cells:
+Type the numbers `10` and `6` directly into **Y2** and **Y3**. That is all. The Bucket formula in Step 2 reads these two cells with `$Y$2` and `$Y$3`.
 
-1. Click **Y2**, click the Name Box (far left of the formula bar, next to the formula), type `Tier1_Cutoff`, press Enter.
-2. Click **Y3**, click the Name Box, type `Tier2_Cutoff`, press Enter.
-
-Names cannot contain spaces, hence the underscore. Once these exist, the Bucket column stops showing `#NAME?`.
+If you prefer different cells, that is fine, just use their addresses in the Bucket formula instead of `$Y$2` and `$Y$3`.
 
 ---
 
@@ -62,9 +57,9 @@ Names cannot contain spaces, hence the underscore. Once these exist, the Bucket 
 
 Type each into **row 2**, press Enter, then double-click the small square at the cell's bottom-right corner to fill down to row 25.
 
-**B2 — Bucket.** Which size group the territory competes in.
+**B2 — Bucket.** Which size group the territory competes in. `$Y$2` and `$Y$3` are the two cutoff cells from Step 1.
 ```
-=IF(N2>=Tier1_Cutoff,"Tier 1",IF(N2>=Tier2_Cutoff,"Tier 2","Tier 3"))
+=IF(N2>=$Y$2,"Tier 1",IF(N2>=$Y$3,"Tier 2","Tier 3"))
 ```
 
 **M2 — Total.** All ten quarters, for reference only.
@@ -157,7 +152,7 @@ The baseline window moves, so the numbers shift but the method does not.
 2. Change **O2** to a count of enrollments dated 1 Aug to 30 Sep 2026 from the raw data, not `=L2`.
 3. Re-sort the new baselines, find the two natural gaps, and type the new cutoffs into **Y2** and **Y3**. Never place a cutoff between two equal baselines.
 
-Only these three inputs change. Every formula stays exactly as written, because the cutoffs live in named cells and the ranks read from whatever the columns hold.
+Only these three inputs change. Every formula stays exactly as written, because the cutoffs live in cells Y2 and Y3 and the ranks read from whatever the columns hold.
 
 ---
 
