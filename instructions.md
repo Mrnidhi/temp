@@ -1,165 +1,116 @@
-# Enrollment Contest: Complete Formula Guide
+# Enrollment Contest: Self-Updating Formula Guide
 
-Every formula for the Contest Scoring sheet, in order, matching the final column layout. Contest quarter is **2Q2026**.
+A version that maintains itself. Each quarter you add one new column of enrollments, and the baseline, buckets and winners all recompute on their own. Built to run every quarter for years without editing a formula.
 
-Assumptions: 24 territories in **rows 2 to 25**, Total in row 26, header in row 1.
-
----
-
-## If you are seeing #NAME? errors
-
-`#NAME?` in the Bucket column means Excel does not recognise a word in the formula. The Rank, Score and Place columns then inherit the error because they read from Bucket.
-
-This guide uses **direct cell references** (`$Y$2`, `$Y$3`) for the cutoffs, not named ranges. A plain cell reference cannot cause `#NAME?`. Just make sure cells Y2 and Y3 actually contain the numbers 10 and 6, per Step 1.
+Assumptions: 24 territories in **rows 2 to 25**, header in row 1, quarter columns starting at **C** and free to grow rightward toward column Z.
 
 ---
 
-## Final column layout
+## The three things that now calculate themselves
 
-| Col | Header | Type |
+1. **Baseline window slides.** It always averages the four quarters immediately before the most recent one, so you never re-edit the range.
+2. **Contest quarter is always the latest column.** Add a quarter, it becomes the one being scored.
+3. **Cutoffs derive from the data** as the 33rd and 67th percentiles (terciles), so the three size groups stay balanced no matter how the numbers drift.
+
+---
+
+## Step 1: Helper block (all formulas, nothing typed by hand)
+
+Put these below the table, starting at **A28**. They are calculations, not settings, so they update automatically.
+
+| Cell | Label (col A) | Formula (col B) |
 |---|---|---|
-| A | Territory | text |
-| B | Bucket | formula |
-| C–L | 1Q2024 … 2Q2026 | your quarterly data |
-| M | Total | formula |
-| N | Baseline | formula |
-| O | Contest metric | formula (2Q2026 enrolled) |
-| P | Volume Growth | formula |
-| Q | Percent Growth | formula |
-| R | Volume Rank | formula |
-| S | Growth Rank | formula |
-| T | Final Score | formula |
-| U | Place | formula |
-| V | Result | formula (optional) |
+| B28 | Quarters filled | `=COUNTA(C1:Z1)` |
+| B29 | Tier 1 cutoff | `=PERCENTILE($N$2:$N$25,2/3)` |
+| B30 | Tier 2 cutoff | `=PERCENTILE($N$2:$N$25,1/3)` |
+
+- **B28** counts how many quarter columns currently have a header. Everything else keys off this number.
+- **B29 / B30** are the tercile cutoffs. On today's data they return 10 and 6, the same numbers you had, but now they move with the data instead of being fixed.
 
 ---
 
-## Step 1: Parameters cells (do this first)
+## Step 2: Column formulas
 
-Cutoff values do not belong inside formulas. Put them in two cells so there is one place to change them, and point the formula at those cells.
+Type each into **row 2**, then fill down to row 25.
 
-In an empty area to the right of the table:
-
-| Cell | Content |
-|---|---|
-| X2 | `Tier 1 cutoff (baseline >=)` (label, optional) |
-| Y2 | `10` |
-| X3 | `Tier 2 cutoff (baseline >=)` (label, optional) |
-| Y3 | `6` |
-
-Type the numbers `10` and `6` directly into **Y2** and **Y3**. That is all. The Bucket formula in Step 2 reads these two cells with `$Y$2` and `$Y$3`.
-
-If you prefer different cells, that is fine, just use their addresses in the Bucket formula instead of `$Y$2` and `$Y$3`.
-
----
-
-## Step 2: The formulas
-
-Type each into **row 2**, press Enter, then double-click the small square at the cell's bottom-right corner to fill down to row 25.
-
-**B2 — Bucket.** Which size group the territory competes in. `$Y$2` and `$Y$3` are the two cutoff cells from Step 1.
+**M2 — Total.** All quarters, however many there are.
 ```
-=IF(N2>=$Y$2,"Tier 1",IF(N2>=$Y$3,"Tier 2","Tier 3"))
+=SUM($C2:$Z2)
 ```
 
-**M2 — Total.** All ten quarters, for reference only.
+**N2 — Baseline.** Average of the four quarters before the latest one. `$B$28` is the quarter count, so this window slides forward on its own.
 ```
-=SUM(C2:L2)
-```
-
-**N2 — Baseline.** A normal quarter, the average of the four quarters before the contest: 2Q2025, 3Q2025, 4Q2025, 1Q2026 (columns H to K).
-```
-=AVERAGE(H2:K2)
+=AVERAGE(INDEX($C2:$Z2,1,$B$28-4):INDEX($C2:$Z2,1,$B$28-1))
 ```
 
-**O2 — Contest metric.** What the territory enrolled in the contest quarter, 2Q2026 (column L).
+**O2 — Contest metric.** The most recent quarter, whichever column that is.
 ```
-=L2
+=INDEX($C2:$Z2,1,$B$28)
 ```
 
-**P2 — Volume Growth.** Extra enrollments over a normal quarter.
+**B2 — Bucket.** Reads the two cutoff cells from Step 1.
+```
+=IF(N2>=$B$29,"Tier 1",IF(N2>=$B$30,"Tier 2","Tier 3"))
+```
+
+**P2 — Volume Growth.**
 ```
 =O2-N2
 ```
 
-**Q2 — Percent Growth.** The same gain as a share of the territory's own size. Format this column as a percentage.
+**Q2 — Percent Growth.** Format as a percentage.
 ```
 =(O2-N2)/N2
 ```
 
-**R2 — Volume Rank.** Rank on patients added, within the group only. 1 is best.
+**R2 — Volume Rank** (within group).
 ```
 =SUMPRODUCT(($B$2:$B$25=B2)*($P$2:$P$25>P2))+1
 ```
 
-**S2 — Growth Rank.** Rank on percent growth, within the group only. 1 is best.
+**S2 — Growth Rank** (within group).
 ```
 =SUMPRODUCT(($B$2:$B$25=B2)*($Q$2:$Q$25>Q2))+1
 ```
 
-**T2 — Final Score.** The two ranks weighted equally.
+**T2 — Final Score.**
 ```
 =AVERAGE(R2,S2)
 ```
 
-**U2 — Place.** Position within the group. Lowest final score wins; ties break on higher percent growth.
+**U2 — Place** (within group, ties break on higher percent growth).
 ```
 =SUMPRODUCT(($B$2:$B$25=B2)*(($T$2:$T$25<T2)+($T$2:$T$25=T2)*($Q$2:$Q$25>Q2)))+1
 ```
 
-**V2 — Result (optional).** Flags the paid positions, top 2 per group.
+**V2 — Result** (optional, flags top 2).
 ```
 =IF(U2<=2,"PAID","")
 ```
 
 ---
 
-## Step 3: Formatting
+## How you run it next quarter
 
-- **Q2:Q25** → click the `%` button so growth shows as percentages.
-- **N2:N25** → 2 decimals, so baselines read cleanly.
-- Widen column **U** if Place shows `####`; that just means the column is too narrow, it is not an error.
-- Winners: six rows will show 1 or 2 in Place. Fill Place-1 rows gold and Place-2 rows grey by hand. They are South FL, Mid-Atlantic, Desert Plains, Great South, North TX/OK, Carolinas.
+1. Paste the new quarter's enrollments into the next empty column (the one just right of your latest quarter). Put the quarter label in row 1.
+2. Done. `Quarters filled` ticks up by one, the baseline slides to the new four-quarter window, the latest quarter becomes the contest quarter, and the cutoffs and winners recalculate.
+
+No formula changes, no re-typing cutoffs, ever.
 
 ---
 
-## Why the cutoffs are 10 and 6
+## Two things to keep in mind
 
-Not arbitrary, and worth being able to explain. Sort the 24 baselines largest to smallest:
+**Only add a quarter once it is complete.** A half-finished quarter would still become the contest quarter and would drag the baseline down. Add the column after the quarter closes.
 
+**Check the tier split after each new quarter.** A percentile can occasionally land exactly on a repeated baseline value and split two identical territories across a boundary. Drop this check somewhere and confirm it reads **0**:
 ```
-17.75  12.5  12  11.5  11  11  10.5  10 | 9.75  8.75  8  7.5  7.25  7.25  6  6 | 5.75  5.5  4.25  3.5  3  2.25  1.75  1.5
+=SUMPRODUCT(--(COUNTIFS($N$2:$N$25,$N$2:$N$25,$B$2:$B$25,$B$2:$B$25)<>COUNTIF($N$2:$N$25,$N$2:$N$25)))
 ```
-
-Three groups of eight put the boundaries after the 8th and 16th values.
-
-- 8th value is **10**, 9th is 9.75, so Tier 1 cutoff is **10**.
-- 16th value is **6**, 17th is 5.75, so Tier 2 cutoff is **6**.
-
-Both boundaries fall between two **different** numbers. That is the point: if a cutoff split two territories with the same baseline, two identical territories would land in different tiers, which cannot be defended to the rep who loses. Both 6.0 territories stay in Tier 2; the 5.75 sits just below in Tier 3.
-
-Drop a note under the parameters box so the reasoning lives on the sheet:
-
-> Cutoffs set at the natural gaps in the sorted baselines (10 / 6), giving 8 / 8 / 8 with no equal baselines split across a boundary.
+If it ever reads above 0, nudge one cutoff cell (B29 or B30) up or down by 0.5 to move the boundary onto a gap. That is the only manual touch the sheet ever needs, and only if that check fails.
 
 ---
 
-## When the real contest runs
+## Sanity check on today's numbers
 
-The baseline window moves, so the numbers shift but the method does not.
-
-1. Change **N2** to `=AVERAGE(I2:L2)`, the four quarters ending 30 June 2026.
-2. Change **O2** to a count of enrollments dated 1 Aug to 30 Sep 2026 from the raw data, not `=L2`.
-3. Re-sort the new baselines, find the two natural gaps, and type the new cutoffs into **Y2** and **Y3**. Never place a cutoff between two equal baselines.
-
-Only these three inputs change. Every formula stays exactly as written, because the cutoffs live in cells Y2 and Y3 and the ranks read from whatever the columns hold.
-
----
-
-## Check it worked
-
-- No `#NAME?` or `#REF!` anywhere
-- Bucket reads Tier 1 / 2 / 3, roughly 8 each
-- Percent Growth is a spread of positive and negative, not all the same value
-- Each tier has exactly one `1` and one `2` in Place
-- Exactly six rows show PAID
+With 10 quarters filled, `Quarters filled` is 10, the baseline averages columns H to K (2Q2025 to 1Q2026), the contest metric reads column L (2Q2026), and the cutoffs come out at 10 and 6. Buckets land roughly 9 / 9 / 6, and the six paid positions are South FL, Mid-Atlantic, Desert Plains, Great South, North TX/OK, Carolinas.
