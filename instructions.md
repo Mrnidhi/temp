@@ -1,241 +1,164 @@
-# Running the Contest on 2Q2026
+# Fixing the Sheet
 
-Show what would have happened if the contest had run during 2Q2026. Real territories, real numbers, a real winner in each tier.
-
-Once this works, moving to 3Q2026 is a two cell change.
+Four changes. Do them in order. Expected results are at the bottom so you can check your work.
 
 ---
 
-## Fix two things first
+## Fix 1: The baseline
 
-The sheet as it stands has two problems. Both must be fixed before anything below will mean anything.
+Right now the baseline averages all ten quarters. CT/NYC has a Total of 139 and a Baseline of 14, which is 139 divided by 10.
 
-### Problem 1: the baseline is averaging all ten quarters
-
-CT/NYC has a Total of 139 and a Baseline of 14. That is 139 divided by 10. Every row does the same thing.
-
-The baseline is supposed to be a **normal quarter as things stand now**, not an average of the last two and a half years. Ten quarters reaches back to a smaller business with fewer slots and a different territory map.
-
-### Problem 2: there is no Contest Enrollments column
-
-Your columns run Adjusted Baseline, then straight into Volume Growth.
-
-So Volume Growth is quietly calculating `Adjusted Baseline minus Baseline`. That is why CT/NYC reads -4.7, which is simply 9.3 minus 14.0. It is also why every Percent Growth on the sheet sits at about -33 percent. It is measuring the two thirds scaling against itself. It is not measuring performance at all.
-
-You need a column holding **what each territory actually enrolled during the contest**, sitting between Adjusted Baseline and Volume Growth.
-
----
-
-## What the demo is
-
-* The contest period is **2Q2026**, which is column L
-* The baseline is the **four quarters immediately before it**: `2Q2025`, `3Q2025`, `4Q2025`, `1Q2026`, which are columns **H through K**
-* `2Q2026` must never appear in the baseline. It is the thing being measured
-
-A full quarter is being compared against a quarterly baseline, so there is **no scaling**. Adjusted Baseline will equal Baseline.
-
-That is correct, and it is worth pointing out when you present. The Adjusted Baseline column earns its keep later, when the real contest runs across two months instead of three.
-
----
-
-## Step 1: Set the parameters
-
-| Cell | Type this |
-|---|---|
-| X1 | `Contest months` |
-| Y1 | `3` |
-| X2 | `Baseline quarter months` |
-| Y2 | `3` |
-| X3 | `Tier 1 cutoff` |
-| Y3 | leave empty for now |
-| X4 | `Tier 2 cutoff` |
-| Y4 | leave empty for now |
-
-`Y1` is 3 because 2Q2026 is a three month quarter. When you move to the real contest in August and September, this becomes 2. Nothing else changes.
-
----
-
-## Step 2: Fix the baseline
+It should average the **four quarters before the contest quarter**: `2Q2025`, `3Q2025`, `4Q2025`, `1Q2026`. Those are columns **H, I, J, K**.
 
 In **N2**:
-
 ```excel
 =ROUNDUP(AVERAGE(H2:K2),0)
 ```
-
 Fill down to N25.
 
-`H` through `K` is `2Q2025`, `3Q2025`, `4Q2025`, `1Q2026`. Four quarters, one full year, ending right before the contest quarter.
+Column L is `2Q2026`. That is the quarter you are measuring. It must never be in the baseline.
 
-**Do not include column L.** That is 2Q2026, the quarter you are measuring. If it goes into the baseline you are comparing 2Q2026 against a number that already contains 2Q2026, and every result becomes meaningless while still looking believable.
-
-**Check:** CT/NYC should now show a baseline of **18**, not 14. San Diego/OC should show **3**, not 2.
+**Check:** CT/NYC changes from 14 to **18**. South FL changes from 12 to **13**.
 
 ---
 
-## Step 3: Adjusted baseline
+## Fix 2: Turn off the scaling
 
-**O2** stays as it is:
+The contest period is 2Q2026, a full three month quarter. There is nothing to shrink.
 
-```excel
-=ROUND(N2*$Y$1/$Y$2,1)
-```
+Change **Y1** from `2` to `3`.
 
-**Check:** because `Y1` and `Y2` are both 3, column O should now be identical to column N. CT/NYC reads 18.0 in both.
+**Check:** column O should now match column N exactly on every row. CT/NYC reads 18.0 in both.
 
-That is the point. A full quarter needs no shrinking.
+Right now the bar is being lowered twice, once by averaging weak old quarters and again by taking two thirds of a full quarter. That is why nearly every territory is showing growth over 100 percent.
 
 ---
 
-## Step 4: Insert the missing column
+## Fix 3: The column heading
 
-Right click on the **Volume Growth** column heading and choose **Insert**. A blank column appears between Adjusted Baseline and Volume Growth.
+**P1** reads `3Q2026 - Contest`. The numbers in it are 2Q2026.
 
-In the new **P1**, type `Contest Enrollments`.
-
-In **P2**:
-
-```excel
-=L2
-```
-
-Fill down to P25.
-
-That is it. Column L already holds each territory's 2Q2026 enrollments. You are simply pointing at it.
-
-Your columns are now:
-
-| Col | Field |
-|---|---|
-| N | Baseline |
-| O | Adjusted Baseline |
-| P | Contest Enrollments |
-| Q | Volume Growth |
-| R | Percent Growth |
-| S | Volume Rank |
-| T | Growth Rank |
-| U | Final Score |
-| V | Place |
-
-Everything shifted one to the right. Excel updates the old formulas automatically, but check them anyway in the next step.
+Rename it to `2Q2026 Contest`.
 
 ---
 
-## Step 5: Rewrite the growth columns
+## Fix 4: New cutoffs
 
-These were pointing at the wrong cells. Retype both.
+Every baseline just changed, so 12 and 8 are stale.
 
-**Q2, Volume Growth.** How many extra enrollments, compared to a normal quarter.
-```excel
-=IF(P2="","",P2-O2)
+Set **Y3** to `11` and **Y4** to `8`.
+
+Here is why. Sorted, the new baselines run:
+
+```
+18  13  12  12  11  11  11  10  10  9  8  8  8  8  6  6  6  6  5  4  3  3  2  2
 ```
 
-**R2, Percent Growth.** How much better than normal, relative to their own size.
-```excel
-=IF(OR(P2="",O2=0),"",(P2-O2)/O2)
-```
+A cutoff at 11 sits between 11 and 10. Two different numbers, so no tie is split.
+A cutoff at 8 sits between 8 and 6. Two different numbers, so no tie is split.
 
-Fill both down. Format R as a percentage.
+That gives tiers of **7, 7 and 10**.
 
-**Check:** the values should now be a mix of positive and negative. If everything is still around -33 percent, the formulas are still pointing at the old columns.
-
-**Check:** CT/NYC enrolled 18 in 2Q2026 against a baseline of 18, so its volume growth is **0** and its percent growth is **0 percent**. Exactly average. San Diego/OC enrolled 0 against a baseline of 3, so **-3** and **-100 percent**.
-
----
-
-## Step 6: Pick new cutoffs
-
-Your baselines have all changed, so **12 and 8 no longer apply.** Those came from the old ten quarter average.
-
-Copy column N into an empty area and sort it largest to smallest.
-
-Look down the sorted list for two natural gaps, one roughly a third of the way down, one roughly two thirds. Put those two values in **Y3** and **Y4**.
-
-**The one rule: never place a cutoff between two territories with the same baseline.** If the gap you want falls between two identical numbers, move the cutoff up or down until it sits between two different numbers.
+Tier 3 is large, and that is unavoidable. Four territories share a baseline of 6, so any attempt to cut through them would separate identical territories. Uneven tiers are the correct answer.
 
 Then in **B2**:
 ```excel
 =IF(N2>=$Y$3,"Tier 1",IF(N2>=$Y$4,"Tier 2","Tier 3"))
 ```
-
-Fill down. This replaces the typed in tiers.
-
-**Check:** the three tiers will be uneven. That is correct.
+Fill down to B25.
 
 ---
 
-## Step 7: The ranks and the winner
+## Fix 5: One validation row is now wrong
 
-These columns already exist but now sit one letter further right. Retype them so the references are certain.
+Row 36 reads `Adjusted baseline is smaller than baseline` and expects 24.
 
-**S2, Volume Rank**
-```excel
-=IF(Q2="","",SUMPRODUCT(($B$2:$B$25=B2)*($Q$2:$Q$25<>"")*($Q$2:$Q$25>Q2))+1)
-```
+For this demo the adjusted baseline **equals** the baseline, because a full quarter needs no scaling. Change that row to:
 
-**T2, Growth Rank**
-```excel
-=IF(R2="","",SUMPRODUCT(($B$2:$B$25=B2)*($R$2:$R$25<>"")*($R$2:$R$25>R2))+1)
-```
+`Adjusted baseline equals baseline`, expected **24**.
 
-**U2, Final Score**
-```excel
-=IF(OR(S2="",T2=""),"",AVERAGE(S2,T2))
-```
-
-**V2, Place**
-```excel
-=IF(U2="","",SUMPRODUCT(($B$2:$B$25=B2)*($U$2:$U$25<>"")*(($U$2:$U$25<U2)+($U$2:$U$25=U2)*($R$2:$R$25>R2)+($U$2:$U$25=U2)*($R$2:$R$25=R2)*($Q$2:$Q$25>Q2)))+1)
-```
-
-Fill all four down.
-
-Lowest Final Score wins. Place 1 in each tier is the winner. Place 2 also gets paid.
+If it fails, `Y1` is still set to 2.
 
 ---
 
-## Step 8: Check it before you show it
+## What you should see when it is right
 
-| Check | What you should see |
-|---|---|
-| Percent Growth is a spread of positive and negative | not all -33 percent |
-| Column O equals column N | because Y1 and Y2 are both 3 |
-| Each tier has exactly one Place 1 | three winners |
-| Each tier has exactly one Place 2 | three runners up |
-| No cell shows an error | no `#DIV/0!` |
-| Somewhere, a smaller territory beat a bigger one on percent growth | this is the whole design working |
+If your numbers do not match this table, something above is still wrong.
 
-That last row is the one to hunt for. Find the example, write down both territory names and both sets of numbers. It is the most persuasive thing you can put in front of anyone, because it shows the fairness mechanism working on real data without you having to argue for it.
+| Territory | Tier | Baseline | 2Q2026 | Volume Growth | Percent Growth |
+|---|---|---|---|---|---|
+| CT/NYC | 1 | 18 | 18 | 0 | 0.0% |
+| South FL | 1 | 13 | 23 | +10 | 76.9% |
+| Pittsburgh/Cleveland | 1 | 12 | 20 | +8 | 66.7% |
+| Los Angeles | 1 | 12 | 17 | +5 | 41.7% |
+| South TX/LA | 1 | 11 | 17 | +6 | 54.5% |
+| Chicago/IN | 1 | 11 | 13 | +2 | 18.2% |
+| Pacific Northwest | 1 | 11 | 9 | -2 | -18.2% |
+| Mid-Atlantic | 2 | 10 | 18 | +8 | 80.0% |
+| Rocky Mountains | 2 | 10 | 8 | -2 | -20.0% |
+| New England | 2 | 9 | 9 | 0 | 0.0% |
+| Philly | 2 | 8 | 13 | +5 | 62.5% |
+| Great South | 2 | 8 | 15 | +7 | 87.5% |
+| OH/MI | 2 | 8 | 13 | +5 | 62.5% |
+| MN/WI | 2 | 8 | 12 | +4 | 50.0% |
+| Desert Plains | 3 | 6 | 15 | +9 | 150.0% |
+| Carolinas | 3 | 6 | 12 | +6 | 100.0% |
+| IN/KY/Cincy | 3 | 6 | 7 | +1 | 16.7% |
+| AR/MO/Tulsa | 3 | 6 | 3 | -3 | -50.0% |
+| Northern Cal | 3 | 5 | 2 | -3 | -60.0% |
+| Midwest | 3 | 4 | 2 | -2 | -50.0% |
+| North FL/GA | 3 | 3 | 4 | +1 | 33.3% |
+| San Diego/OC | 3 | 3 | 0 | -3 | -100.0% |
+| North TX/OK | 3 | 2 | 5 | +3 | 150.0% |
+| Northern NJ & NYC | 3 | 2 | 5 | +3 | 150.0% |
+
+Notice CT/NYC lands on exactly zero. It enrolled 18 against a baseline of 18. That is a good sign, not a bug. It means the largest territory performed exactly at its own normal, which is what a baseline is supposed to detect.
 
 ---
 
-## Step 9: Moving to the real contest
+## Your winners
 
-Once this is signed off, the change to 3Q2026 is small.
-
-1. Set **Y1** to `2`. The contest runs August and September, two months, so every adjusted baseline drops to two thirds of the baseline.
-2. Change **N2** to `=ROUNDUP(AVERAGE(I2:L2),0)`, so the baseline becomes the four quarters ending 30 June 2026.
-3. Change **P2** from `=L2` to a count of enrollments dated between 1 August and 30 September 2026:
-```excel
-=COUNTIFS('Raw Data'!$AO:$AO,$A2,'Raw Data'!$Y:$Y,">="&DATE(2026,8,1),'Raw Data'!$Y:$Y,"<="&DATE(2026,9,30),'Raw Data'!$AQ:$AQ,1)
-```
-4. Re-derive the cutoffs, because the baselines move again.
-
-Nothing else changes. That is the point of building it this way.
+| Tier | First | Second |
+|---|---|---|
+| Tier 1 | South FL | Pittsburgh/Cleveland |
+| Tier 2 | **Great South** | Mid-Atlantic |
+| Tier 3 | Desert Plains | North TX/OK and Northern NJ & NYC, tied |
 
 ---
 
-## What to say when you present
+## The example to show Kolin
 
-**Lead with the mechanism.** Here is what each territory normally does in a quarter. Here is what they actually did in 2Q2026. Here is the growth, both in patients added and as a percentage. Here is how those two rank inside a size group, and here is the winner.
+**Tier 2 is the whole design working, on real data.**
 
-**Then show the example.** A small territory that added fewer patients than a large one, but placed ahead because it grew more against its own baseline. That is the fairness rule doing its job.
+Mid-Atlantic added **8** extra patients. Great South added **7**. Mid-Atlantic added more.
 
-**Then say the caveats before he asks.**
+But Mid-Atlantic's normal quarter is 10, so 8 extra is 80 percent growth.
+Great South's normal quarter is 8, so 7 extra is 87.5 percent growth.
 
-1. This uses today's territory map applied to older enrollments. Territories have changed. So this proves the scoring, it is not a real leaderboard.
-2. Every count is orders, not patients. There is no patient identifier in the data, so a patient who enrolled twice is counted twice.
-3. Some enrollments have an unresolved territory and are excluded from every number here.
-4. The workbook maps 24 territories. There should be 28.
+Mid-Atlantic wins the volume rank. Great South wins the growth rank. Both score 1.5.
 
-The scoring engine is finished. What is left is two data fixes that belong to whoever owns the source file.
+The tiebreaker goes to higher percent growth, so **Great South wins the tier despite adding fewer patients.**
+
+That single comparison proves the contest does not simply reward whoever is bigger. Write down both names and all four numbers, and lead with it.
+
+---
+
+## A real problem the data just handed you
+
+In Tier 3, **North TX/OK** and **Northern NJ & NYC** are identical.
+
+Both have a baseline of 2. Both enrolled 5 in 2Q2026. Both grew by 3 patients and by 150 percent.
+
+They tie on final score. They tie on percent growth. They tie on volume growth. Every tiebreaker in the sheet runs out, and they share second place.
+
+This is not a bug. It is what happens with small territories and whole numbers, and it will happen again. Second place is a paid position, so somebody has to decide what happens when two territories are genuinely indistinguishable.
+
+Take this to Kolin as a question. Split the prize, pay both, or add a further tiebreaker such as who reached TTP more often. It is his call, and finding it now rather than in October is exactly the kind of thing that makes the work look finished.
+
+---
+
+## Still outstanding, and not fixable here
+
+* The workbook maps **24** territories. There should be 28.
+* Some enrollment rows carry `#N/A` for territory and are excluded from every number above.
+* There is no patient identifier, so all counts are orders, not patients.
