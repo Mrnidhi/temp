@@ -1,164 +1,222 @@
-# Fixing the Sheet
+# Contest Scoring: Trend Adjusted Design
 
-Four changes. Do them in order. Expected results are at the bottom so you can check your work.
+Two changes to how the bar is set. Both are supported by the ten quarters of data already in the workbook.
 
 ---
 
-## Fix 1: The baseline
+## Change 1: Stop rounding the baseline up
 
-Right now the baseline averages all ten quarters. CT/NYC has a Total of 139 and a Baseline of 14, which is 139 divided by 10.
+`ROUNDUP` raises the bar by 33.3 percent for San Diego/OC and North TX/OK, by 1.4 percent for CT/NYC, and by nothing at all for six territories that happen to land on whole numbers.
 
-It should average the **four quarters before the contest quarter**: `2Q2025`, `3Q2025`, `4Q2025`, `1Q2026`. Those are columns **H, I, J, K**.
+It taxes the smallest territories hardest, which is the opposite of what the tiers exist to do.
+
+Removing it produces three benefits, all measured on your own data.
+
+**Tiers become clean.** Unrounded baselines sorted:
+
+```
+17.75  12.5  12  11.5  11  11  10.5  10  9.75  8.75  8  7.5
+7.25  7.25  6  6  5.75  5.5  4.25  3.5  3  2.25  1.75  1.5
+```
+
+Cutoffs at **10.0** and **6.0** give tiers of exactly **8, 8 and 8**, with **zero** baselines split across a boundary. Both territories on 7.25 sit together. Both on 6.0 sit together.
+
+**The unresolvable tie disappears.** North TX/OK and Northern NJ & NYC both rounded to a baseline of 2 and tied on every tiebreaker. Unrounded they are 1.50 and 1.75, and the tie never occurs.
+
+**Growth is measured precisely.** A territory averaging 12.5 is measured against 12.5.
+
+---
+
+## Change 2: Set the bar to what the territory would do anyway
+
+The business is growing. Quarterly enrollments across all territories:
+
+```
+1Q2024   42   <- launch ramp, an outlier
+2Q2024  144
+3Q2024  159
+4Q2024  137
+1Q2025  177
+2Q2025  161
+3Q2025  175
+4Q2025  180
+1Q2026  221
+2Q2026  260
+```
+
+From 2Q2024 to 1Q2026 that is **6.31 percent growth per quarter, compounding.**
+
+A four quarter average sits about **2.5 quarters** behind the quarter it is meant to predict. At 6.31 percent compounding, that gap is worth **16.5 percent**.
+
+So a plain four quarter average sets a bar that a territory clears by doing nothing at all. It rewards the tailwind, not the effort.
+
+**Fix:** multiply the baseline by the growth the business is already producing.
+
+```
+Contest Target = Baseline  x  Trend Uplift  x  (Contest Months / 3)
+```
+
+The trend uplift is `(1 + quarterly growth) ^ 2.5`.
+
+**This changes no winners.** Tested against 2Q2026, all six paid positions are identical with and without the adjustment. What it changes is the story: territories can no longer claim growth that the market handed them.
+
+---
+
+## Three rules this design depends on
+
+**1. The target must be known before the contest opens.**
+
+You cannot tell a rep in November what their August target was. The growth rate is therefore computed **only from quarters that finished before the contest starts**, then frozen. It is never recalculated using contest period data.
+
+This also avoids a circularity. If the growth rate were computed from the contest quarter, a large territory's own performance would be inflating the bar it is being measured against.
+
+**2. Tiers are locked before the contest and never recomputed.**
+
+Slide the baseline window by a single quarter and 4 of 24 territories change tier. Tier assignment must be frozen at the same moment the targets are published.
+
+**3. The launch quarter is excluded from the trend calculation.**
+
+1Q2024 recorded 42 enrollments against 144 the following quarter. Including it would triple the apparent growth rate.
+
+---
+
+## Building it in Excel
+
+### Step 1: Add a quarter totals row
+
+In **C27**:
+```excel
+=SUM(C2:C25)
+```
+Fill across to **L27**.
+
+Label **A27** as `Quarter total`.
+
+### Step 2: Extend the parameter block
+
+| Cell | Label | Value or formula |
+|---|---|---|
+| X1 | `Contest months` | `3` |
+| X2 | `Baseline quarter months` | `3` |
+| X3 | `Tier 1 cutoff` | `10` |
+| X4 | `Tier 2 cutoff` | `6` |
+| X5 | `Baseline lag, quarters` | `2.5` |
+| X6 | `Quarterly growth` | `=(K27/D27)^(1/7)-1` |
+| X7 | `Trend uplift` | `=(1+Y6)^Y5` |
+
+Put each label in column X and each value in column Y.
+
+`Y6` reads from **D27** (`2Q2024`) to **K27** (`1Q2026`). Seven steps. It deliberately skips **C27**, the launch quarter, and deliberately stops before **L27**, the contest quarter.
+
+**Check:** `Y6` should read about **6.31%**. `Y7` should read about **1.1653**.
+
+### Step 3: Baseline, unrounded
 
 In **N2**:
 ```excel
-=ROUNDUP(AVERAGE(H2:K2),0)
+=AVERAGE(H2:K2)
 ```
 Fill down to N25.
 
-Column L is `2Q2026`. That is the quarter you are measuring. It must never be in the baseline.
+No `ROUNDUP`. Format the column to two decimals.
 
-**Check:** CT/NYC changes from 14 to **18**. South FL changes from 12 to **13**.
+**Check:** CT/NYC reads **17.75**. North TX/OK reads **1.50**.
 
----
+### Step 4: Rename column O and rebuild it
 
-## Fix 2: Turn off the scaling
+Rename **O1** from `Adjusted Baseline` to `Contest Target`.
 
-The contest period is 2Q2026, a full three month quarter. There is nothing to shrink.
-
-Change **Y1** from `2` to `3`.
-
-**Check:** column O should now match column N exactly on every row. CT/NYC reads 18.0 in both.
-
-Right now the bar is being lowered twice, once by averaging weak old quarters and again by taking two thirds of a full quarter. That is why nearly every territory is showing growth over 100 percent.
-
----
-
-## Fix 3: The column heading
-
-**P1** reads `3Q2026 - Contest`. The numbers in it are 2Q2026.
-
-Rename it to `2Q2026 Contest`.
-
----
-
-## Fix 4: New cutoffs
-
-Every baseline just changed, so 12 and 8 are stale.
-
-Set **Y3** to `11` and **Y4** to `8`.
-
-Here is why. Sorted, the new baselines run:
-
+In **O2**:
+```excel
+=ROUND(N2*$Y$7*$Y$1/$Y$2,2)
 ```
-18  13  12  12  11  11  11  10  10  9  8  8  8  8  6  6  6  6  5  4  3  3  2  2
-```
+Fill down to O25.
 
-A cutoff at 11 sits between 11 and 10. Two different numbers, so no tie is split.
-A cutoff at 8 sits between 8 and 6. Two different numbers, so no tie is split.
+This applies both adjustments at once: the trend uplift, and the shortening of the window if the contest runs fewer than three months. For this demo `Y1` is 3, so the window factor is 1 and only the trend applies.
 
-That gives tiers of **7, 7 and 10**.
+**Check:** CT/NYC reads **20.68**. South FL reads **14.57**.
 
-Tier 3 is large, and that is unavoidable. Four territories share a baseline of 6, so any attempt to cut through them would separate identical territories. Uneven tiers are the correct answer.
+### Step 5: New cutoffs
 
-Then in **B2**:
+Set **Y3** to `10` and **Y4** to `6`.
+
+In **B2**:
 ```excel
 =IF(N2>=$Y$3,"Tier 1",IF(N2>=$Y$4,"Tier 2","Tier 3"))
 ```
-Fill down to B25.
+Fill down.
+
+**Check:** tiers come out **8, 8, 8**.
+
+### Step 6: Everything downstream is unchanged
+
+Volume Growth, Percent Growth, both ranks, Final Score and Place all point at column O, which still holds the bar. Nothing needs retyping.
 
 ---
 
-## Fix 5: One validation row is now wrong
-
-Row 36 reads `Adjusted baseline is smaller than baseline` and expects 24.
-
-For this demo the adjusted baseline **equals** the baseline, because a full quarter needs no scaling. Change that row to:
-
-`Adjusted baseline equals baseline`, expected **24**.
-
-If it fails, `Y1` is still set to 2.
-
----
-
-## What you should see when it is right
-
-If your numbers do not match this table, something above is still wrong.
-
-| Territory | Tier | Baseline | 2Q2026 | Volume Growth | Percent Growth |
-|---|---|---|---|---|---|
-| CT/NYC | 1 | 18 | 18 | 0 | 0.0% |
-| South FL | 1 | 13 | 23 | +10 | 76.9% |
-| Pittsburgh/Cleveland | 1 | 12 | 20 | +8 | 66.7% |
-| Los Angeles | 1 | 12 | 17 | +5 | 41.7% |
-| South TX/LA | 1 | 11 | 17 | +6 | 54.5% |
-| Chicago/IN | 1 | 11 | 13 | +2 | 18.2% |
-| Pacific Northwest | 1 | 11 | 9 | -2 | -18.2% |
-| Mid-Atlantic | 2 | 10 | 18 | +8 | 80.0% |
-| Rocky Mountains | 2 | 10 | 8 | -2 | -20.0% |
-| New England | 2 | 9 | 9 | 0 | 0.0% |
-| Philly | 2 | 8 | 13 | +5 | 62.5% |
-| Great South | 2 | 8 | 15 | +7 | 87.5% |
-| OH/MI | 2 | 8 | 13 | +5 | 62.5% |
-| MN/WI | 2 | 8 | 12 | +4 | 50.0% |
-| Desert Plains | 3 | 6 | 15 | +9 | 150.0% |
-| Carolinas | 3 | 6 | 12 | +6 | 100.0% |
-| IN/KY/Cincy | 3 | 6 | 7 | +1 | 16.7% |
-| AR/MO/Tulsa | 3 | 6 | 3 | -3 | -50.0% |
-| Northern Cal | 3 | 5 | 2 | -3 | -60.0% |
-| Midwest | 3 | 4 | 2 | -2 | -50.0% |
-| North FL/GA | 3 | 3 | 4 | +1 | 33.3% |
-| San Diego/OC | 3 | 3 | 0 | -3 | -100.0% |
-| North TX/OK | 3 | 2 | 5 | +3 | 150.0% |
-| Northern NJ & NYC | 3 | 2 | 5 | +3 | 150.0% |
-
-Notice CT/NYC lands on exactly zero. It enrolled 18 against a baseline of 18. That is a good sign, not a bug. It means the largest territory performed exactly at its own normal, which is what a baseline is supposed to detect.
-
----
-
-## Your winners
+## What you should see
 
 | Tier | First | Second |
 |---|---|---|
-| Tier 1 | South FL | Pittsburgh/Cleveland |
-| Tier 2 | **Great South** | Mid-Atlantic |
-| Tier 3 | Desert Plains | North TX/OK and Northern NJ & NYC, tied |
+| Tier 1 | South FL | Mid-Atlantic |
+| Tier 2 | Desert Plains | Great South |
+| Tier 3 | North TX/OK | Carolinas |
+
+Identical with or without the trend adjustment. That is the point.
+
+**CT/NYC is the one to look at.** Against a plain baseline it grew 1.4 percent and looked fine. Against a target that expects the market's own growth, it is at **-13.0 percent**. It grew, but slower than the business around it. That is exactly the distinction the adjustment exists to draw.
 
 ---
 
 ## The example to show Kolin
 
-**Tier 2 is the whole design working, on real data.**
+**Tier 1. Pittsburgh/Cleveland added more patients and still lost.**
 
-Mid-Atlantic added **8** extra patients. Great South added **7**. Mid-Atlantic added more.
+| | Target | Enrolled | Added | Growth |
+|---|---|---|---|---|
+| Pittsburgh/Cleveland | 13.40 | 20 | +6.60 | +49.2% |
+| Mid-Atlantic | 11.65 | 18 | +6.35 | +54.5% |
 
-But Mid-Atlantic's normal quarter is 10, so 8 extra is 80 percent growth.
-Great South's normal quarter is 8, so 7 extra is 87.5 percent growth.
+Pittsburgh added more patients, so it wins the volume rank. Mid-Atlantic grew a larger share of its own target, so it wins the growth rank. Both score 2.5. The tiebreaker goes to percent growth, and **Mid-Atlantic takes second place with fewer patients added.**
 
-Mid-Atlantic wins the volume rank. Great South wins the growth rank. Both score 1.5.
-
-The tiebreaker goes to higher percent growth, so **Great South wins the tier despite adding fewer patients.**
-
-That single comparison proves the contest does not simply reward whoever is bigger. Write down both names and all four numbers, and lead with it.
+Neither territory can win on size alone. That is the entire design, on real data, in four numbers.
 
 ---
 
-## A real problem the data just handed you
+## Validation
 
-In Tier 3, **North TX/OK** and **Northern NJ & NYC** are identical.
-
-Both have a baseline of 2. Both enrolled 5 in 2Q2026. Both grew by 3 patients and by 150 percent.
-
-They tie on final score. They tie on percent growth. They tie on volume growth. Every tiebreaker in the sheet runs out, and they share second place.
-
-This is not a bug. It is what happens with small territories and whole numbers, and it will happen again. Second place is a paid position, so somebody has to decide what happens when two territories are genuinely indistinguishable.
-
-Take this to Kolin as a question. Split the prize, pay both, or add a further tiebreaker such as who reached TTP more often. It is his call, and finding it now rather than in October is exactly the kind of thing that makes the work look finished.
+| Check | Formula | Expected |
+|---|---|---|
+| Baseline is unrounded | `=SUMPRODUCT(--(N2:N25<>ROUND(N2:N25,0)))` | above 0 |
+| Baseline matches a fresh average | `=SUMPRODUCT(--(ROUND(N2:N25,4)<>ROUND((H2:H25+I2:I25+J2:J25+K2:K25)/4,4)))` | 0 |
+| Target above baseline while uplift exceeds 1 | `=SUMPRODUCT(--(O2:O25>N2:N25))` | 24 |
+| Growth rate excludes the launch quarter | inspect `Y6` | reads D27, not C27 |
+| Growth rate excludes the contest quarter | inspect `Y6` | stops at K27, not L27 |
+| Tier counts | `=COUNTIF(B:B,"Tier 1")` and so on | 8, 8, 8 |
+| No baseline split across tiers | `=SUMPRODUCT(--(COUNTIFS($N$2:$N$25,$N$2:$N$25,$B$2:$B$25,$B$2:$B$25)<>COUNTIF($N$2:$N$25,$N$2:$N$25)))` | 0 |
+| One first place per tier | `=COUNTIFS(B:B,"Tier 1",W:W,1)` and so on | 1 each |
+| No formula errors | `=SUMPRODUCT(--ISERROR(N2:W25))` | 0 |
 
 ---
 
-## Still outstanding, and not fixable here
+## Be honest about what this does not fix
 
-* The workbook maps **24** territories. There should be 28.
-* Some enrollment rows carry `#N/A` for territory and are excluded from every number above.
-* There is no patient identifier, so all counts are orders, not patients.
+**2Q2026 was an exceptional quarter, not just a trending one.** The plain baseline understates it by 41 percent. The trend adjusted target still understates it by 21 percent. The adjustment removes the predictable part of the growth, not a genuine surge. Sixteen of twenty four territories still beat the adjusted target.
+
+**Tier 3 is still decided by very few patients.** North TX/OK wins on a target of 1.75 and five enrollments. One patient is worth 57 percent growth to that territory and 5 percent to CT/NYC. Volatility for territories below a baseline of 5 is three times that of territories above 8.
+
+No arithmetic fixes this. It is a property of small numbers. Either merge Tier 2 and Tier 3, or give the smallest territories a fixed target instead of a rank. That is a decision for Kolin, and it is better raised with these numbers than discovered in October.
+
+**Every count is orders, not patients.** There is still no patient identifier in the source data.
+
+---
+
+## When the real contest runs
+
+Three changes and nothing else.
+
+1. `Y1` becomes `2`, because August and September are two months. The window factor drops the target to two thirds.
+2. `N2` becomes `=AVERAGE(I2:L2)`, the four quarters ending 30 June 2026.
+3. `Y6` extends one quarter to `=(L27/D27)^(1/8)-1`, since 2Q2026 has now finished and is no longer the contest quarter.
+
+Then recompute the cutoffs, publish the targets, and freeze everything before 1 August.
