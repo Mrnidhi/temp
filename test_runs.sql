@@ -30,3 +30,15 @@ SELECT
          ELSE '' END                                                         AS FLAG
 FROM by_state
 ORDER BY ATC_PATIENTS ASC, TOTAL_PATIENTS DESC;
+
+-- VERIFIED RESULT (run 2026-07-10, 7 rows = all 7 Central states; Mississippi absent, confirming it is NOT Central):
+--   STATE  TOTAL  ATC  NON_ATC  PCT_ATC  FLAG
+--   AR     121    0    121      0.0      NO ATC PRESENCE
+--   SD      57    0     57      0.0      NO ATC PRESENCE
+--   ND      16    0     16      0.0      NO ATC PRESENCE
+--   NE      38    1     37      2.6      near-zero
+--   KS      79   13     66     16.5
+--   OK     143   65     78     45.5
+--   TX     563  186    377     33.0
+-- Central total: 265 ATC / 1,017 = 26.0% (matches slide 5 chart).
+-- Slide 5 fix: the zero-ATC Central states are Arkansas + the Dakotas, NOT Mississippi (which is Southeast).

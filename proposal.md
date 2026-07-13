@@ -10,9 +10,9 @@
 - **28 territories** (not 24), split into 3 color-coded size tiers.
 - **Baseline = average monthly enrollments** (weekly optional), computed over the last **4 quarters** (6 not adopted), scaled to the 2-month window (≈ 2× the average month).
 - **Score:** 50/50 volume growth + % growth within tier. **Top 2 per tier paid.**
-- **RAT bucket:** the 6 Regional Account Teams compete as one single group (not split by size), same growth-over-baseline scoring.
+- **RAD bucket:** all Regional Account **Directors** compete in one single bucket (not split by size), ranked on volume & % growth over baseline.
 - **Conversion side prize (pull-through):** rewards enrollments that reach TTP. Conversion rate = enrollments reaching TTP ÷ total enrollments in the window; highest in a tier qualifies; minimum-enrollment floor so tiny counts don't skew it. Track days from enrollment to TTP. A rep can win both gross and conversion.
-- **Payout is a formula** with the budget as a variable (first > second). **Exact split still to confirm** — Kolin floated 65/35, then 70/30, then ~50/30 and per-tier percentages; the call audio was garbled here.
+- **Payout formula (PROVISIONAL — likely to change, do not lock):** Kolin's 07/10 chat floated per tier 1st ≈ 16.66% of pot / 2nd ≈ 10% / side ≈ 6.66% (50/30/20 within tier), budget = $X. Treat as a placeholder; the real split is still moving.
 
 ---
 
@@ -108,8 +108,8 @@ Everything scored/guarded/watched comes from the **Infinity/CARES enrollment fee
 ## Open decisions (Kolin / VP)
 - ~~**Top 2 or 3** per group?~~ → **Top 2 per tier** (locked 07/10).
 - ~~**2 or 3** size buckets?~~ → **3 tiers** (locked 07/10).
-- **Exact payout split** — first vs. second, and how the pot divides across tiers (garbled on the 07/10 call, confirm with Kolin).
-- **Prize** — budget still TBD; building as a formula for now.
+- ~~**Exact payout split**~~ → **Confirmed 07/10** (Kolin's chat): per tier 1st 16.66% / 2nd 10% / side 6.66% of the pot; 50/30/20 within tier.
+- **Prize budget** ($X total pot) — still TBD; formula holds for any budget.
 - **VP name** + when I present.
 
 ## Phase-2 add-on (optional)

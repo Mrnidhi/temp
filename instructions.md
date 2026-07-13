@@ -1,129 +1,63 @@
-# Enrollment Contest: Formula Guide
+# Excel Copilot Prompts — Contest Scoring
 
-Corrected version. The cutoffs still calculate themselves from the data. The quarter formulas are bounded to the actual quarter columns so there is no circular reference.
-
-Layout: 24 territories in **rows 2 to 25**, header in row 1. Quarter columns are **C to L** (1Q2024 to 2Q2026). Scoring columns start at M.
+Paste these into Excel's Copilot **with the Contest Scoring tab active**. Two prompts: the main scorer, then the RAD bucket. Feed steps one message at a time if Copilot stalls.
 
 ---
 
-## Why you saw a circular reference
+## PROMPT 1 — Main territory scorer
 
-The earlier formulas used the range `C:Z`, which reaches past the quarters into the scoring columns. `Total = SUM($C2:$Z2)` was adding the Total cell to itself, and `COUNTA(C1:Z1)` counted the Baseline and Contest headers as if they were quarters, which is why "Quarters filled" read 19 instead of 10.
-
-The fix: point the quarter formulas only at **C to L**, the real quarter columns.
-
----
-
-## Delete this first
-
-Remove the **Quarters filled** helper (the cell that reads 19). It is not needed and it was feeding the circular formulas. Keep the two cutoff cells below it.
-
----
-
-## Cutoff cells (these calculate themselves)
-
-In your helper block:
-
-| Cell | Label | Formula |
-|---|---|---|
-| B35 | Tier 1 cutoff | `=PERCENTILE($N$2:$N$25,2/3)` |
-| B36 | Tier 2 cutoff | `=PERCENTILE($N$2:$N$25,1/3)` |
-
-These derive the two size boundaries as the 33rd and 67th percentiles of the baselines. On today's data they return 10 and 6, and they re-derive on their own whenever the baselines change. No typing.
-
----
-
-## Column formulas
-
-Type into **row 2**, fill down to row 25.
-
-**M2 — Total.** Only the quarter columns C to L.
-```
-=SUM(C2:L2)
-```
-
-**N2 — Baseline.** Average of the four quarters before the contest quarter: 2Q2025, 3Q2025, 4Q2025, 1Q2026 (H to K).
-```
-=AVERAGE(H2:K2)
-```
-
-**O2 — Contest metric.** The contest quarter, 2Q2026 (column L).
-```
-=L2
-```
-
-**B2 — Bucket.** Reads the two cutoff cells.
-```
-=IF(N2>=$B$35,"Tier 1",IF(N2>=$B$36,"Tier 2","Tier 3"))
-```
-
-**P2 — Volume Growth.**
-```
-=O2-N2
-```
-
-**Q2 — Percent Growth.** Format as a percentage.
-```
-=(O2-N2)/N2
-```
-
-**R2 — Volume Rank** (within group).
-```
-=SUMPRODUCT(($B$2:$B$25=B2)*($P$2:$P$25>P2))+1
-```
-
-**S2 — Growth Rank** (within group).
-```
-=SUMPRODUCT(($B$2:$B$25=B2)*($Q$2:$Q$25>Q2))+1
-```
-
-**T2 — Final Score.**
-```
-=AVERAGE(R2,S2)
-```
-
-**U2 — Place** (within group, ties break on percent growth).
-```
-=SUMPRODUCT(($B$2:$B$25=B2)*(($T$2:$T$25<T2)+($T$2:$T$25=T2)*($Q$2:$Q$25>Q2)))+1
-```
-
-**V2 — Result** (optional).
-```
-=IF(U2<=2,"PAID","")
-```
+> **What this sheet is:** a sales enrollment contest scorer. It has one row per territory with quarterly enrollments, and I want to score each territory on growth over its own baseline, grouped into size tiers, plus a conversion side prize and a payout. There are other tabs in this workbook (ATC Enrollments, ATC TTPs, ATC Infusions) — you may **read** from them if a formula needs a number, but do **not** edit, rename, move, or reformat any tab other than this active one. Every change stays on this sheet, and add new columns to the right of what's already here so my current layout doesn't shift.
+>
+> Please do these in order, and show me each formula before applying it:
+>
+> **Step 1 — A small settings block.** In a few empty cells near the top, create these named inputs so every formula can reference them:
+> - Total prize pot = 30000
+> - Tier 1 cutoff = `=PERCENTILE(<the size column>,2/3)`
+> - Tier 2 cutoff = `=PERCENTILE(<the size column>,1/3)`
+> - Min enrollments for side prize = 5
+> - 1st share = 0.1666, 2nd share = 0.10, side-prize share = 0.0666
+> - Window scale = 0.6667  (a quarter is 3 months, the contest is 2)
+>
+> **Step 2 — Size and baseline.** Add a "Size" column = the average of each territory's quarterly enrollments. Then Baseline = `=ROUND(Size * WindowScale, 1)`. Baseline is each territory's 2-month target.
+>
+> **Step 3 — Tier.** `=IF(Size >= Tier1cutoff, "Tier 1", IF(Size >= Tier2cutoff, "Tier 2", "Tier 3"))`.
+>
+> **Step 4 — Growth.** Volume Growth = `Contest enrollments − Baseline`. % Growth = `(Contest − Baseline) / Baseline`.
+>
+> **Step 5 — The 50/50 rank (within each tier).**
+> - Volume Rank = `=SUMPRODUCT((TierColumn=thisTier)*(VolGrowthColumn>thisVolGrowth))+1`
+> - Growth Rank = `=SUMPRODUCT((TierColumn=thisTier)*(%GrowthColumn>this%Growth))+1`
+> - Final Score = `=AVERAGE(VolumeRank, GrowthRank)`
+> - Place = `=SUMPRODUCT((TierColumn=thisTier)*((ScoreColumn<thisScore)+(ScoreColumn=thisScore)*(%GrowthColumn>this%Growth)))+1`
+> - Result = `=IF(Place<=2,"PAID","")`
+>
+> **Step 6 — Conversion side prize.** Read TTP counts from the ATC TTPs tab (read only). Pull-through % = `=IFERROR(TTP/Contest,0)`. Side Prize flag = `=IF(AND(Contest>=MinEnroll, PullThrough=MAXIFS(PullColumn, TierColumn, thisTier, ContestColumn, ">="&MinEnroll)),"SIDE","")`.
+>
+> **Step 7 — Payout.** `=IF(Place=1, 1stShare*Pot, IF(Place=2, 2ndShare*Pot, 0)) + IF(SidePrize="SIDE", SideShare*Pot, 0)`. Format as currency.
+>
+> Explain each formula in plain English as you go. **Reminder: only this active sheet gets changed — leave every other tab exactly as it is.**
 
 ---
 
-## What still updates on its own, and what does not
+## PROMPT 2 — RAD bucket (run after Prompt 1)
 
-**Self-updating:** the cutoffs. Change any baseline and B35 and B36 re-derive. You never touch them.
-
-**Manual each quarter:** the baseline window and the contest quarter. Because your quarter columns sit directly next to the scoring columns, there is no empty space for them to grow into, so a fully automatic sliding window is not possible in this layout without a circular reference. That is the trade-off, and it is a small one.
-
----
-
-## Running it next quarter (3Q2026 and beyond)
-
-When a quarter closes:
-
-1. **Insert a column** just left of Total (between L and M). Put the new quarter's enrollments in it and the label in row 1.
-2. Update **Total** to include the new column, for example `=SUM(C2:M2)`.
-3. Update **Baseline** to the new last four quarters. When 3Q2026 lands in M, baseline becomes `=AVERAGE(I2:L2)` (3Q2025 to 2Q2026).
-4. Update **Contest metric** to the new quarter, for example `=M2`.
-
-That is three cell edits, filled down. The cutoffs, buckets, ranks and winners all recalculate on their own.
-
-If you want it to be fully automatic for years with no edits at all, the quarter history has to move to the far right of the sheet so it can grow into empty columns. That is a one-time restructure. Say the word and I will write it up, otherwise the three-edit routine above is reliable and safe.
+> On this **active sheet only**, add a small separate table below the territory table for the RAD bucket. Do not touch any other tab. The Regional Account Directors all compete as **one single group** — no tiers.
+>
+> Columns: RAD name, Baseline (2-mo), Contest Enroll, Volume Growth, % Growth, Vol Rank, Growth Rank, Final Score, Place, Result.
+>
+> - Volume Growth = `Contest − Baseline`; % Growth = `(Contest − Baseline)/Baseline`
+> - Vol Rank = `=SUMPRODUCT((VolGrowthColumn>thisVolGrowth)*1)+1` (across all RADs, one group)
+> - Growth Rank = `=SUMPRODUCT((%GrowthColumn>this%Growth)*1)+1`
+> - Final Score = `=AVERAGE(VolRank, GrowthRank)`
+> - Place = `=SUMPRODUCT((ScoreColumn<thisScore)+(ScoreColumn=thisScore)*(%GrowthColumn>this%Growth))+1`
+> - Result = `=IF(Place<=2,"PAID","")`
+>
+> Show me each formula before applying. Keep everything on this active sheet.
 
 ---
 
-## Check after any change
-
-- No circular reference warning
-- Bucket reads Tier 1 / 2 / 3, roughly 9 / 9 / 6
-- Percent Growth is a spread of positive and negative
-- Each tier has exactly one 1 and one 2 in Place
-- Tie-split check reads 0:
-```
-=SUMPRODUCT(--(COUNTIFS($N$2:$N$25,$N$2:$N$25,$B$2:$B$25,$B$2:$B$25)<>COUNTIF($N$2:$N$25,$N$2:$N$25)))
-```
+## Notes
+- Do Step 1 first, then feed steps 2–7 one at a time, each starting with "On this active sheet only," so the guardrail sticks.
+- Swap the demo numbers for the real **ATC Enrollments** and **ATC TTPs**, and add the 4 missing territories to reach **28**.
+- Change the **pot** cell and every payout re-flows — that's the "budget is a formula" point for Kolin.
+- Reference build with all of this already wired up: `Contest Scoring - Reference Build.xlsx`.
