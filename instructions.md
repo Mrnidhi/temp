@@ -1,21 +1,16 @@
-Context: This is my enrollment contest scorer. It works, but it has a few bugs and needs cleanup. Fix the items below on this active sheet only — you may read from the ATC Enrollments and ATC TTPs tabs, but do not edit, rename, or reformat any other tab. Show me each change and explain it in plain English.
+Context: My enrollment contest scorer works, but it has three issues to fix. Make all changes on this active sheet only — read from other tabs if needed, but don't edit, rename, or reformat any other tab. Show me each change and explain it.
 
-Fix 1 — Pull-through can't exceed 100%. Right now some rows show pull-through over 100%, which is impossible (TTPs are a subset of enrollments). Change the Pull-through formula to cap at 100%: =IFERROR(MIN(TTP/Contest, 1), 0). Also add a small "Data check" column that flags "CHECK" whenever TTPs are greater than Contest enrollments, so bad source data is visible.
+Fix 1 — One side prize per tier (there's currently a tie). Capping pull-through at 100% made several territories tie at exactly 100%, so more than one is getting flagged "SIDE" in the same tier. Add a tiebreaker so only one wins per tier:
 
-Fix 2 — Repair the RAD bucket ranks. In the RAD table, Vol Rank, Growth Rank, and Final Score all show 1.0 for every RAD — the formulas are broken. Rebuild them so they rank across all RADs as one group:
+Create a side-prize rank: =SUMPRODUCT((TierCol=thisTier)*(ContestCol>=MinEnroll)*((PullCol>thisPull)+(PullCol=thisPull)*(TTPCol>thisTTP)))+1
+This ranks eligible territories by pull-through, and breaks ties by the higher raw TTP count.
+Then set Side Prize = =IF(AND(Contest>=MinEnroll, sidePrizeRank=1),"SIDE",""), so exactly one territory per tier is flagged. Confirm each tier ends up with only one side prize, and the payout total goes back to 100% of the pot.
+Fix 2 — Stop the blank placeholder rows from distorting everything. The 4 empty rows I added toward 28 territories are being counted as size 0, which is dragging the tier percentile cutoffs down and adding phantom rows to the rankings. Fix this by wrapping every calculated cell in each territory row so it returns blank when the territory name is empty — for example Size = =IF(TerritoryCell="","",AVERAGE(quarters)), and the same guard on Baseline, Tier, growth, ranks, place, pull-through, side prize, and payout. Empty rows should show nothing and be ignored by the PERCENTILE cutoffs and all the SUMPRODUCT ranges. Confirm the Tier 2 cutoff goes back to what it was with only the 24 real territories.
 
-Vol Rank = =SUMPRODUCT((AllRAD_VolGrowth > thisVolGrowth)*1)+1
-Growth Rank = =SUMPRODUCT((AllRAD_%Growth > this%Growth)*1)+1
-Final Score = =AVERAGE(VolRank, GrowthRank)
-Make sure the ranges cover only the RAD rows and use absolute references so they don't drift.
-Fix 3 — Make the payout shares display honestly. The share cells show 17% and 7% but the payouts actually use 16.66% and 6.66%. Set the share cells to the true values (0.1666 and 0.0666) and format them to show two decimals, so what's displayed matches what's calculated. Confirm the three tiers still total 100% of the pot.
+Fix 3 — Rewrite the notes as real sentences. The notes block still has broken fragments ("contest window, averaged and scaled to two", "territories compete together"). Replace it with four clean, complete sentences in plain English:
 
-Fix 4 — Expand to 28 territories. There should be 28 territories, not 24. Add 4 more territory rows (leave the names and quarterly numbers blank for me to fill from the real roster), and extend every formula and every SUMPRODUCT/PERCENTILE range down so the whole table and the tier cutoffs correctly include all 28 rows.
-
-Fix 5 — Flag the near-zero small territories. Add a "Baseline flag" column that marks "LOW BASE" for any territory whose baseline is below 3. Don't change how they're scored — just flag them, so I can see which territories are too small for percent-growth scoring to be reliable.
-
-Fix 6 — Fix the test so the baseline doesn't overlap the contest window. For testing on the 2025 Aug–Sep window, the baseline quarters must end before that window. Set the trailing quarters to the four quarters immediately before the contest start, with no overlap, and update the settings note to show which quarters are used.
-
-Fix 7 — Clean up the styling (make it look human, not AI-generated). Remove the "Formula / Block → Plain English" legend block with the half-sentence descriptions. Replace it with a short, clean 4-line note in plain English explaining baseline, tiers, scoring, and payout. Use sentence case headers, consistent number formats (one decimal for counts, whole numbers for percentages), and remove any filler text. Keep only what's needed to read and trust the sheet.
-
-After each fix, tell me what changed and confirm the winners and payouts still recalculate correctly. Everything stays on this active sheet.
+Baseline: each territory's average quarterly enrollments over the trailing quarters, scaled to the two-month window.
+Tiers: territories are split into three size groups so they only compete against similar-sized peers.
+Scoring: ranked within their tier on volume growth and percent growth, averaged; the top two are paid.
+Side prize: goes to the best enrollment-to-TTP pull-through in each tier, among territories that meet the minimum enrollment threshold.
+After each fix, confirm the winners, side prizes, and payouts recalculate correctly. Everything stays on this active sheet.
