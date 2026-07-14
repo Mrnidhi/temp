@@ -1,8 +1,46 @@
-Context: I have two small data tables on this sheet — one by REGION and one by STATE — each with columns: total patients, ATC patients, untapped patients, and % ATC (penetration). I want to build two clean charts that show enrollment opportunity, not just penetration. Work on this active sheet only; don't touch other tabs. Show me each chart and explain it.
+Prompt 1 — Region opportunity slide
+(Run this on a new slide inserted after slide 5, or on slide 5 itself.)
 
-Chart 1 — Region opportunity (bar). From the region table, make a horizontal bar chart of untapped patients, sorted largest to smallest. Add each region's penetration % as a data label at the end of its bar. Title it "Where the enrollment opportunity is largest." Keep it flat and clean — one bar color, no gridline clutter. The point I'm making: the region with the lowest penetration (Central) has one of the smallest opportunities, while West and Northeast are the biggest.
+On this slide only, build a chart slide that matches the existing deck template (kicker label, bold headline, a highlighted takeaway bar at the bottom, source footnote, Iovance branding).
 
-Chart 2 — State opportunity map (scatter). From the state table, make a scatter chart with penetration % on the X-axis and untapped patients on the Y-axis. Label the highest-opportunity states (California, Michigan, Indiana, Virginia, Florida, New York, Texas). Draw attention to the top-left area (low penetration, high volume) as the "priority target zone" — that's where adding ATC access captures the most net-new patients. Title it "Opportunity map: where to add ATC access."
+Kicker: REGIONAL OPPORTUNITY
+Headline: The biggest opportunity isn't where penetration is lowest
 
-Round all numbers, use full clean labels, and make both charts look professional enough to drop into a leadership deck. Everything stays on this active sheet.
+Make a horizontal bar chart of untapped (out-of-network) patients by region, sorted largest to smallest, using this data. Show each region's ATC penetration % as a label next to its bar:
+
+West — 2,319 untapped (42.3% penetration)
+Northeast — 1,969 untapped (48.9%)
+Southeast — 1,605 untapped (49.9%)
+Ohio Valley — 1,270 untapped (33.3%)
+Great Lakes — 1,262 untapped (40.3%)
+Central — 752 untapped (26.1%)
+Takeaway bar: Central has the lowest ATC penetration but one of the smallest untapped pools. West and Northeast together hold nearly half the total opportunity.
+Source footnote: McKesson (Compile) medical claims, 2021–2025. Untapped = patients treated outside the ATC network.
+
+Keep it flat and clean, one bar color, no gridline clutter.
+
+Prompt 2 — State opportunity map slide
+(Run this on a new slide after the region slide.)
+
+On this slide only, build a chart slide matching the existing deck template (kicker, headline, takeaway bar, source footnote, Iovance branding).
+
+Kicker: STATE-LEVEL TARGETING
+Headline: The sharpest targets combine large volume and low penetration
+
+Make a scatter chart with ATC penetration % on the X-axis and untapped patients on the Y-axis, plotting and labeling these states:
+
+California — 32.8%, 1,249
+Florida — 62.1%, 691
+Michigan — 12.3%, 663
+New York — 39.6%, 478
+Ohio — 51.0%, 451
+Indiana — 0.7%, 403
+Texas — 33.0%, 377
+Virginia — 1.7%, 287
+Alabama — 25.0%, 279
+Kentucky — 9.8%, 239
+Highlight the top-left region of the chart (low penetration, high volume) as the "priority target zone," and call out Michigan, Indiana, and Virginia as the standouts there.
+
+Takeaway bar: Michigan, Indiana, and Virginia are large untapped pools with almost no ATC presence — the clearest targets for adding ATC access.
+Source footnote: McKesson (Compile) medical claims, 2021–2025.
 
