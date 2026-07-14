@@ -1,15 +1,21 @@
-On this active sheet only (don't touch any other tab, and keep all my formulas working), restyle the whole thing so it looks clean, minimal, and human-made — like a sharp analyst's working model, not an auto-generated report. Make these changes:
+Context: This is my enrollment contest scorer. It works, but it has a few bugs and needs cleanup. Fix the items below on this active sheet only — you may read from the ATC Enrollments and ATC TTPs tabs, but do not edit, rename, or reformat any other tab. Show me each change and explain it in plain English.
 
-1. Delete the "Formula / Block / Plain English" explanation table near the bottom. Replace it with a single italic line under the title that reads: "Method: growth over each territory's own baseline, bucketed by size, half on volume and half on percent. Top 2 per tier paid, plus a pull-through side prize."
+Fix 1 — Pull-through can't exceed 100%. Right now some rows show pull-through over 100%, which is impossible (TTPs are a subset of enrollments). Change the Pull-through formula to cap at 100%: =IFERROR(MIN(TTP/Contest, 1), 0). Also add a small "Data check" column that flags "CHECK" whenever TTPs are greater than Contest enrollments, so bad source data is visible.
 
-2. Round everything. Tier cutoffs and baselines to 1 decimal. Percentages to whole numbers (e.g. 42%, not 42.8%). Payout to whole dollars. Scores and ranks to 1 decimal. No long decimals like 13.83333333.
+Fix 2 — Repair the RAD bucket ranks. In the RAD table, Vol Rank, Growth Rank, and Final Score all show 1.0 for every RAD — the formulas are broken. Rebuild them so they rank across all RADs as one group:
 
-3. One clean header style. Remove the heavy dark-blue banners and any rainbow/gradient coloring. Use a single light-gray header row, bold text, sentence case, with a thin bottom border. Headers should be short: "Baseline (2-mo)", "% Growth", "Vol Rank", "Place", "Result", "Pull-through", "Side Prize", "Payout".
+Vol Rank = =SUMPRODUCT((AllRAD_VolGrowth > thisVolGrowth)*1)+1
+Growth Rank = =SUMPRODUCT((AllRAD_%Growth > this%Growth)*1)+1
+Final Score = =AVERAGE(VolRank, GrowthRank)
+Make sure the ranges cover only the RAD rows and use absolute references so they don't drift.
+Fix 3 — Make the payout shares display honestly. The share cells show 17% and 7% but the payouts actually use 16.66% and 6.66%. Set the share cells to the true values (0.1666 and 0.0666) and format them to show two decimals, so what's displayed matches what's calculated. Confirm the three tiers still total 100% of the pot.
 
-4. Color only where it means something. Shade the "Result" cells that say PAID a light green. Give the Tier column a very subtle tint (Tier 1/2/3). Everything else stays plain — no decorative fills.
+Fix 4 — Expand to 28 territories. There should be 28 territories, not 24. Add 4 more territory rows (leave the names and quarterly numbers blank for me to fill from the real roster), and extend every formula and every SUMPRODUCT/PERCENTILE range down so the whole table and the tier cutoffs correctly include all 28 rows.
 
-5. Group the mechanics. Group the intermediate columns (Vol Rank, Growth Rank, Final Score) so they collapse out of view, keeping the sheet focused on the columns that matter: Territory, Baseline, Contest, % Growth, Place, Result, Side Prize, Payout. The mechanics stay in the sheet, just tucked away.
+Fix 5 — Flag the near-zero small territories. Add a "Baseline flag" column that marks "LOW BASE" for any territory whose baseline is below 3. Don't change how they're scored — just flag them, so I can see which territories are too small for percent-growth scoring to be reliable.
 
-6. Tidy up. Remove empty scaffolding rows, set consistent column widths, freeze the header row and the Territory column, and align numbers right, text left.
+Fix 6 — Fix the test so the baseline doesn't overlap the contest window. For testing on the 2025 Aug–Sep window, the baseline quarters must end before that window. Set the trailing quarters to the four quarters immediately before the contest start, with no overlap, and update the settings note to show which quarters are used.
 
-Keep every formula intact — this is styling only. Show me the sheet when done.
+Fix 7 — Clean up the styling (make it look human, not AI-generated). Remove the "Formula / Block → Plain English" legend block with the half-sentence descriptions. Replace it with a short, clean 4-line note in plain English explaining baseline, tiers, scoring, and payout. Use sentence case headers, consistent number formats (one decimal for counts, whole numbers for percentages), and remove any filler text. Keep only what's needed to read and trust the sheet.
+
+After each fix, tell me what changed and confirm the winners and payouts still recalculate correctly. Everything stays on this active sheet.
