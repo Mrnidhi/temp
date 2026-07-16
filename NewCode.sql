@@ -53,6 +53,28 @@ auth_parent AS (
       AND "ATC HCO Parent Name (McKesson Claims)" IS NOT NULL
       AND TRIM("ATC HCO Parent Name (McKesson Claims)") NOT IN ('', 'null')
 ),
+-- Roster gap correction (2026-07-16).
+-- CTAM_ATC_ALIGNMENT_2026 is missing these four organisations, so their patients
+-- were scored Non-ATC. Each was confirmed against Infinity's authoritative ATC
+-- master (file_Veeva_Komodo_ATC_Mapping, 93 accounts): City of Hope = Duarte and
+-- Chicago, NYU Langone = Perlmutter, Ohio State = Wexner (exact name match),
+-- Hoag = Hoag Memorial, which is in Newport Beach.
+--   Effect: +566 patients move to ATC. 6,935 -> 7,501, i.e. 42.7% -> 46.2%.
+-- These deliberately bypass the fallback_state_limit guard below: they are
+-- confirmed authorized, not inferred from a fuzzy name match.
+-- DELIBERATELY EXCLUDED: Kaiser, Providence, Mayo, Intermountain, Avera,
+-- Northwell, AdventHealth, Advocate, St Luke's, Baylor (449 patients). All are
+-- multi-site systems where only ONE site is authorized (e.g. Kaiser Vallejo,
+-- Providence Portland), so promoting the whole parent would overstate ATC.
+-- Retire this CTE once the source roster itself is fixed.
+roster_gap_parent AS (
+    SELECT PARENT FROM VALUES
+        ('CITY OF HOPE'),
+        ('NYU LANGONE HEALTH SYSTEM'),
+        ('THE OHIO STATE UNIVERSITY WEXNER MEDICAL CENTER'),
+        ('HOAG HOSPITAL NEWPORT BEACH')
+    AS t(PARENT)
+),
 classified AS (
     SELECT
         p.*,
@@ -64,6 +86,8 @@ classified AS (
                 THEN 'Non-ATC: Community Network'
             WHEN n.NPI IS NOT NULL
                 THEN 'ATC: NPI confirmed'
+            WHEN rg.PARENT IS NOT NULL
+                THEN 'ATC: roster gap corrected'
             WHEN ap.PARENT IS NOT NULL
                 THEN 'ATC: name fallback'
             WHEN EXISTS (
@@ -78,6 +102,7 @@ classified AS (
     FROM COMPILE_DEV.PUBLIC.ATC_SOC_PATIENT_CLASSIFIED_2021_2025 p
     LEFT JOIN auth_npi    n  ON TRIM(p.D_PRIMARY_HCO_NPI) = n.NPI
     LEFT JOIN auth_parent ap ON UPPER(TRIM(p.HCO_PARENT_NAME)) = ap.PARENT
+    LEFT JOIN roster_gap_parent rg ON UPPER(TRIM(p.HCO_PARENT_NAME)) = rg.PARENT
 ),
 fallback_footprint AS (
     SELECT HCO_PARENT_NAME,
@@ -91,6 +116,7 @@ SELECT
     f.PARENT_STATES,
     CASE
         WHEN c.CLASS_HYBRID = 'ATC: NPI confirmed'                                              THEN 'ATC'
+        WHEN c.CLASS_HYBRID = 'ATC: roster gap corrected'                                       THEN 'ATC'
         WHEN c.CLASS_HYBRID = 'ATC: name fallback' AND f.PARENT_STATES <= $fallback_state_limit THEN 'ATC'
         WHEN c.CLASS_HYBRID = 'ATC: name fallback' AND f.PARENT_STATES >  $fallback_state_limit THEN 'Non-ATC: System sweep'
         WHEN c.CLASS_HYBRID = 'Needs Review'                                                    THEN 'Needs Review'
