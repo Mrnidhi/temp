@@ -1,9 +1,7 @@
 /* Run in SNOWFLAKE. Top non-ATC accounts within each region = a regional target
-   list. Counts patients per region x parent (so a multi-state system lands in the
-   region where its patients actually are). Uses NewCode.sql base tables.
-   Paste back the output. */
+   list. Uses NewCode.sql base tables. Paste back both outputs. */
 
--- Top 8 non-ATC accounts per region
+-- 1) Top 8 non-ATC accounts per region
 WITH nonatc AS (
     SELECT
         COALESCE(r.REGION, 'Unmapped') AS REGION_NAME,
@@ -13,7 +11,9 @@ WITH nonatc AS (
     LEFT JOIN COMPILE_DEV.PUBLIC.STATE_REGION_MAP r
         ON a.PRIMARY_HCO_NPI_STATE = r.STATE
     WHERE a.CLASS_FINAL LIKE 'Non-ATC%'
-    GROUP BY 1, 2
+    GROUP BY
+        COALESCE(r.REGION, 'Unmapped'),
+        COALESCE(NULLIF(TRIM(a.HCO_PARENT_NAME), ''), 'Unknown / unmapped')
 ),
 ranked AS (
     SELECT REGION_NAME, PARENT, PATIENTS,
@@ -26,7 +26,7 @@ WHERE RN <= 8
 ORDER BY REGION_NAME, PATIENTS DESC;
 
 
--- Optional: non-ATC patients by state (top to bottom)
+-- 2) Non-ATC patients by state (top to bottom)
 SELECT
     a.PRIMARY_HCO_NPI_STATE AS STATE,
     COALESCE(r.REGION, 'Unmapped') AS REGION_NAME,
@@ -35,5 +35,7 @@ FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
 LEFT JOIN COMPILE_DEV.PUBLIC.STATE_REGION_MAP r
     ON a.PRIMARY_HCO_NPI_STATE = r.STATE
 WHERE a.CLASS_FINAL LIKE 'Non-ATC%'
-GROUP BY 1, 2
+GROUP BY
+    a.PRIMARY_HCO_NPI_STATE,
+    COALESCE(r.REGION, 'Unmapped')
 ORDER BY NON_ATC_PATIENTS DESC;
