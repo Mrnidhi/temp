@@ -53,28 +53,6 @@ auth_parent AS (
       AND "ATC HCO Parent Name (McKesson Claims)" IS NOT NULL
       AND TRIM("ATC HCO Parent Name (McKesson Claims)") NOT IN ('', 'null')
 ),
--- Roster gap correction (2026-07-16).
--- CTAM_ATC_ALIGNMENT_2026 is missing these four organisations, so their patients
--- were scored Non-ATC. Each was confirmed against Infinity's authoritative ATC
--- master (file_Veeva_Komodo_ATC_Mapping, 93 accounts): City of Hope = Duarte and
--- Chicago, NYU Langone = Perlmutter, Ohio State = Wexner (exact name match),
--- Hoag = Hoag Memorial, which is in Newport Beach.
---   Effect: +566 patients move to ATC. 6,935 -> 7,501, i.e. 42.7% -> 46.2%.
--- These deliberately bypass the fallback_state_limit guard below: they are
--- confirmed authorized, not inferred from a fuzzy name match.
--- DELIBERATELY EXCLUDED: Kaiser, Providence, Mayo, Intermountain, Avera,
--- Northwell, AdventHealth, Advocate, St Luke's, Baylor (449 patients). All are
--- multi-site systems where only ONE site is authorized (e.g. Kaiser Vallejo,
--- Providence Portland), so promoting the whole parent would overstate ATC.
--- Retire this CTE once the source roster itself is fixed.
-roster_gap_parent AS (
-    SELECT PARENT FROM VALUES
-        ('CITY OF HOPE'),
-        ('NYU LANGONE HEALTH SYSTEM'),
-        ('THE OHIO STATE UNIVERSITY WEXNER MEDICAL CENTER'),
-        ('HOAG HOSPITAL NEWPORT BEACH')
-    AS t(PARENT)
-),
 classified AS (
     SELECT
         p.*,
@@ -86,7 +64,31 @@ classified AS (
                 THEN 'Non-ATC: Community Network'
             WHEN n.NPI IS NOT NULL
                 THEN 'ATC: NPI confirmed'
-            WHEN rg.PARENT IS NOT NULL
+            -- Roster gap correction (2026-07-16, matching reworked 07-16).
+            -- CTAM_ATC_ALIGNMENT_2026 is missing these four organisations, so their
+            -- patients were scored Non-ATC. Each was confirmed against Infinity's
+            -- authoritative ATC master (file_Veeva_Komodo_ATC_Mapping, 93 accounts):
+            -- City of Hope = Duarte and Chicago, NYU Langone = Perlmutter,
+            -- Ohio State = Wexner, Hoag = Hoag Memorial in Newport Beach.
+            --   Effect: +566 patients move to ATC. 6,935 to 7,501, i.e. 42.7% to 46.2%.
+            -- Matched on a pattern, NOT an exact string. The first version of this
+            -- joined hardcoded literals against UPPER(TRIM(HCO_PARENT_NAME)); any
+            -- suffix or stray space made the join return NULL, the branch never
+            -- fired, and nothing errored. Pattern matching removes that failure mode
+            -- and picks up the satellites at the same time.
+            -- These bypass the fallback_state_limit guard below on purpose: they are
+            -- confirmed authorized, not inferred from a fuzzy name match.
+            -- THESE FOUR PATTERNS ALSO APPEAR IN STEPS 2 AND 3. Keep all three in
+            -- sync, and delete all three once the source roster carries these four.
+            -- DELIBERATELY EXCLUDED: Kaiser, Providence, Mayo, Intermountain, Avera,
+            -- Northwell, AdventHealth, Advocate, St Luke's, Baylor (449 patients). All
+            -- are multi-site systems where only ONE site is authorized (e.g. Kaiser
+            -- Vallejo, Providence Portland), so promoting the whole parent would
+            -- overstate ATC.
+            WHEN UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%'
+              OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
+              OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%WEXNER%'
+              OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%HOAG%'
                 THEN 'ATC: roster gap corrected'
             WHEN ap.PARENT IS NOT NULL
                 THEN 'ATC: name fallback'
@@ -102,7 +104,6 @@ classified AS (
     FROM COMPILE_DEV.PUBLIC.ATC_SOC_PATIENT_CLASSIFIED_2021_2025 p
     LEFT JOIN auth_npi    n  ON TRIM(p.D_PRIMARY_HCO_NPI) = n.NPI
     LEFT JOIN auth_parent ap ON UPPER(TRIM(p.HCO_PARENT_NAME)) = ap.PARENT
-    LEFT JOIN roster_gap_parent rg ON UPPER(TRIM(p.HCO_PARENT_NAME)) = rg.PARENT
 ),
 fallback_footprint AS (
     SELECT HCO_PARENT_NAME,
@@ -149,6 +150,7 @@ treated AS (
         D_PATIENT_ID,
         D_PRIMARY_HCO_NPI,
         D_PRIMARY_HCO_COMPILE_ID,
+        HCO_PARENT_NAME,
         YEAR(DATE_OF_SERVICE) AS TX_YEAR
     FROM COMPILE_CLAIMS.OPEN_CLAIMS.IOV2501_MEDICAL_CLAIMS
     WHERE D_PATIENT_ID <> 'XXX - HIDDEN'
@@ -161,7 +163,18 @@ SELECT
     t.D_PATIENT_ID,
     t.TX_YEAR,
     t.D_PRIMARY_HCO_COMPILE_ID,
-    MAX(CASE WHEN n.NPI IS NOT NULL THEN 1 ELSE 0 END) AS IS_ATC_HCO,
+    -- Roster gap correction. Keep in sync with the patterns in Steps 1 and 3.
+    -- Before 2026-07-16 this was the NPI match alone, so the year trend silently
+    -- ignored the four missing organisations no matter how often Step 1 was
+    -- rebuilt. This step never reads ATC_CLASSIFIED_FINAL, it classifies its own.
+    MAX(CASE
+            WHEN n.NPI IS NOT NULL THEN 1
+            WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%'
+              OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
+              OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%WEXNER%'
+              OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%HOAG%' THEN 1
+            ELSE 0
+        END) AS IS_ATC_HCO,
     COUNT(*) AS CLAIMS
 FROM treated t
 INNER JOIN diagnosed d ON t.D_PATIENT_ID = d.D_PATIENT_ID
