@@ -1,86 +1,94 @@
-/* ROSTER GAP CORRECTION - VERIFICATION RUNBOOK
-   Run the three steps IN ORDER. Do not skip step 0.
+/* ==========================================================================
+   STEP 1 - REBUILD ATC_CLASSIFIED_FINAL WITH THE ROSTER GAP CORRECTION
+   Paste this whole file into Snowflake and run it. Then run the post-checks in
+   "Verify roster gap correction.sql".
+
+   This is Step 1 of git/NewCode.sql with the roster_gap_parent correction added.
+   It REPLACES the existing ATC_CLASSIFIED_FINAL table (same as the original
+   pipeline does), so everything downstream reads the corrected classification.
+
+   Nothing else in NewCode.sql changes.
    ========================================================================== */
 
+SET fallback_state_limit = 2;
 
-/* -----------------------------------------------------------------------
-   STEP 0 - PRE-CHECK. Run this FIRST, before re-running anything.
-   Non-destructive, reads the source table only.
-
-   Why: in NewCode.sql the community-network branch is evaluated BEFORE the
-   roster-gap branch. If any of our four parents carry one of the three network
-   tags, they will STAY Non-ATC and the +566 estimate is wrong.
-   Also confirms the parent strings match exactly (the join is on an exact
-   UPPER(TRIM(...)) match, so a stray suffix would silently break the fix).
-
-   PASS = every row shows HCO_COMMUNITY_NETWORK as NULL/blank, and the four
-          parents total 566.
-   FAIL = any row shows THE US ONCOLOGY NETWORK / ONE ONCOLOGY /
-          AMERICAN ONCOLOGY NETWORK. Stop and tell me the number.
-   ----------------------------------------------------------------------- */
+CREATE OR REPLACE TRANSIENT TABLE COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL AS
+WITH auth_npi AS (
+    SELECT DISTINCT TRIM("NPI") AS NPI
+    FROM COMPILE_DEV.PUBLIC.CTAM_ATC_ALIGNMENT_2026
+    WHERE UPPER(TRIM("Status")) = 'AUTHORIZED'
+      AND "NPI" IS NOT NULL
+      AND TRIM("NPI") NOT IN ('0', '', 'NPI')
+),
+auth_parent AS (
+    SELECT DISTINCT UPPER(TRIM("ATC HCO Parent Name (McKesson Claims)")) AS PARENT
+    FROM COMPILE_DEV.PUBLIC.CTAM_ATC_ALIGNMENT_2026
+    WHERE UPPER(TRIM("Status")) = 'AUTHORIZED'
+      AND "ATC HCO Parent Name (McKesson Claims)" IS NOT NULL
+      AND TRIM("ATC HCO Parent Name (McKesson Claims)") NOT IN ('', 'null')
+),
+-- Roster gap correction (2026-07-16).
+-- These four organisations are missing from CTAM_ATC_ALIGNMENT_2026, so their
+-- patients scored Non-ATC. Each confirmed against Infinity's authoritative ATC
+-- master (file_Veeva_Komodo_ATC_Mapping, 93 accounts).
+-- They bypass the fallback_state_limit guard deliberately: confirmed authorized,
+-- not inferred from a fuzzy name match.
+-- Retire this CTE once the source roster itself is fixed.
+roster_gap_parent AS (
+    SELECT PARENT FROM VALUES
+        ('CITY OF HOPE'),
+        ('NYU LANGONE HEALTH SYSTEM'),
+        ('THE OHIO STATE UNIVERSITY WEXNER MEDICAL CENTER'),
+        ('HOAG HOSPITAL NEWPORT BEACH')
+    AS t(PARENT)
+),
+classified AS (
+    SELECT
+        p.*,
+        CASE
+            WHEN p.HCO_COMMUNITY_NETWORK IN (
+                    'THE US ONCOLOGY NETWORK',
+                    'ONE ONCOLOGY',
+                    'AMERICAN ONCOLOGY NETWORK')
+                THEN 'Non-ATC: Community Network'
+            WHEN n.NPI IS NOT NULL
+                THEN 'ATC: NPI confirmed'
+            WHEN rg.PARENT IS NOT NULL
+                THEN 'ATC: roster gap corrected'
+            WHEN ap.PARENT IS NOT NULL
+                THEN 'ATC: name fallback'
+            WHEN EXISTS (
+                    SELECT 1 FROM auth_parent x
+                    WHERE UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%' || x.PARENT || '%'
+                       OR x.PARENT LIKE '%' || UPPER(TRIM(p.HCO_PARENT_NAME)) || '%')
+                THEN 'Needs Review'
+            WHEN p.HCO_PARENT_NAME IS NULL
+                THEN 'Non-ATC: Unknown'
+            ELSE 'Non-ATC'
+        END AS CLASS_HYBRID
+    FROM COMPILE_DEV.PUBLIC.ATC_SOC_PATIENT_CLASSIFIED_2021_2025 p
+    LEFT JOIN auth_npi    n  ON TRIM(p.D_PRIMARY_HCO_NPI) = n.NPI
+    LEFT JOIN auth_parent ap ON UPPER(TRIM(p.HCO_PARENT_NAME)) = ap.PARENT
+    LEFT JOIN roster_gap_parent rg ON UPPER(TRIM(p.HCO_PARENT_NAME)) = rg.PARENT
+),
+fallback_footprint AS (
+    SELECT HCO_PARENT_NAME,
+           COUNT(DISTINCT PRIMARY_HCO_NPI_STATE) AS PARENT_STATES
+    FROM classified
+    WHERE CLASS_HYBRID = 'ATC: name fallback'
+    GROUP BY 1
+)
 SELECT
-    UPPER(TRIM(HCO_PARENT_NAME))  AS PARENT,
-    HCO_COMMUNITY_NETWORK,
-    COUNT(DISTINCT D_PATIENT_ID)  AS PATIENTS
-FROM COMPILE_DEV.PUBLIC.ATC_SOC_PATIENT_CLASSIFIED_2021_2025
-WHERE UPPER(TRIM(HCO_PARENT_NAME)) IN (
-        'CITY OF HOPE',
-        'NYU LANGONE HEALTH SYSTEM',
-        'THE OHIO STATE UNIVERSITY WEXNER MEDICAL CENTER',
-        'HOAG HOSPITAL NEWPORT BEACH')
-GROUP BY 1, 2
-ORDER BY 1, 3 DESC;
-
-
-/* -----------------------------------------------------------------------
-   STEP 1 - Only if step 0 passes: re-run Step 1 of git/NewCode.sql
-   (the CREATE OR REPLACE ... ATC_CLASSIFIED_FINAL block, lines ~40 to ~125).
-   That block now contains the roster_gap_parent correction.
-   ----------------------------------------------------------------------- */
-
-
-/* -----------------------------------------------------------------------
-   STEP 2 - POST-CHECK. Run all three. If any disagree, do NOT update the deck.
-   ----------------------------------------------------------------------- */
-
--- 2A) Headline. EXPECT: ATC 7,501 (46.2%) | Non-ATC 8,643 | Needs Review 102 | 16,246 total
---     Slide 3 folds Needs Review into "Other", so it reads 7,501 (46.2%) vs 8,745 (53.8%).
-SELECT
-    CASE WHEN CLASS_FINAL = 'ATC'          THEN 'ATC'
-         WHEN CLASS_FINAL = 'Needs Review' THEN 'Needs Review'
-         ELSE 'Non-ATC' END                                    AS GRP,
-    COUNT(DISTINCT D_PATIENT_ID)                               AS PATIENTS,
-    ROUND(100.0 * COUNT(DISTINCT D_PATIENT_ID)
-          / SUM(COUNT(DISTINCT D_PATIENT_ID)) OVER (), 1)      AS PCT
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-GROUP BY 1
-ORDER BY 2 DESC;
-
--- 2B) The four corrected parents. EXPECT exactly 4 rows summing to 566,
---     all CLASS_FINAL = 'ATC':
---     CITY OF HOPE 298 | NYU LANGONE 216 | OHIO STATE WEXNER 32 | HOAG 20
-SELECT
-    HCO_PARENT_NAME,
-    CLASS_HYBRID,
-    CLASS_FINAL,
-    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-WHERE CLASS_HYBRID = 'ATC: roster gap corrected'
-GROUP BY 1, 2, 3
-ORDER BY 4 DESC;
-
--- 2C) Guard check. The systems we deliberately did NOT promote must still be
---     Non-ATC. EXPECT: Kaiser 166, Providence 85, Mayo 56, Intermountain 55,
---     Avera 23, Northwell 21, AdventHealth 20, Advocate 12, St Luke's 10, Baylor 1.
-SELECT
-    HCO_PARENT_NAME,
-    CLASS_FINAL,
-    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-WHERE UPPER(HCO_PARENT_NAME) IN (
-        'KAISER PERMANENTE', 'PROVIDENCE ST. JOSEPH HEALTH', 'MAYO CLINIC',
-        'INTERMOUNTAIN HEALTHCARE', 'AVERA HEALTH', 'NORTHWELL HEALTH',
-        'ADVENTHEALTH', 'ADVOCATE HEALTH', 'ST LUKE''S',
-        'BAYLOR SCOTT & WHITE HEALTH')
-GROUP BY 1, 2
-ORDER BY 3 DESC;
+    c.*,
+    f.PARENT_STATES,
+    CASE
+        WHEN c.CLASS_HYBRID = 'ATC: NPI confirmed'                                              THEN 'ATC'
+        WHEN c.CLASS_HYBRID = 'ATC: roster gap corrected'                                       THEN 'ATC'
+        WHEN c.CLASS_HYBRID = 'ATC: name fallback' AND f.PARENT_STATES <= $fallback_state_limit THEN 'ATC'
+        WHEN c.CLASS_HYBRID = 'ATC: name fallback' AND f.PARENT_STATES >  $fallback_state_limit THEN 'Non-ATC: System sweep'
+        WHEN c.CLASS_HYBRID = 'Needs Review'                                                    THEN 'Needs Review'
+        ELSE c.CLASS_HYBRID
+    END AS CLASS_FINAL
+FROM classified c
+LEFT JOIN fallback_footprint f
+    ON c.HCO_PARENT_NAME = f.HCO_PARENT_NAME;
