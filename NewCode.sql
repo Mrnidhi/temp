@@ -14,21 +14,41 @@
        ATC_TREATMENT_CLAIMS    claim level with dates and drug (journey, timing)
        STATE_REGION_MAP        state to region lookup (6 regions)
 
-   INSIGHTS
-       8   Patient journey (first vs last treatment site)      [priority]
-       9   Treatment persistence by starting site              [priority]
-      6a   Migration cohort: start non-ATC, classified ATC
-      6b   Time spent in each setting (migration cohort)
-       1   Headline split (ATC vs Non-ATC)
-       2   Classification confidence
-       3   ATC share by treatment year
-       4   ATC-assigned patients with non-ATC activity
-       5   Leakage concentration by account
-       7   Community network share of leakage
-      10   Regional ATC penetration
-      11   Time from diagnosis to first treatment (context only)
-      12   Drug mix (Yervoy vs Opdualag)
-      13   ATC performance profile
+   DECK ALIGNMENT (ATC Network vs Non-ATC Site of Care Analysis, 9-slide deck,
+   corrected July 2026). Each slide and the query that feeds it:
+
+       Slide 2  Methodology            Steps 1 to 4 (the classification logic)
+       Slide 3  Market structure       Insight 1  (headline), Insight 2 (confidence)
+       Slide 4  Patient journey        Insight 8  (first vs last), Insight 9 (persistence)
+       Slide 5  Regional penetration   Insight 10 (by region)
+       Slide 6  State scatter          Insight 10b (by state)      <- added for the deck
+       Slide 7  Non-ATC by region      Insight 5  (by account) + region
+       Slide 8  Non-ATC by state       Insight 5b (by state)       <- added for the deck
+       Slide 9  Appendix               Insight 3 (year trend), 9 (claims intensity),
+                                       11 (dx-to-tx timing), 6a/6b (sample journeys)
+
+   The four-organisation roster gap correction (City of Hope, NYU Langone, Ohio
+   State Wexner, Hoag; +566 patients, 42.7% -> 46.2%) is applied in Steps 1, 2 AND
+   3 as of 2026-07-17. Before that Step 3 was NPI-only, so Slide 4 sat on the old
+   definition while Slide 3 showed the corrected one. Re-run Slide 4 after this.
+
+   INSIGHTS (grouped by slide above; listed here in build order)
+       1   Headline split (ATC vs Non-ATC)                      -> Slide 3
+       2   Classification confidence                            -> Slide 3
+       3   ATC share by treatment year                          -> Slide 9
+       4   ATC-assigned patients with non-ATC activity          context
+       5   Leakage concentration by account                     -> Slide 7
+      5b   Leakage concentration by state                       -> Slide 8
+      6a   Migration cohort: start non-ATC, classified ATC      -> Slide 9
+      6b   Time spent in each setting (migration cohort)        -> Slide 9
+       7   Community network share of leakage                   context
+       8   Patient journey (first vs last treatment site)       -> Slide 4
+       9   Treatment persistence by starting site               -> Slide 4
+      10   Regional ATC penetration                             -> Slide 5
+     10b   State ATC penetration and untapped volume            -> Slide 6
+      11   Time from diagnosis to first treatment               -> Slide 9
+      12   Drug mix (Yervoy vs Opdualag)                        context
+      13   ATC performance profile                              context
    ============================================================================ */
 
 
@@ -229,7 +249,20 @@ SELECT
     t.HCO_PARENT_NAME,
     t.DRUG,
     d.FIRST_DX_DATE,
-    CASE WHEN n.NPI IS NOT NULL THEN 1 ELSE 0 END AS IS_ATC_HCO
+    -- Roster gap correction. Keep in sync with the patterns in Steps 1 and 2.
+    -- Before 2026-07-17 this was the NPI match alone, so the journey, persistence,
+    -- timing and drug-mix views (Insights 8, 9, 11, 12 -> Slides 4 and 9) scored
+    -- City of Hope, NYU Langone, Ohio State Wexner and Hoag patients as Non-ATC.
+    -- That is why Slide 4 disagreed with the corrected headline on Slide 3. Adding
+    -- the four patterns here reconciles the journey with the 46.2% headline.
+    CASE
+        WHEN n.NPI IS NOT NULL THEN 1
+        WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%'
+          OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
+          OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%WEXNER%'
+          OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%HOAG%' THEN 1
+        ELSE 0
+    END AS IS_ATC_HCO
 FROM treated t
 INNER JOIN diagnosed d ON t.D_PATIENT_ID = d.D_PATIENT_ID
 LEFT JOIN auth_npi n ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI;
@@ -257,7 +290,8 @@ SELECT * FROM VALUES
 AS T(STATE, REGION);
 
 
--- Insight 8: where each patient started treatment versus where they ended.
+-- Insight 8 (Slide 4): where each patient started treatment versus where they ended.
+-- The four cells are the Slide 4 quadrants: started/ended x ATC/non-ATC.
 WITH ranked AS (
     SELECT
         D_PATIENT_ID,
@@ -286,7 +320,8 @@ GROUP BY 1, 2
 ORDER BY 3 DESC;
 
 
--- Insight 9: how much treatment patients get, split by where they started.
+-- Insight 9 (Slide 4, Slide 9): how much treatment patients get, split by where they
+-- started. AVG_TREATMENT_CLAIMS is the "6.7 vs 6.0 claims per patient" line.
 WITH ranked AS (
     SELECT
         D_PATIENT_ID,
@@ -316,7 +351,7 @@ ORDER BY 2 DESC;
 
 
 
--- Insight 6b: referral source with the ATC parent they moved to.
+-- Insight 6b (Slide 9, sample journeys): referral source with the ATC parent they moved to.
 -- If STARTING_PARENT and MIGRATED_PARENT match, it is the same system (artifact).
 -- If they differ, it is a real move from one system into an ATC.
 
@@ -364,7 +399,8 @@ GROUP BY 1, 2
 ORDER BY PATIENTS DESC
 LIMIT 30;
 
--- Insight 1: the headline. Share of patients treated at ATC versus non-ATC.
+-- Insight 1 (Slide 3): the headline. Share of patients treated at ATC versus non-ATC.
+-- Second query is the two-way ATC vs Non-ATC roll-up (the 46.2% headline number).
 SELECT
     CLASS_FINAL,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
@@ -384,7 +420,7 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 2: how the ATC count is built, by match type. Shows how confident we are.
+-- Insight 2 (Slide 3): how the ATC count is built, by match type. Shows how confident we are.
 SELECT
     CLASS_HYBRID,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
@@ -395,7 +431,8 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 3: ATC share for each year, to see the trend over time.
+-- Insight 3 (Slide 9): ATC share for each year, to see the trend over time.
+-- This is the "19% to 24%, 2021 to 2025" year-over-year line.
 SELECT
     TX_YEAR,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS_TREATED,
@@ -429,7 +466,7 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 5: which non-ATC accounts hold the most patients, and how concentrated it is.
+-- Insight 5 (Slide 7): which non-ATC accounts hold the most patients, and how concentrated it is.
 WITH leak AS (
     SELECT
         HCO_PARENT_NAME,
@@ -455,6 +492,40 @@ ORDER BY PATIENTS DESC
 LIMIT 25;
 
 
+-- Insight 5b (Slide 8): largest non-ATC accounts within each state.
+-- Same leakage logic as Insight 5, grouped to state x parent and ranked within
+-- each state. The deck shows the six states with the most non-ATC volume, top
+-- three accounts each; STATE_NON_ATC_PATIENTS gives the order to pick those six.
+WITH state_leak AS (
+    SELECT
+        PRIMARY_HCO_NPI_STATE AS STATE,
+        HCO_PARENT_NAME,
+        COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS
+    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+    WHERE CLASS_FINAL LIKE 'Non-ATC%'
+      AND PRIMARY_HCO_NPI_STATE IS NOT NULL
+    GROUP BY 1, 2
+),
+ranked AS (
+    SELECT
+        STATE,
+        HCO_PARENT_NAME,
+        PATIENTS,
+        RANK() OVER (PARTITION BY STATE ORDER BY PATIENTS DESC) AS RANK_IN_STATE,
+        SUM(PATIENTS) OVER (PARTITION BY STATE)                 AS STATE_NON_ATC_PATIENTS
+    FROM state_leak
+)
+SELECT
+    STATE,
+    STATE_NON_ATC_PATIENTS,
+    HCO_PARENT_NAME,
+    PATIENTS,
+    RANK_IN_STATE
+FROM ranked
+WHERE RANK_IN_STATE <= 3
+ORDER BY STATE_NON_ATC_PATIENTS DESC, RANK_IN_STATE;
+
+
 -- Insight 7: how much non-ATC volume sits inside the large community networks.
 SELECT
     COALESCE(HCO_COMMUNITY_NETWORK, 'Independent / Other') AS NETWORK,
@@ -467,7 +538,8 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 10: ATC share by region.
+-- Insight 10 (Slide 5): ATC share by region.
+-- ATC_PATIENTS is "Treated in ATC Network", NON_ATC_PATIENTS is "Untapped".
 SELECT
     COALESCE(r.REGION, 'Unmapped') AS REGION,
     COUNT(DISTINCT a.D_PATIENT_ID) AS TOTAL_PATIENTS,
@@ -482,7 +554,27 @@ GROUP BY 1
 ORDER BY TOTAL_PATIENTS DESC;
 
 
--- Insight 11: days from diagnosis to first treatment. Context only, the gap is small.
+-- Insight 10b (Slide 6): ATC penetration and untapped volume by state.
+-- State-grain version of Insight 10, feeding the scatter: x = PCT_ATC,
+-- y = UNTAPPED_PATIENTS. Priority zone on the slide is high untapped, low PCT_ATC.
+-- HAVING >= 50 drops the long tail of tiny states so the plot stays readable;
+-- it is a display threshold, not a business rule.
+SELECT
+    a.PRIMARY_HCO_NPI_STATE AS STATE,
+    COUNT(DISTINCT a.D_PATIENT_ID) AS TOTAL_PATIENTS,
+    COUNT(DISTINCT CASE WHEN a.CLASS_FINAL =  'ATC' THEN a.D_PATIENT_ID END) AS ATC_PATIENTS,
+    COUNT(DISTINCT CASE WHEN a.CLASS_FINAL <> 'ATC' THEN a.D_PATIENT_ID END) AS UNTAPPED_PATIENTS,
+    ROUND(100.0 * COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC' THEN a.D_PATIENT_ID END)
+          / NULLIF(COUNT(DISTINCT a.D_PATIENT_ID), 0), 1) AS PCT_ATC
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
+WHERE a.PRIMARY_HCO_NPI_STATE IS NOT NULL
+GROUP BY 1
+HAVING COUNT(DISTINCT a.D_PATIENT_ID) >= 50
+ORDER BY UNTAPPED_PATIENTS DESC;
+
+
+-- Insight 11 (Slide 9): days from diagnosis to first treatment. Context only, the gap is small.
+-- This is the "about a 40-day median, similar across both settings" appendix line.
 WITH first_tx AS (
     SELECT
         D_PATIENT_ID,
