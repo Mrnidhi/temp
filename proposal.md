@@ -1,91 +1,12 @@
-/* Data for slides 6, 7, 8, 9 from the CORRECTED classification.
-   Run after the roster-gap rebuild (ATC = 7,501). Each block is one result set.
-   ATC = CLASS_FINAL = 'ATC'. Non-ATC = CLASS_FINAL LIKE 'Non-ATC%'.
-   Penetration = ATC / (ATC + Non-ATC), Needs Review excluded from the rate. */
+SITE OF CARE DECK — corrections
 
+Rename the account "Clearview" to "Clearview Cancer Institute" everywhere it appears. It is a real oncology company based in Alabama, which is why it surfaces in the Southeast.
+Remove the footnote that describes Clearview as "an imaging center, a likely claims artifact." That description is incorrect. The account name is Clearview; only the underlying facility name contains "imaging," which is what made it look like an artifact. It is a genuine non-ATC account and a valid target.
+Ohio State (Wexner) is now correctly counted as an ATC. No further action — this is already reflected in the corrected numbers.
+CONTEST DECK — corrections
 
--- ============ SLIDE 6 - Regional opportunity (at-ATC vs untapped) ============
-SELECT
-    COALESCE(r.REGION, 'Unmapped') AS REGION_NAME,
-    COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC'          THEN a.D_PATIENT_ID END) AS AT_ATC,
-    COUNT(DISTINCT CASE WHEN a.CLASS_FINAL LIKE 'Non-ATC%'  THEN a.D_PATIENT_ID END) AS UNTAPPED,
-    COUNT(DISTINCT a.D_PATIENT_ID)                                                   AS TOTAL,
-    ROUND(100.0 * COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC' THEN a.D_PATIENT_ID END)
-          / NULLIF(COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC'
-                                        OR a.CLASS_FINAL LIKE 'Non-ATC%'
-                                       THEN a.D_PATIENT_ID END), 0), 1)              AS PENETRATION_PCT
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
-LEFT JOIN COMPILE_DEV.PUBLIC.STATE_REGION_MAP r
-    ON a.PRIMARY_HCO_NPI_STATE = r.STATE
-GROUP BY 1
-ORDER BY UNTAPPED DESC;
-
-
--- ============ SLIDE 7 - State-level scatter (untapped vs penetration) ============
-SELECT
-    a.PRIMARY_HCO_NPI_STATE AS STATE,
-    COALESCE(r.REGION, 'Unmapped') AS REGION_NAME,
-    COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC'         THEN a.D_PATIENT_ID END) AS AT_ATC,
-    COUNT(DISTINCT CASE WHEN a.CLASS_FINAL LIKE 'Non-ATC%' THEN a.D_PATIENT_ID END) AS UNTAPPED,
-    ROUND(100.0 * COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC' THEN a.D_PATIENT_ID END)
-          / NULLIF(COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC'
-                                        OR a.CLASS_FINAL LIKE 'Non-ATC%'
-                                       THEN a.D_PATIENT_ID END), 0), 1)             AS PENETRATION_PCT
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
-LEFT JOIN COMPILE_DEV.PUBLIC.STATE_REGION_MAP r
-    ON a.PRIMARY_HCO_NPI_STATE = r.STATE
-GROUP BY 1, 2
-HAVING COUNT(DISTINCT CASE WHEN a.CLASS_FINAL LIKE 'Non-ATC%' THEN a.D_PATIENT_ID END) >= 20
-ORDER BY UNTAPPED DESC;
-
-
--- ============ SLIDE 8 - Top 3 non-ATC accounts per region (target list) ============
--- City of Hope / NYU / Ohio State Wexner / Hoag now score ATC, so they drop out here.
-WITH nonatc AS (
-    SELECT
-        COALESCE(r.REGION, 'Unmapped') AS REGION_NAME,
-        COALESCE(NULLIF(TRIM(a.HCO_PARENT_NAME), ''), 'Unknown / unmapped') AS PARENT,
-        COUNT(DISTINCT a.D_PATIENT_ID) AS PATIENTS
-    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
-    LEFT JOIN COMPILE_DEV.PUBLIC.STATE_REGION_MAP r
-        ON a.PRIMARY_HCO_NPI_STATE = r.STATE
-    WHERE a.CLASS_FINAL LIKE 'Non-ATC%'
-    GROUP BY 1, 2
-),
-ranked AS (
-    SELECT REGION_NAME, PARENT, PATIENTS,
-           ROW_NUMBER() OVER (PARTITION BY REGION_NAME ORDER BY PATIENTS DESC) AS RN
-    FROM nonatc
-)
-SELECT REGION_NAME, PARENT, PATIENTS
-FROM ranked
-WHERE RN <= 3
-ORDER BY REGION_NAME, PATIENTS DESC;
-
-
--- ============ SLIDE 9 - Concentration by segment (dispersed vs concentrated) ==
--- Answers Tim's appendix ask: top-10 share, accounts to reach 50%, by segment.
-WITH parents AS (
-    SELECT
-        COALESCE(NULLIF(TRIM(HCO_PARENT_NAME), ''), 'Unknown / unmapped') AS PARENT,
-        COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS
-    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-    WHERE CLASS_FINAL LIKE 'Non-ATC%'
-    GROUP BY 1
-),
-ranked AS (
-    SELECT PARENT, PATIENTS,
-           ROW_NUMBER() OVER (ORDER BY PATIENTS DESC) AS RN,
-           SUM(PATIENTS) OVER () AS TOTAL_NONATC,
-           SUM(PATIENTS) OVER (ORDER BY PATIENTS DESC
-                               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS RUNNING
-    FROM parents
-)
-SELECT
-    (SELECT COUNT(*) FROM parents)                                    AS TOTAL_ACCOUNTS,
-    MAX(TOTAL_NONATC)                                                 AS TOTAL_NONATC_PATIENTS,
-    ROUND(100.0 * SUM(CASE WHEN RN <= 10 THEN PATIENTS END)
-          / MAX(TOTAL_NONATC), 1)                                     AS TOP10_SHARE_PCT,
-    MIN(CASE WHEN RUNNING >= 0.50 * TOTAL_NONATC THEN RN END)         AS ACCOUNTS_TO_50PCT,
-    MIN(CASE WHEN RUNNING >= 0.80 * TOTAL_NONATC THEN RN END)         AS ACCOUNTS_TO_80PCT
-FROM ranked;
+Baseline period is three quarters, not four: Q4 2025, Q1 2026, Q2 2026. After changing it, re-check that the volume-tier cutoffs still make sense.
+Add a baseline table slide: all territories laid out in three columns by volume group — low, medium, high. Each row shows a territory and its baseline. Label the groups by volume (low / medium / high), not "tier 1 / 2 / 3," so it does not imply one group is better.
+Funnel slide: optionally add "about 70 reach TTP" as the middle step between enrollments and infusions.
+Keep the $30,000 pot as a placeholder — the actual prize amount is not finalized.
+Keep the methodology / backtest slide (the one using last year's August–September data). It shows the scoring works and reviewers will want to see it.
