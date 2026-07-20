@@ -1,55 +1,64 @@
 /* ============================================================================
-   Diagnosed & Treated Patients - ATC vs Non-ATC Split
+   ATC Network vs Non-ATC Site of Care Analysis - Metastatic Melanoma
+   MASTER FILE: one-shot rebuild plus every slide output, corrected roster.
+
+   HOW TO RUN
+       Paste the whole file, press Run All, then screenshot each result grid in
+       order. Part A rebuilds the four base tables; Parts B and C only read them,
+       so a single top-to-bottom run is enough. Do not run the outputs on their
+       own against an old table - the numbers will look plausible and be wrong.
 
    Business question:
        For metastatic melanoma patients diagnosed and treated with Yervoy or
        Opdualag from 2021 to 2025, what share were treated at an Authorized
-       Treatment Center versus a non-ATC site of care?
+       Treatment Center versus a non-ATC site of care, and where is the
+       remaining opportunity?
 
-   Outputs:
-
-   BASE TABLES
+   BASE TABLES (built in Part A)
        ATC_CLASSIFIED_FINAL    one row per patient, hybrid classification
        ATC_PATIENT_HCO_YEAR    patient x HCO x year (trend, overlap)
        ATC_TREATMENT_CLAIMS    claim level with dates and drug (journey, timing)
        STATE_REGION_MAP        state to region lookup (6 regions)
 
-   DECK ALIGNMENT (ATC Network vs Non-ATC Site of Care Analysis, 9-slide deck,
-   corrected July 2026). Each slide and the query that feeds it:
+   DECK ALIGNMENT (9-slide deck, corrected July 2026). Each slide, the cell it
+   fills, and the query in Part B that feeds it:
 
-       Slide 2  Methodology            Steps 1 to 4 (the classification logic)
-       Slide 3  Market structure       Insight 1  (headline), Insight 2 (confidence)
-       Slide 4  Patient journey        Insight 8  (first vs last), Insight 9 (persistence)
-       Slide 5  Regional penetration   Insight 10 (by region)
-       Slide 6  State scatter          Insight 10b (by state)      <- added for the deck
-       Slide 7  Non-ATC by region      Insight 5  (by account) + region
-       Slide 8  Non-ATC by state       Insight 5b (by state)       <- added for the deck
-       Slide 9  Appendix               Insight 3 (year trend), 9 (claims intensity),
-                                       11 (dx-to-tx timing), 6a/6b (sample journeys)
+       Slide 2  Methodology            no query, text only
+       Slide 3  Market structure       B3A table, B3B headline, B3C year trend
+       Slide 4  Patient journey        B4A four boxes, B4B claims intensity
+       Slide 5  Regional penetration   B5  bars, untapped, penetration percent
+       Slide 6  State scatter          B6  untapped vs penetration by state
+       Slide 7  Non-ATC by region      B7A raw top 5, B7B genuine top 5
+       Slide 8  Non-ATC by state       B8A raw top 5, B8B genuine top 5
+       Slide 9  Appendix               B9A satellite split, B9B dx-to-tx timing,
+                                       plus B3C, B4B and B5 re-used
 
-   The four-organisation roster gap correction (City of Hope, NYU Langone, Ohio
-   State Wexner, Hoag; +566 patients, 42.7% -> 46.2%) is applied in Steps 1, 2 AND
-   3 as of 2026-07-17. Before that Step 3 was NPI-only, so Slide 4 sat on the old
-   definition while Slide 3 showed the corrected one. Re-run Slide 4 after this.
+   Part C is context and reconciliation, not on any slide. It is here so a second
+   run is never needed: classification confidence, the headline vs journey
+   reconciliation (CHECK D), community-network share, drug mix, and the two ATC
+   reference lists.
 
-   INSIGHTS (grouped by slide above; listed here in build order)
-       1   Headline split (ATC vs Non-ATC)                      -> Slide 3
-       2   Classification confidence                            -> Slide 3
-       3   ATC share by treatment year                          -> Slide 9
-       4   ATC-assigned patients with non-ATC activity          context
-       5   Leakage concentration by account                     -> Slide 7
-      5b   Leakage concentration by state                       -> Slide 8
-      6a   Migration cohort: start non-ATC, classified ATC      -> Slide 9
-      6b   Time spent in each setting (migration cohort)        -> Slide 9
-       7   Community network share of leakage                   context
-       8   Patient journey (first vs last treatment site)       -> Slide 4
-       9   Treatment persistence by starting site               -> Slide 4
-      10   Regional ATC penetration                             -> Slide 5
-     10b   State ATC penetration and untapped volume            -> Slide 6
-      11   Time from diagnosis to first treatment               -> Slide 9
-      12   Drug mix (Yervoy vs Opdualag)                        context
-      13   ATC performance profile                              context
+   TOP 5 NOT TOP 3
+       The deck shows three accounts per region and per state. Every ranked query
+       here returns the top 5, and Slide 8 returns the top 8 states, so if a rank
+       shifts after the correction the buffer is already in hand and nothing has
+       to be re-run.
+
+   ROSTER GAP CORRECTION (applied 2026-07-17, baked into Steps 1, 2 AND 3)
+       CTAM_ATC_ALIGNMENT_2026 is missing four authorized organisations, so their
+       patients were scored Non-ATC. Each was confirmed against Infinity's ATC
+       master (file_Veeva_Komodo_ATC_Mapping, 93 accounts): City of Hope,
+       NYU Langone, Ohio State Wexner, Hoag. Effect: +566 patients move to ATC,
+       6,935 to 7,501, i.e. 42.7% to 46.2%. Because the correction is in the base
+       tables, every output below reads CLASS_FINAL / IS_ATC_HCO directly - there
+       is no second, on-read correction anywhere in this file. Delete the four
+       patterns in all three steps once the source roster carries these accounts.
    ============================================================================ */
+
+
+/* ############################################################################
+   PART A  -  REBUILD THE FOUR BASE TABLES
+   ############################################################################ */
 
 
 -- Controls how many states an ATC parent can span before we treat it as a
@@ -84,27 +93,10 @@ classified AS (
                 THEN 'Non-ATC: Community Network'
             WHEN n.NPI IS NOT NULL
                 THEN 'ATC: NPI confirmed'
-            -- Roster gap correction (2026-07-16, matching reworked 07-16).
-            -- CTAM_ATC_ALIGNMENT_2026 is missing these four organisations, so their
-            -- patients were scored Non-ATC. Each was confirmed against Infinity's
-            -- authoritative ATC master (file_Veeva_Komodo_ATC_Mapping, 93 accounts):
-            -- City of Hope = Duarte and Chicago, NYU Langone = Perlmutter,
-            -- Ohio State = Wexner, Hoag = Hoag Memorial in Newport Beach.
-            --   Effect: +566 patients move to ATC. 6,935 to 7,501, i.e. 42.7% to 46.2%.
-            -- Matched on a pattern, NOT an exact string. The first version of this
-            -- joined hardcoded literals against UPPER(TRIM(HCO_PARENT_NAME)); any
-            -- suffix or stray space made the join return NULL, the branch never
-            -- fired, and nothing errored. Pattern matching removes that failure mode
-            -- and picks up the satellites at the same time.
-            -- These bypass the fallback_state_limit guard below on purpose: they are
-            -- confirmed authorized, not inferred from a fuzzy name match.
-            -- THESE FOUR PATTERNS ALSO APPEAR IN STEPS 2 AND 3. Keep all three in
-            -- sync, and delete all three once the source roster carries these four.
-            -- DELIBERATELY EXCLUDED: Kaiser, Providence, Mayo, Intermountain, Avera,
-            -- Northwell, AdventHealth, Advocate, St Luke's, Baylor (449 patients). All
-            -- are multi-site systems where only ONE site is authorized (e.g. Kaiser
-            -- Vallejo, Providence Portland), so promoting the whole parent would
-            -- overstate ATC.
+            -- Roster gap correction. Confirmed authorized, matched on a pattern
+            -- not an exact string so a suffix or stray space cannot break it.
+            -- Bypasses the fallback_state_limit guard on purpose. Keep in sync
+            -- with the identical patterns in Steps 2 and 3.
             WHEN UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%'
               OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
               OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%WEXNER%'
@@ -183,10 +175,7 @@ SELECT
     t.D_PATIENT_ID,
     t.TX_YEAR,
     t.D_PRIMARY_HCO_COMPILE_ID,
-    -- Roster gap correction. Keep in sync with the patterns in Steps 1 and 3.
-    -- Before 2026-07-16 this was the NPI match alone, so the year trend silently
-    -- ignored the four missing organisations no matter how often Step 1 was
-    -- rebuilt. This step never reads ATC_CLASSIFIED_FINAL, it classifies its own.
+    -- Roster gap correction. Keep in sync with Steps 1 and 3.
     MAX(CASE
             WHEN n.NPI IS NOT NULL THEN 1
             WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%'
@@ -249,12 +238,7 @@ SELECT
     t.HCO_PARENT_NAME,
     t.DRUG,
     d.FIRST_DX_DATE,
-    -- Roster gap correction. Keep in sync with the patterns in Steps 1 and 2.
-    -- Before 2026-07-17 this was the NPI match alone, so the journey, persistence,
-    -- timing and drug-mix views (Insights 8, 9, 11, 12 -> Slides 4 and 9) scored
-    -- City of Hope, NYU Langone, Ohio State Wexner and Hoag patients as Non-ATC.
-    -- That is why Slide 4 disagreed with the corrected headline on Slide 3. Adding
-    -- the four patterns here reconciles the journey with the 46.2% headline.
+    -- Roster gap correction. Keep in sync with Steps 1 and 2.
     CASE
         WHEN n.NPI IS NOT NULL THEN 1
         WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%'
@@ -290,8 +274,95 @@ SELECT * FROM VALUES
 AS T(STATE, REGION);
 
 
--- Insight 8 (Slide 4): where each patient started treatment versus where they ended.
--- The four cells are the Slide 4 quadrants: started/ended x ATC/non-ATC.
+/* ############################################################################
+   PART B  -  SLIDE OUTPUTS, IN SLIDE ORDER
+   Screenshot each grid and retype the numbers onto the matching slide.
+   ############################################################################ */
+
+
+/* ---------------------------------------------------------------------------
+   B3A. SLIDE 3, the market-structure table. Four buckets and a total row.
+   Buckets match the definitions written on slide 2. Expect:
+       ATC 7,501 (46.2%), Non-ATC: Hospital, Community network, Other, Total 16,246.
+   --------------------------------------------------------------------------- */
+WITH bucketed AS (
+    SELECT
+        D_PATIENT_ID,
+        CASE
+            WHEN CLASS_FINAL = 'ATC'                                  THEN 'ATC'
+            WHEN CLASS_FINAL = 'Non-ATC: Community Network'           THEN 'Non-ATC: Community network'
+            WHEN CLASS_FINAL IN ('Non-ATC: Unknown', 'Needs Review')  THEN 'Non-ATC: Other'
+            ELSE 'Non-ATC: Hospital'
+        END AS SITE_OF_CARE
+    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+),
+agg AS (
+    -- Buckets are mutually exclusive (one row per patient), so the bucket
+    -- distinct counts sum to the grand distinct total.
+    SELECT SITE_OF_CARE, COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS
+    FROM bucketed
+    GROUP BY 1
+),
+tot AS (
+    SELECT SUM(PATIENTS) AS TOTAL FROM agg
+)
+SELECT a.SITE_OF_CARE, a.PATIENTS, ROUND(100.0 * a.PATIENTS / t.TOTAL, 1) AS PCT
+FROM agg a CROSS JOIN tot t
+UNION ALL
+SELECT 'Total', t.TOTAL, 100.0 FROM tot t
+ORDER BY CASE WHEN SITE_OF_CARE = 'Total' THEN 1 ELSE 0 END, PATIENTS DESC;
+
+
+/* ---------------------------------------------------------------------------
+   B3B. SLIDE 3, the headline bullet. Two-way split, the "about 54% outside the
+   ATC Network" line.
+   --------------------------------------------------------------------------- */
+SELECT
+    CASE WHEN CLASS_FINAL = 'ATC' THEN 'ATC' ELSE 'Non-ATC' END AS SITE_GROUP,
+    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
+    ROUND(100.0 * COUNT(DISTINCT D_PATIENT_ID)
+          / SUM(COUNT(DISTINCT D_PATIENT_ID)) OVER (), 1) AS PCT
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+/* ---------------------------------------------------------------------------
+   B3C. SLIDE 3 trend bullet and SLIDE 9 appendix. ATC share by the year each
+   patient began treatment. The "rose from 19% to 24%, 2021 to 2025" line.
+   Read the first and last year off ATC_SHARE_PCT.
+   --------------------------------------------------------------------------- */
+WITH first_year AS (
+    SELECT D_PATIENT_ID, MIN(TX_YEAR) AS FIRST_TX_YEAR
+    FROM COMPILE_DEV.PUBLIC.ATC_PATIENT_HCO_YEAR
+    GROUP BY 1
+),
+first_site AS (
+    SELECT
+        y.D_PATIENT_ID,
+        f.FIRST_TX_YEAR,
+        MAX(y.IS_ATC_HCO) AS STARTED_ATC
+    FROM COMPILE_DEV.PUBLIC.ATC_PATIENT_HCO_YEAR y
+    JOIN first_year f
+      ON y.D_PATIENT_ID = f.D_PATIENT_ID
+     AND y.TX_YEAR      = f.FIRST_TX_YEAR
+    GROUP BY 1, 2
+)
+SELECT
+    FIRST_TX_YEAR                                 AS TX_YEAR,
+    COUNT(*)                                      AS PATIENTS_STARTING,
+    SUM(STARTED_ATC)                              AS STARTED_AT_ATC,
+    ROUND(100.0 * SUM(STARTED_ATC) / COUNT(*), 1) AS ATC_SHARE_PCT
+FROM first_site
+GROUP BY 1
+ORDER BY 1;
+
+
+/* ---------------------------------------------------------------------------
+   B4A. SLIDE 4, the patient journey. The four boxes, first treatment site by
+   last treatment site. The four PATIENTS values must sum to the journey
+   population and the four PCT values to 100.
+   --------------------------------------------------------------------------- */
 WITH ranked AS (
     SELECT
         D_PATIENT_ID,
@@ -311,22 +382,23 @@ first_last AS (
     GROUP BY 1
 )
 SELECT
-    CASE WHEN FIRST_ATC = 1 THEN 'ATC' ELSE 'Non-ATC' END AS FIRST_SITE,
-    CASE WHEN LAST_ATC  = 1 THEN 'ATC' ELSE 'Non-ATC' END AS LAST_SITE,
-    COUNT(*) AS PATIENTS,
+    CASE WHEN FIRST_ATC = 1 THEN 'Started at an ATC' ELSE 'Started non-ATC' END AS FIRST_SITE,
+    CASE WHEN LAST_ATC  = 1 THEN 'Ended at an ATC'   ELSE 'Ended non-ATC'   END AS LAST_SITE,
+    COUNT(*)                                          AS PATIENTS,
     ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT
 FROM first_last
 GROUP BY 1, 2
 ORDER BY 3 DESC;
 
 
--- Insight 9 (Slide 4, Slide 9): how much treatment patients get, split by where they
--- started. AVG_TREATMENT_CLAIMS is the "6.7 vs 6.0 claims per patient" line.
+/* ---------------------------------------------------------------------------
+   B4B. SLIDE 4 strip and SLIDE 9 appendix. Claims per patient by starting site.
+   The "6.7 vs 6.0 claims per patient" line.
+   --------------------------------------------------------------------------- */
 WITH ranked AS (
     SELECT
         D_PATIENT_ID,
         IS_ATC_HCO,
-        DATE_OF_SERVICE,
         ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID
                            ORDER BY DATE_OF_SERVICE, D_PRIMARY_HCO_COMPILE_ID) AS RN
     FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
@@ -335,246 +407,254 @@ pt AS (
     SELECT
         D_PATIENT_ID,
         MAX(CASE WHEN RN = 1 THEN IS_ATC_HCO END) AS FIRST_ATC,
-        COUNT(*) AS TREATMENT_CLAIMS,
-        DATEDIFF('day', MIN(DATE_OF_SERVICE), MAX(DATE_OF_SERVICE)) AS TX_SPAN_DAYS
+        COUNT(*)                                  AS TREATMENT_CLAIMS
     FROM ranked
     GROUP BY 1
 )
 SELECT
-    CASE WHEN FIRST_ATC = 1 THEN 'Started at ATC' ELSE 'Started at Non-ATC' END AS FIRST_SITE,
-    COUNT(*) AS PATIENTS,
-    ROUND(AVG(TREATMENT_CLAIMS), 1) AS AVG_TREATMENT_CLAIMS,
-    ROUND(AVG(TX_SPAN_DAYS), 0)     AS AVG_TX_SPAN_DAYS
+    CASE WHEN FIRST_ATC = 1 THEN 'Started at ATC' ELSE 'Started at non-ATC' END AS FIRST_SITE,
+    COUNT(*)                        AS PATIENTS,
+    ROUND(AVG(TREATMENT_CLAIMS), 1) AS AVG_CLAIMS_PER_PATIENT
 FROM pt
 GROUP BY 1
 ORDER BY 2 DESC;
 
 
-
--- Insight 6b (Slide 9, sample journeys): referral source with the ATC parent they moved to.
--- If STARTING_PARENT and MIGRATED_PARENT match, it is the same system (artifact).
--- If they differ, it is a real move from one system into an ATC.
-
-
-WITH first_claim AS (
-    SELECT
-        D_PATIENT_ID,
-        HCO_PARENT_NAME AS STARTING_PARENT,
-        IS_ATC_HCO      AS STARTED_ATC
-    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
-    QUALIFY ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID
-                               ORDER BY DATE_OF_SERVICE, D_PRIMARY_HCO_COMPILE_ID) = 1
-),
-last_atc AS (
-    SELECT
-        D_PATIENT_ID,
-        HCO_PARENT_NAME AS MIGRATED_PARENT
-    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
-    WHERE IS_ATC_HCO = 1
-    QUALIFY ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID
-                               ORDER BY DATE_OF_SERVICE DESC, D_PRIMARY_HCO_COMPILE_ID) = 1
-),
-starters AS (
-    SELECT
-        COALESCE(fc.STARTING_PARENT, 'Unknown') AS STARTING_PARENT,
-        COALESCE(la.MIGRATED_PARENT, 'Unknown') AS MIGRATED_PARENT,
-        CASE WHEN c.CLASS_FINAL = 'ATC' THEN 1 ELSE 0 END AS MIGRATED
-    FROM first_claim fc
-    INNER JOIN COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL c
-        ON fc.D_PATIENT_ID = c.D_PATIENT_ID
-    LEFT JOIN last_atc la
-        ON fc.D_PATIENT_ID = la.D_PATIENT_ID
-    WHERE fc.STARTED_ATC = 0
-      AND c.CLASS_FINAL = 'ATC'
-)
+/* ---------------------------------------------------------------------------
+   B5. SLIDE 5 bars and SLIDE 9 penetration range. Treated in the ATC Network,
+   untapped, total, and the penetration percent next to each region label.
+   The Unmapped row is the unassigned-geography count the slide footnote excludes;
+   read it and put the real number in that footnote.
+   --------------------------------------------------------------------------- */
 SELECT
-    STARTING_PARENT,
-    MIGRATED_PARENT,
-    COUNT(*) AS PATIENTS,
-    CASE WHEN UPPER(TRIM(STARTING_PARENT)) = UPPER(TRIM(MIGRATED_PARENT))
-         THEN 'Same system (artifact)'
-         ELSE 'Different system (real move)' END AS MOVE_TYPE
-FROM starters
-GROUP BY 1, 2
-ORDER BY PATIENTS DESC
-LIMIT 30;
-
--- Insight 1 (Slide 3): the headline. Share of patients treated at ATC versus non-ATC.
--- Second query is the two-way ATC vs Non-ATC roll-up (the 46.2% headline number).
-SELECT
-    CLASS_FINAL,
-    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
-    ROUND(100.0 * COUNT(DISTINCT D_PATIENT_ID)
-          / SUM(COUNT(DISTINCT D_PATIENT_ID)) OVER (), 1) AS PCT
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-GROUP BY 1
-ORDER BY 2 DESC;
-
-SELECT
-    CASE WHEN CLASS_FINAL = 'ATC' THEN 'ATC' ELSE 'Non-ATC' END AS SITE_GROUP,
-    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
-    ROUND(100.0 * COUNT(DISTINCT D_PATIENT_ID)
-          / SUM(COUNT(DISTINCT D_PATIENT_ID)) OVER (), 1) AS PCT
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-GROUP BY 1
-ORDER BY 2 DESC;
-
-
--- Insight 2 (Slide 3): how the ATC count is built, by match type. Shows how confident we are.
-SELECT
-    CLASS_HYBRID,
-    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
-    ROUND(100.0 * COUNT(DISTINCT D_PATIENT_ID)
-          / SUM(COUNT(DISTINCT D_PATIENT_ID)) OVER (), 1) AS PCT
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-GROUP BY 1
-ORDER BY 2 DESC;
-
-
--- Insight 3 (Slide 9): ATC share for each year, to see the trend over time.
--- This is the "19% to 24%, 2021 to 2025" year-over-year line.
-SELECT
-    TX_YEAR,
-    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS_TREATED,
-    COUNT(DISTINCT CASE WHEN IS_ATC_HCO = 1 THEN D_PATIENT_ID END) AS ATC_PATIENTS,
-    ROUND(100.0 * COUNT(DISTINCT CASE WHEN IS_ATC_HCO = 1 THEN D_PATIENT_ID END)
-          / NULLIF(COUNT(DISTINCT D_PATIENT_ID), 0), 1) AS PCT_ATC
-FROM COMPILE_DEV.PUBLIC.ATC_PATIENT_HCO_YEAR
-GROUP BY 1
-ORDER BY 1;
-
-
--- Insight 4: ATC patients who also have some non-ATC treatment activity.
-WITH pt AS (
-    SELECT
-        D_PATIENT_ID,
-        MAX(IS_ATC_HCO)                                  AS HAS_ATC,
-        MAX(CASE WHEN IS_ATC_HCO = 0 THEN 1 ELSE 0 END)  AS HAS_NON_ATC,
-        SUM(CASE WHEN IS_ATC_HCO = 0 THEN CLAIMS ELSE 0 END) AS NON_ATC_CLAIMS
-    FROM COMPILE_DEV.PUBLIC.ATC_PATIENT_HCO_YEAR
-    GROUP BY 1
-)
-SELECT
-    CASE WHEN HAS_NON_ATC = 1 THEN 'ATC + non-ATC activity'
-         ELSE 'ATC only' END AS PATTERN,
-    COUNT(*) AS PATIENTS,
-    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT_OF_ATC,
-    SUM(NON_ATC_CLAIMS) AS NON_ATC_CLAIMS
-FROM pt
-WHERE HAS_ATC = 1
-GROUP BY 1
-ORDER BY 2 DESC;
-
-
--- Insight 5 (Slide 7): which non-ATC accounts hold the most patients, and how concentrated it is.
-WITH leak AS (
-    SELECT
-        HCO_PARENT_NAME,
-        COUNT(DISTINCT D_PATIENT_ID)             AS PATIENTS,
-        COUNT(DISTINCT D_PRIMARY_HCO_COMPILE_ID) AS DISTINCT_HCOS,
-        SUM(TREATMENT_CLAIMS)                    AS TOTAL_CLAIMS
-    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-    WHERE CLASS_FINAL LIKE 'Non-ATC%'
-    GROUP BY 1
-)
-SELECT
-    HCO_PARENT_NAME,
-    PATIENTS,
-    DISTINCT_HCOS,
-    TOTAL_CLAIMS,
-    RANK() OVER (ORDER BY PATIENTS DESC) AS LEAK_RANK,
-    ROUND(100.0 * PATIENTS / SUM(PATIENTS) OVER (), 1) AS PCT_OF_LEAKAGE,
-    ROUND(100.0 * SUM(PATIENTS) OVER (ORDER BY PATIENTS DESC
-                                      ROWS UNBOUNDED PRECEDING)
-          / SUM(PATIENTS) OVER (), 1) AS CUM_PCT_OF_LEAKAGE
-FROM leak
-ORDER BY PATIENTS DESC
-LIMIT 25;
-
-
--- Insight 5b (Slide 8): largest non-ATC accounts within each state.
--- Same leakage logic as Insight 5, grouped to state x parent and ranked within
--- each state. The deck shows the six states with the most non-ATC volume, top
--- three accounts each; STATE_NON_ATC_PATIENTS gives the order to pick those six.
-WITH state_leak AS (
-    SELECT
-        PRIMARY_HCO_NPI_STATE AS STATE,
-        HCO_PARENT_NAME,
-        COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS
-    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-    WHERE CLASS_FINAL LIKE 'Non-ATC%'
-      AND PRIMARY_HCO_NPI_STATE IS NOT NULL
-    GROUP BY 1, 2
-),
-ranked AS (
-    SELECT
-        STATE,
-        HCO_PARENT_NAME,
-        PATIENTS,
-        RANK() OVER (PARTITION BY STATE ORDER BY PATIENTS DESC) AS RANK_IN_STATE,
-        SUM(PATIENTS) OVER (PARTITION BY STATE)                 AS STATE_NON_ATC_PATIENTS
-    FROM state_leak
-)
-SELECT
-    STATE,
-    STATE_NON_ATC_PATIENTS,
-    HCO_PARENT_NAME,
-    PATIENTS,
-    RANK_IN_STATE
-FROM ranked
-WHERE RANK_IN_STATE <= 3
-ORDER BY STATE_NON_ATC_PATIENTS DESC, RANK_IN_STATE;
-
-
--- Insight 7: how much non-ATC volume sits inside the large community networks.
-SELECT
-    COALESCE(HCO_COMMUNITY_NETWORK, 'Independent / Other') AS NETWORK,
-    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
-    ROUND(100.0 * COUNT(DISTINCT D_PATIENT_ID)
-          / SUM(COUNT(DISTINCT D_PATIENT_ID)) OVER (), 1) AS PCT_OF_LEAKAGE
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-WHERE CLASS_FINAL LIKE 'Non-ATC%'
-GROUP BY 1
-ORDER BY 2 DESC;
-
-
--- Insight 10 (Slide 5): ATC share by region.
--- ATC_PATIENTS is "Treated in ATC Network", NON_ATC_PATIENTS is "Untapped".
-SELECT
-    COALESCE(r.REGION, 'Unmapped') AS REGION,
-    COUNT(DISTINCT a.D_PATIENT_ID) AS TOTAL_PATIENTS,
-    COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC' THEN a.D_PATIENT_ID END) AS ATC_PATIENTS,
-    COUNT(DISTINCT CASE WHEN a.CLASS_FINAL <> 'ATC' THEN a.D_PATIENT_ID END) AS NON_ATC_PATIENTS,
-    ROUND(100.0 * COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC' THEN a.D_PATIENT_ID END)
-          / NULLIF(COUNT(DISTINCT a.D_PATIENT_ID), 0), 1) AS PCT_ATC
+    COALESCE(r.REGION, 'Unmapped, excluded from the slide')  AS REGION_NAME,
+    COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC'
+                        THEN a.D_PATIENT_ID END)             AS TREATED_IN_ATC_NETWORK,
+    COUNT(DISTINCT CASE WHEN a.CLASS_FINAL <> 'ATC'
+                        THEN a.D_PATIENT_ID END)             AS UNTAPPED,
+    COUNT(DISTINCT a.D_PATIENT_ID)                           AS TOTAL_PATIENTS,
+    ROUND(100.0 * COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC'
+                                      THEN a.D_PATIENT_ID END)
+          / COUNT(DISTINCT a.D_PATIENT_ID), 0)               AS ATC_PENETRATION_PCT
 FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
 LEFT JOIN COMPILE_DEV.PUBLIC.STATE_REGION_MAP r
     ON a.PRIMARY_HCO_NPI_STATE = r.STATE
 GROUP BY 1
-ORDER BY TOTAL_PATIENTS DESC;
+ORDER BY 4 DESC;
 
 
--- Insight 10b (Slide 6): ATC penetration and untapped volume by state.
--- State-grain version of Insight 10, feeding the scatter: x = PCT_ATC,
--- y = UNTAPPED_PATIENTS. Priority zone on the slide is high untapped, low PCT_ATC.
--- HAVING >= 50 drops the long tail of tiny states so the plot stays readable;
--- it is a display threshold, not a business rule.
+/* ---------------------------------------------------------------------------
+   B6. SLIDE 6, the state scatter. One row per state. Plot UNTAPPED on the y axis
+   and ATC_PENETRATION_PCT on the x axis. Priority zone is high untapped, low
+   penetration (top left). Only states with 100 or more patients are returned so
+   the chart stays readable.
+   --------------------------------------------------------------------------- */
 SELECT
-    a.PRIMARY_HCO_NPI_STATE AS STATE,
-    COUNT(DISTINCT a.D_PATIENT_ID) AS TOTAL_PATIENTS,
-    COUNT(DISTINCT CASE WHEN a.CLASS_FINAL =  'ATC' THEN a.D_PATIENT_ID END) AS ATC_PATIENTS,
-    COUNT(DISTINCT CASE WHEN a.CLASS_FINAL <> 'ATC' THEN a.D_PATIENT_ID END) AS UNTAPPED_PATIENTS,
-    ROUND(100.0 * COUNT(DISTINCT CASE WHEN a.CLASS_FINAL = 'ATC' THEN a.D_PATIENT_ID END)
-          / NULLIF(COUNT(DISTINCT a.D_PATIENT_ID), 0), 1) AS PCT_ATC
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
-WHERE a.PRIMARY_HCO_NPI_STATE IS NOT NULL
+    PRIMARY_HCO_NPI_STATE                                 AS STATE,
+    COUNT(DISTINCT CASE WHEN CLASS_FINAL = 'ATC'
+                        THEN D_PATIENT_ID END)            AS TREATED_IN_ATC_NETWORK,
+    COUNT(DISTINCT CASE WHEN CLASS_FINAL <> 'ATC'
+                        THEN D_PATIENT_ID END)            AS UNTAPPED,
+    COUNT(DISTINCT D_PATIENT_ID)                          AS TOTAL_PATIENTS,
+    ROUND(100.0 * COUNT(DISTINCT CASE WHEN CLASS_FINAL = 'ATC'
+                                      THEN D_PATIENT_ID END)
+          / COUNT(DISTINCT D_PATIENT_ID), 1)              AS ATC_PENETRATION_PCT
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+WHERE PRIMARY_HCO_NPI_STATE IS NOT NULL
 GROUP BY 1
-HAVING COUNT(DISTINCT a.D_PATIENT_ID) >= 50
-ORDER BY UNTAPPED_PATIENTS DESC;
+HAVING COUNT(DISTINCT D_PATIENT_ID) >= 100
+ORDER BY 3 DESC;
 
 
--- Insight 11 (Slide 9): days from diagnosis to first treatment. Context only, the gap is small.
--- This is the "about a 40-day median, similar across both settings" appendix line.
+/* ---------------------------------------------------------------------------
+   B7A. SLIDE 7, top 5 non-ATC accounts per region (raw, correction only), plus
+   each region's untapped total for the card header. The slide shows three; the
+   extra two are the buffer. City of Hope and NYU Langone must NOT appear - if
+   either does, the correction did not land.
+   --------------------------------------------------------------------------- */
+WITH nonatc AS (
+    SELECT
+        COALESCE(r.REGION, 'Unmapped')                                       AS REGION_NAME,
+        COALESCE(NULLIF(TRIM(a.HCO_PARENT_NAME), ''), 'Unknown / unmapped')  AS PARENT,
+        COUNT(DISTINCT a.D_PATIENT_ID)                                       AS PATIENTS
+    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
+    LEFT JOIN COMPILE_DEV.PUBLIC.STATE_REGION_MAP r
+        ON a.PRIMARY_HCO_NPI_STATE = r.STATE
+    WHERE a.CLASS_FINAL <> 'ATC'
+    GROUP BY 1, 2
+),
+region_tot AS (
+    SELECT REGION_NAME, SUM(PATIENTS) AS REGION_UNTAPPED
+    FROM nonatc GROUP BY 1
+),
+ranked AS (
+    SELECT
+        n.REGION_NAME, n.PARENT, n.PATIENTS, t.REGION_UNTAPPED,
+        ROW_NUMBER() OVER (PARTITION BY n.REGION_NAME ORDER BY n.PATIENTS DESC) AS RN
+    FROM nonatc n
+    JOIN region_tot t ON n.REGION_NAME = t.REGION_NAME
+)
+SELECT REGION_NAME, REGION_UNTAPPED, RN AS RANK_IN_REGION, PARENT, PATIENTS
+FROM ranked
+WHERE RN <= 5
+  AND REGION_NAME <> 'Unmapped'
+ORDER BY REGION_UNTAPPED DESC, PATIENTS DESC;
+
+
+/* ---------------------------------------------------------------------------
+   B7B. SLIDE 7 alternative, GENUINE targets per region, top 5. Same as B7A but
+   also drops the multi-site systems that sit on the ATC roster with only one
+   authorized site (Kaiser, Providence, Mayo, Intermountain, Avera, Northwell,
+   AdventHealth, Advocate, St Luke's, Baylor). Nothing even partly an ATC appears
+   as a target here. Use B7A to match the current slide, B7B for the cleaner list.
+   --------------------------------------------------------------------------- */
+WITH nonatc AS (
+    SELECT
+        COALESCE(r.REGION, 'Unmapped')                                       AS REGION_NAME,
+        COALESCE(NULLIF(TRIM(a.HCO_PARENT_NAME), ''), 'Unknown / unmapped')  AS PARENT,
+        COUNT(DISTINCT a.D_PATIENT_ID)                                       AS PATIENTS
+    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
+    LEFT JOIN COMPILE_DEV.PUBLIC.STATE_REGION_MAP r
+        ON a.PRIMARY_HCO_NPI_STATE = r.STATE
+    WHERE a.CLASS_FINAL <> 'ATC'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%KAISER%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%PROVIDENCE%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%MAYO%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%INTERMOUNTAIN%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%AVERA%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%NORTHWELL%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%ADVENTHEALTH%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%ADVOCATE%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%ST LUKE%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%BAYLOR%'
+    GROUP BY 1, 2
+),
+region_tot AS (
+    SELECT REGION_NAME, SUM(PATIENTS) AS REGION_UNTAPPED
+    FROM nonatc GROUP BY 1
+),
+ranked AS (
+    SELECT
+        n.REGION_NAME, n.PARENT, n.PATIENTS, t.REGION_UNTAPPED,
+        ROW_NUMBER() OVER (PARTITION BY n.REGION_NAME ORDER BY n.PATIENTS DESC) AS RN
+    FROM nonatc n
+    JOIN region_tot t ON n.REGION_NAME = t.REGION_NAME
+)
+SELECT REGION_NAME, REGION_UNTAPPED, RN AS RANK_IN_REGION, PARENT, PATIENTS
+FROM ranked
+WHERE RN <= 5
+  AND REGION_NAME <> 'Unmapped'
+ORDER BY REGION_UNTAPPED DESC, PATIENTS DESC;
+
+
+/* ---------------------------------------------------------------------------
+   B8A. SLIDE 8, top 5 non-ATC accounts (raw, correction only) for the eight
+   largest states by non-ATC volume. The slide shows six states and three
+   accounts each; the extra states and accounts are the buffer in case the order
+   shifts after the correction. STATE_RANK gives the true ordering.
+   --------------------------------------------------------------------------- */
+WITH nonatc AS (
+    SELECT
+        a.PRIMARY_HCO_NPI_STATE                                              AS STATE,
+        COALESCE(NULLIF(TRIM(a.HCO_PARENT_NAME), ''), 'Unknown / unmapped')  AS PARENT,
+        COUNT(DISTINCT a.D_PATIENT_ID)                                       AS PATIENTS
+    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
+    WHERE a.CLASS_FINAL <> 'ATC'
+      AND a.PRIMARY_HCO_NPI_STATE IS NOT NULL
+    GROUP BY 1, 2
+),
+state_tot AS (
+    SELECT STATE, SUM(PATIENTS) AS STATE_UNTAPPED
+    FROM nonatc GROUP BY 1
+),
+top_states AS (
+    SELECT STATE, STATE_UNTAPPED,
+           ROW_NUMBER() OVER (ORDER BY STATE_UNTAPPED DESC) AS STATE_RANK
+    FROM state_tot
+),
+ranked AS (
+    SELECT
+        n.STATE, n.PARENT, n.PATIENTS, s.STATE_UNTAPPED, s.STATE_RANK,
+        ROW_NUMBER() OVER (PARTITION BY n.STATE ORDER BY n.PATIENTS DESC) AS RN
+    FROM nonatc n
+    JOIN top_states s ON n.STATE = s.STATE
+)
+SELECT STATE, STATE_RANK, STATE_UNTAPPED, RN AS RANK_IN_STATE, PARENT, PATIENTS
+FROM ranked
+WHERE RN <= 5
+  AND STATE_RANK <= 8
+ORDER BY STATE_UNTAPPED DESC, PATIENTS DESC;
+
+
+/* ---------------------------------------------------------------------------
+   B8B. SLIDE 8 alternative, GENUINE targets, top 5 for the eight largest states.
+   Same multi-site roster exclusion as B7B. Note the eight largest states can
+   differ from B8A once those systems are removed, so read STATE_RANK here too.
+   --------------------------------------------------------------------------- */
+WITH nonatc AS (
+    SELECT
+        a.PRIMARY_HCO_NPI_STATE                                              AS STATE,
+        COALESCE(NULLIF(TRIM(a.HCO_PARENT_NAME), ''), 'Unknown / unmapped')  AS PARENT,
+        COUNT(DISTINCT a.D_PATIENT_ID)                                       AS PATIENTS
+    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
+    WHERE a.CLASS_FINAL <> 'ATC'
+      AND a.PRIMARY_HCO_NPI_STATE IS NOT NULL
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%KAISER%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%PROVIDENCE%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%MAYO%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%INTERMOUNTAIN%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%AVERA%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%NORTHWELL%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%ADVENTHEALTH%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%ADVOCATE%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%ST LUKE%'
+      AND UPPER(TRIM(a.HCO_PARENT_NAME)) NOT LIKE '%BAYLOR%'
+    GROUP BY 1, 2
+),
+state_tot AS (
+    SELECT STATE, SUM(PATIENTS) AS STATE_UNTAPPED
+    FROM nonatc GROUP BY 1
+),
+top_states AS (
+    SELECT STATE, STATE_UNTAPPED,
+           ROW_NUMBER() OVER (ORDER BY STATE_UNTAPPED DESC) AS STATE_RANK
+    FROM state_tot
+),
+ranked AS (
+    SELECT
+        n.STATE, n.PARENT, n.PATIENTS, s.STATE_UNTAPPED, s.STATE_RANK,
+        ROW_NUMBER() OVER (PARTITION BY n.STATE ORDER BY n.PATIENTS DESC) AS RN
+    FROM nonatc n
+    JOIN top_states s ON n.STATE = s.STATE
+)
+SELECT STATE, STATE_RANK, STATE_UNTAPPED, RN AS RANK_IN_STATE, PARENT, PATIENTS
+FROM ranked
+WHERE RN <= 5
+  AND STATE_RANK <= 8
+ORDER BY STATE_UNTAPPED DESC, PATIENTS DESC;
+
+
+/* ---------------------------------------------------------------------------
+   B9A. SLIDE 9 appendix, the satellite split. Share of ATC patients by how they
+   were classified. The "53% of ATC patients are at satellite sites" line reads
+   off the non-NPI-confirmed rows (roster gap corrected plus name fallback came
+   in through the parent, i.e. satellites of an ATC parent).
+   --------------------------------------------------------------------------- */
+SELECT
+    CLASS_HYBRID,
+    COUNT(DISTINCT D_PATIENT_ID)                          AS PATIENTS,
+    ROUND(100.0 * COUNT(DISTINCT D_PATIENT_ID)
+          / SUM(COUNT(DISTINCT D_PATIENT_ID)) OVER (), 1) AS PCT_OF_ATC
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+WHERE CLASS_FINAL = 'ATC'
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+/* ---------------------------------------------------------------------------
+   B9B. SLIDE 9 appendix, diagnosis to first treatment timing. The "about a
+   40-day median, similar across both settings" line.
+   --------------------------------------------------------------------------- */
 WITH first_tx AS (
     SELECT
         D_PATIENT_ID,
@@ -586,7 +666,7 @@ WITH first_tx AS (
 )
 SELECT
     CASE WHEN IS_ATC_HCO = 1 THEN 'ATC' ELSE 'Non-ATC' END AS FIRST_SITE,
-    COUNT(*) AS PATIENTS,
+    COUNT(*)                        AS PATIENTS,
     ROUND(AVG(DAYS_DX_TO_TX), 0)    AS AVG_DAYS_DX_TO_TX,
     ROUND(MEDIAN(DAYS_DX_TO_TX), 0) AS MEDIAN_DAYS_DX_TO_TX
 FROM first_tx
@@ -596,7 +676,77 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 12: Yervoy versus Opdualag, and the ATC share of each.
+/* ############################################################################
+   PART C  -  CONTEXT AND RECONCILIATION (not on a slide)
+   Run for the buffer, so a follow-up question never needs a second trip.
+   ############################################################################ */
+
+
+/* ---------------------------------------------------------------------------
+   C1. Classification confidence. How the ATC and non-ATC counts are built by
+   match type. Supports the slide 3 table and the satellite split.
+   --------------------------------------------------------------------------- */
+SELECT
+    CLASS_HYBRID,
+    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
+    ROUND(100.0 * COUNT(DISTINCT D_PATIENT_ID)
+          / SUM(COUNT(DISTINCT D_PATIENT_ID)) OVER (), 1) AS PCT
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+/* ---------------------------------------------------------------------------
+   C2. CHECK D, headline versus journey reconciliation.
+   Step 1 counts a patient as ATC on NPI, the four roster patterns, OR a name
+   fallback for authorized parents in two states or fewer. Steps 2 and 3 (journey
+   and year trend) do NOT have the name-fallback branch. So the journey can sit on
+   a slightly narrower ATC definition than the slide 3 headline. This sizes the
+   gap: if NAME_FALLBACK_ONLY is small, leave it; if large, slide 4 and slide 3
+   disagree in a way a careful reader could catch.
+   --------------------------------------------------------------------------- */
+WITH headline AS (
+    SELECT COUNT(DISTINCT D_PATIENT_ID) AS ATC_HEADLINE
+    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+    WHERE CLASS_FINAL = 'ATC'
+),
+name_fallback_only AS (
+    SELECT COUNT(DISTINCT D_PATIENT_ID) AS ATC_VIA_NAME_FALLBACK
+    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+    WHERE CLASS_FINAL = 'ATC'
+      AND CLASS_HYBRID = 'ATC: name fallback'
+),
+journey AS (
+    SELECT COUNT(DISTINCT D_PATIENT_ID) AS ATC_IN_JOURNEY
+    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
+    WHERE IS_ATC_HCO = 1
+)
+SELECT
+    h.ATC_HEADLINE,
+    j.ATC_IN_JOURNEY,
+    h.ATC_HEADLINE - j.ATC_IN_JOURNEY AS DIFFERENCE,
+    n.ATC_VIA_NAME_FALLBACK           AS NAME_FALLBACK_ONLY
+FROM headline h, journey j, name_fallback_only n;
+
+
+/* ---------------------------------------------------------------------------
+   C3. Community-network share of the non-ATC volume (US Oncology, One Oncology,
+   American Oncology versus independent or other).
+   --------------------------------------------------------------------------- */
+SELECT
+    COALESCE(HCO_COMMUNITY_NETWORK, 'Independent / Other') AS NETWORK,
+    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
+    ROUND(100.0 * COUNT(DISTINCT D_PATIENT_ID)
+          / SUM(COUNT(DISTINCT D_PATIENT_ID)) OVER (), 1) AS PCT_OF_NON_ATC
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+WHERE CLASS_FINAL LIKE 'Non-ATC%'
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+/* ---------------------------------------------------------------------------
+   C4. Drug mix, Yervoy versus Opdualag, and the ATC share of each.
+   --------------------------------------------------------------------------- */
 SELECT
     DRUG,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
@@ -609,23 +759,9 @@ GROUP BY 1
 ORDER BY 2 DESC;
 
 
--- Insight 13: ATC centers ranked by claims per patient, minimum 10 patients.
-SELECT
-    PRIMARY_HCO_NPI_NAME AS ACCOUNT_NAME,
-    HCO_PARENT_NAME,
-    PRIMARY_HCO_NPI_STATE AS STATE,
-    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
-    SUM(TREATMENT_CLAIMS)        AS TOTAL_CLAIMS,
-    ROUND(1.0 * SUM(TREATMENT_CLAIMS) / NULLIF(COUNT(DISTINCT D_PATIENT_ID), 0), 1)
-        AS CLAIMS_PER_PATIENT
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-WHERE CLASS_FINAL = 'ATC'
-GROUP BY 1, 2, 3
-HAVING COUNT(DISTINCT D_PATIENT_ID) >= 10
-ORDER BY CLAIMS_PER_PATIENT DESC;
-
-
--- Reference list: authorized ATC accounts rolled up to parent.
+/* ---------------------------------------------------------------------------
+   C5. Reference list, authorized ATC accounts rolled up to parent.
+   --------------------------------------------------------------------------- */
 SELECT
     HCO_PARENT_NAME,
     COUNT(DISTINCT D_PATIENT_ID)             AS PATIENTS,
@@ -637,9 +773,12 @@ WHERE CLASS_FINAL = 'ATC'
 GROUP BY 1
 ORDER BY PATIENTS DESC;
 
--- Reference list: authorized ATC accounts at the individual site level.
+
+/* ---------------------------------------------------------------------------
+   C6. Reference list, authorized ATC accounts at the individual site level.
+   --------------------------------------------------------------------------- */
 SELECT
-    PRIMARY_HCO_NPI_NAME AS ACCOUNT_NAME,
+    PRIMARY_HCO_NPI_NAME  AS ACCOUNT_NAME,
     HCO_PARENT_NAME,
     PRIMARY_HCO_NPI_STATE AS STATE,
     COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
