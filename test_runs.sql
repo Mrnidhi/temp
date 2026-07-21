@@ -1,102 +1,263 @@
 /* ============================================================================
-   TEST / QA FILE - Site of Care. Every check worth running, in one place.
-
-   WHAT THIS IS
-       Read-only checks that confirm the four base tables are built and classified
-       the way we think. Run this after any MASTER rebuild (new ATCs, roster change,
-       definition change) to catch a break before the numbers reach a slide.
+   RUN THIS - build the four base tables once, then only the queries still needed
+   to finalize the deck. Nothing else from the MASTER runs, so this is the cheapest
+   way to close out Site of Care.
 
    HOW TO RUN
-       The four base tables must already exist (run the MASTER first). Run all,
-       screenshot each grid. Nothing here creates or changes a table.
+       Run all, top to bottom, once. Part A rebuilds the tables (the only heavy
+       step, it scans the claims table twice). Part B is five light reads plus a
+       roster sanity. Screenshot Q3A, Q4A, Q4B, Q4D, Q4E, Q4F and send them.
 
-   SECTIONS
-       1  Population integrity     row and patient counts line up across tables
-       2  Classification audit     how every patient bucket is built
-       3  Roster correction        the four gap orgs landed as ATC
-       4  Alignment effects        CHECK D, slide 4 boxes, start/class cross, and
-                                 every slide number that moved with the alignment
-       5  Data quality             state coverage, drug mix, community network
-       6  New-ATC readiness         template to test an ATC before adding it
-
-   This supersedes "TEST - slide 4 journey definitions" - Section 4 folds it in,
-   now on the aligned definition that is live in the MASTER.
+   This is a trimmed copy of the MASTER - the table builds are identical (aligned:
+   Steps 2 and 3 carry the name fallback), only the slide outputs that did not
+   change are dropped. The MASTER stays the source of truth.
    ============================================================================ */
 
 
 /* ############################################################################
-   SECTION 1  -  POPULATION INTEGRITY
+   PART A  -  REBUILD THE FOUR BASE TABLES  (heavy step, runs once)
    ############################################################################ */
 
-/* Q1A. Headcounts per base table. Sanity floor for everything else.
-   Journey patients (~16,404) sit a little above classified (~16,246) because the
-   journey keeps every treated-and-diagnosed patient, classified is one row each. */
-SELECT 'classified patients'  AS METRIC, COUNT(DISTINCT D_PATIENT_ID) AS N FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-UNION ALL SELECT 'journey patients',     COUNT(DISTINCT D_PATIENT_ID)      FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
-UNION ALL SELECT 'journey claims',       COUNT(*)                          FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
-UNION ALL SELECT 'year-table patients',  COUNT(DISTINCT D_PATIENT_ID)      FROM COMPILE_DEV.PUBLIC.ATC_PATIENT_HCO_YEAR;
+
+SET fallback_state_limit = 2;
 
 
-/* Q1B. One row per patient in the classified table. ROWS must equal PATIENTS,
-   otherwise the market-table distinct counts would double-count. */
-SELECT COUNT(*) AS ROWS, COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL;
-
-
-/* Q1C. Where the two populations differ. Explains the journey-vs-classified gap. */
+-- Step 1: classify every patient as ATC or non-ATC. One row per patient.
+CREATE OR REPLACE TRANSIENT TABLE COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL AS
+WITH auth_npi AS (
+    SELECT DISTINCT TRIM("NPI") AS NPI
+    FROM COMPILE_DEV.PUBLIC.CTAM_ATC_ALIGNMENT_2026
+    WHERE UPPER(TRIM("Status")) = 'AUTHORIZED'
+      AND "NPI" IS NOT NULL
+      AND TRIM("NPI") NOT IN ('0', '', 'NPI')
+),
+auth_parent AS (
+    SELECT DISTINCT UPPER(TRIM("ATC HCO Parent Name (McKesson Claims)")) AS PARENT
+    FROM COMPILE_DEV.PUBLIC.CTAM_ATC_ALIGNMENT_2026
+    WHERE UPPER(TRIM("Status")) = 'AUTHORIZED'
+      AND "ATC HCO Parent Name (McKesson Claims)" IS NOT NULL
+      AND TRIM("ATC HCO Parent Name (McKesson Claims)") NOT IN ('', 'null')
+),
+classified AS (
+    SELECT
+        p.*,
+        CASE
+            WHEN p.HCO_COMMUNITY_NETWORK IN (
+                    'THE US ONCOLOGY NETWORK',
+                    'ONE ONCOLOGY',
+                    'AMERICAN ONCOLOGY NETWORK')
+                THEN 'Non-ATC: Community Network'
+            WHEN n.NPI IS NOT NULL
+                THEN 'ATC: NPI confirmed'
+            -- Roster gap correction. Confirmed authorized, matched on a pattern
+            -- not an exact string so a suffix or stray space cannot break it.
+            -- Bypasses the fallback_state_limit guard on purpose. Keep in sync
+            -- with the identical patterns in Steps 2 and 3.
+            WHEN UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%'
+              OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
+              OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%WEXNER%'
+              OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%HOAG%'
+                THEN 'ATC: roster gap corrected'
+            WHEN ap.PARENT IS NOT NULL
+                THEN 'ATC: name fallback'
+            WHEN EXISTS (
+                    SELECT 1 FROM auth_parent x
+                    WHERE UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%' || x.PARENT || '%'
+                       OR x.PARENT LIKE '%' || UPPER(TRIM(p.HCO_PARENT_NAME)) || '%')
+                THEN 'Needs Review'
+            WHEN p.HCO_PARENT_NAME IS NULL
+                THEN 'Non-ATC: Unknown'
+            ELSE 'Non-ATC'
+        END AS CLASS_HYBRID
+    FROM COMPILE_DEV.PUBLIC.ATC_SOC_PATIENT_CLASSIFIED_2021_2025 p
+    LEFT JOIN auth_npi    n  ON TRIM(p.D_PRIMARY_HCO_NPI) = n.NPI
+    LEFT JOIN auth_parent ap ON UPPER(TRIM(p.HCO_PARENT_NAME)) = ap.PARENT
+),
+fallback_footprint AS (
+    SELECT HCO_PARENT_NAME,
+           COUNT(DISTINCT PRIMARY_HCO_NPI_STATE) AS PARENT_STATES
+    FROM classified
+    WHERE CLASS_HYBRID = 'ATC: name fallback'
+    GROUP BY 1
+)
 SELECT
-    (SELECT COUNT(DISTINCT t.D_PATIENT_ID)
-       FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS t
-      WHERE NOT EXISTS (SELECT 1 FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL c
-                         WHERE c.D_PATIENT_ID = t.D_PATIENT_ID))       AS IN_JOURNEY_NOT_CLASSIFIED,
-    (SELECT COUNT(DISTINCT c.D_PATIENT_ID)
-       FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL c
-      WHERE NOT EXISTS (SELECT 1 FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS t
-                         WHERE t.D_PATIENT_ID = c.D_PATIENT_ID))       AS CLASSIFIED_NOT_IN_JOURNEY;
+    c.*,
+    f.PARENT_STATES,
+    CASE
+        WHEN c.CLASS_HYBRID = 'ATC: NPI confirmed'                                              THEN 'ATC'
+        WHEN c.CLASS_HYBRID = 'ATC: roster gap corrected'                                       THEN 'ATC'
+        WHEN c.CLASS_HYBRID = 'ATC: name fallback' AND f.PARENT_STATES <= $fallback_state_limit THEN 'ATC'
+        WHEN c.CLASS_HYBRID = 'ATC: name fallback' AND f.PARENT_STATES >  $fallback_state_limit THEN 'Non-ATC: System sweep'
+        WHEN c.CLASS_HYBRID = 'Needs Review'                                                    THEN 'Needs Review'
+        ELSE c.CLASS_HYBRID
+    END AS CLASS_FINAL
+FROM classified c
+LEFT JOIN fallback_footprint f
+    ON c.HCO_PARENT_NAME = f.HCO_PARENT_NAME;
+
+
+-- Step 2: one row per patient, site and year. Used for the trend and overlap views.
+CREATE OR REPLACE TRANSIENT TABLE COMPILE_DEV.PUBLIC.ATC_PATIENT_HCO_YEAR AS
+WITH auth_npi AS (
+    SELECT DISTINCT TRIM("NPI") AS NPI
+    FROM COMPILE_DEV.PUBLIC.CTAM_ATC_ALIGNMENT_2026
+    WHERE UPPER(TRIM("Status")) = 'AUTHORIZED'
+      AND "NPI" IS NOT NULL
+      AND TRIM("NPI") NOT IN ('0', '', 'NPI')
+),
+name_fallback_parents AS (
+    -- Parents Step 1 accepted as ATC on a name match (authorized parent in two
+    -- states or fewer). Read from the finished Step 1 table so the two-state guard
+    -- is already applied. Added so the trend uses the same ATC definition as the
+    -- slide 3 headline. Keep in sync with Step 3.
+    SELECT DISTINCT UPPER(TRIM(HCO_PARENT_NAME)) AS PARENT
+    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+    WHERE CLASS_HYBRID = 'ATC: name fallback'
+      AND CLASS_FINAL  = 'ATC'
+),
+diagnosed AS (
+    SELECT DISTINCT D_PATIENT_ID
+    FROM COMPILE_CLAIMS.OPEN_CLAIMS.IOV2501_MEDICAL_CLAIMS
+    WHERE D_PATIENT_ID <> 'XXX - HIDDEN'
+      AND DATE_OF_SERVICE >= DATE '2021-01-01'
+      AND D_DIAGNOSIS_CODE_ALL ILIKE '%C43%'
+      AND D_DIAGNOSIS_CODE_ALL ILIKE ANY ('%C77%', '%C78%', '%C79%')
+),
+treated AS (
+    SELECT
+        D_PATIENT_ID,
+        D_PRIMARY_HCO_NPI,
+        D_PRIMARY_HCO_COMPILE_ID,
+        HCO_PARENT_NAME,
+        YEAR(DATE_OF_SERVICE) AS TX_YEAR
+    FROM COMPILE_CLAIMS.OPEN_CLAIMS.IOV2501_MEDICAL_CLAIMS
+    WHERE D_PATIENT_ID <> 'XXX - HIDDEN'
+      AND DATE_OF_SERVICE >= DATE '2021-01-01'
+      AND DATE_OF_SERVICE <  DATE '2026-01-01'
+      AND (D_NDC_CODE IN ('00003232711', '00003232822', '00003712511')
+           OR D_PROCEDURE_CODE IN ('J9228', 'J9298'))
+)
+SELECT
+    t.D_PATIENT_ID,
+    t.TX_YEAR,
+    t.D_PRIMARY_HCO_COMPILE_ID,
+    -- Roster gap correction plus name fallback. Keep in sync with Steps 1 and 3.
+    MAX(CASE
+            WHEN n.NPI IS NOT NULL THEN 1
+            WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%'
+              OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
+              OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%WEXNER%'
+              OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%HOAG%' THEN 1
+            WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) IN
+                 (SELECT PARENT FROM name_fallback_parents) THEN 1
+            ELSE 0
+        END) AS IS_ATC_HCO,
+    COUNT(*) AS CLAIMS
+FROM treated t
+INNER JOIN diagnosed d ON t.D_PATIENT_ID = d.D_PATIENT_ID
+LEFT JOIN auth_npi   n ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI
+GROUP BY 1, 2, 3;
+
+
+-- Step 3: one row per treatment claim, with dates and drug.
+-- Used for the journey and timing views. Drug is read from procedure and NDC codes.
+CREATE OR REPLACE TRANSIENT TABLE COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS AS
+WITH auth_npi AS (
+    SELECT DISTINCT TRIM("NPI") AS NPI
+    FROM COMPILE_DEV.PUBLIC.CTAM_ATC_ALIGNMENT_2026
+    WHERE UPPER(TRIM("Status")) = 'AUTHORIZED'
+      AND "NPI" IS NOT NULL
+      AND TRIM("NPI") NOT IN ('0', '', 'NPI')
+),
+name_fallback_parents AS (
+    -- Same set as Step 2. Keeps the journey ATC flag aligned with the headline.
+    SELECT DISTINCT UPPER(TRIM(HCO_PARENT_NAME)) AS PARENT
+    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+    WHERE CLASS_HYBRID = 'ATC: name fallback'
+      AND CLASS_FINAL  = 'ATC'
+),
+diagnosed AS (
+    SELECT D_PATIENT_ID, MIN(DATE_OF_SERVICE) AS FIRST_DX_DATE
+    FROM COMPILE_CLAIMS.OPEN_CLAIMS.IOV2501_MEDICAL_CLAIMS
+    WHERE D_PATIENT_ID <> 'XXX - HIDDEN'
+      AND DATE_OF_SERVICE >= DATE '2021-01-01'
+      AND D_DIAGNOSIS_CODE_ALL ILIKE '%C43%'
+      AND D_DIAGNOSIS_CODE_ALL ILIKE ANY ('%C77%', '%C78%', '%C79%')
+    GROUP BY 1
+),
+treated AS (
+    SELECT
+        D_PATIENT_ID,
+        DATE_OF_SERVICE,
+        D_PRIMARY_HCO_NPI,
+        D_PRIMARY_HCO_COMPILE_ID,
+        HCO_PARENT_NAME,
+        CASE
+            WHEN D_PROCEDURE_CODE = 'J9228'
+                 OR D_NDC_CODE IN ('00003232711', '00003232822') THEN 'Yervoy'
+            WHEN D_PROCEDURE_CODE = 'J9298'
+                 OR D_NDC_CODE = '00003712511'                    THEN 'Opdualag'
+            ELSE 'Other'
+        END AS DRUG
+    FROM COMPILE_CLAIMS.OPEN_CLAIMS.IOV2501_MEDICAL_CLAIMS
+    WHERE D_PATIENT_ID <> 'XXX - HIDDEN'
+      AND DATE_OF_SERVICE >= DATE '2021-01-01'
+      AND DATE_OF_SERVICE <  DATE '2026-01-01'
+      AND (D_NDC_CODE IN ('00003232711', '00003232822', '00003712511')
+           OR D_PROCEDURE_CODE IN ('J9228', 'J9298'))
+)
+SELECT
+    t.D_PATIENT_ID,
+    t.DATE_OF_SERVICE,
+    t.D_PRIMARY_HCO_COMPILE_ID,
+    t.HCO_PARENT_NAME,
+    t.DRUG,
+    d.FIRST_DX_DATE,
+    -- Roster gap correction plus name fallback. Keep in sync with Steps 1 and 2.
+    CASE
+        WHEN n.NPI IS NOT NULL THEN 1
+        WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%'
+          OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
+          OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%WEXNER%'
+          OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%HOAG%' THEN 1
+        WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) IN
+             (SELECT PARENT FROM name_fallback_parents) THEN 1
+        ELSE 0
+    END AS IS_ATC_HCO
+FROM treated t
+INNER JOIN diagnosed d ON t.D_PATIENT_ID = d.D_PATIENT_ID
+LEFT JOIN auth_npi n ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI;
+
+
+-- Step 4: state to region lookup. Six regions. VA, MD, DC, DE sit in Northeast.
+-- Hawaii and Alaska are left unmapped on purpose.
+CREATE OR REPLACE TRANSIENT TABLE COMPILE_DEV.PUBLIC.STATE_REGION_MAP AS
+SELECT * FROM VALUES
+    ('CA','West'),('WA','West'),('OR','West'),('NV','West'),('AZ','West'),
+    ('UT','West'),('CO','West'),('ID','West'),('MT','West'),('WY','West'),
+    ('NM','West'),
+    ('TX','Central'),('OK','Central'),('KS','Central'),('NE','Central'),
+    ('SD','Central'),('ND','Central'),('AR','Central'),
+    ('IL','Great Lakes'),('MI','Great Lakes'),('WI','Great Lakes'),
+    ('MN','Great Lakes'),('IA','Great Lakes'),('MO','Great Lakes'),
+    ('OH','Ohio Valley'),('IN','Ohio Valley'),('KY','Ohio Valley'),
+    ('TN','Ohio Valley'),('WV','Ohio Valley'),
+    ('FL','Southeast'),('GA','Southeast'),('SC','Southeast'),
+    ('NC','Southeast'),('AL','Southeast'),('MS','Southeast'),('LA','Southeast'),
+    ('NY','Northeast'),('NJ','Northeast'),('PA','Northeast'),
+    ('MA','Northeast'),('CT','Northeast'),('RI','Northeast'),
+    ('NH','Northeast'),('ME','Northeast'),('VT','Northeast'),
+    ('VA','Northeast'),('MD','Northeast'),('DC','Northeast'),('DE','Northeast')
+AS T(STATE, REGION);
 
 
 /* ############################################################################
-   SECTION 2  -  CLASSIFICATION AUDIT
+   PART B  -  FINISH QUERIES  (light reads, screenshot each)
    ############################################################################ */
 
-/* Q2A. The full CLASS_HYBRID by CLASS_FINAL matrix. Shows exactly how each raw
-   match type rolls into the final ATC / non-ATC decision, including name fallback
-   splitting into ATC (<=2 states) and Non-ATC: System sweep (>2 states). */
-SELECT CLASS_HYBRID, CLASS_FINAL, COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-GROUP BY 1, 2
-ORDER BY 3 DESC;
 
-
-/* Q2B. Name-fallback footprint audit. Every parent accepted (or swept) by the
-   name match, how many states it spans, and where the two-state guard drew the
-   line. This is the softest half of the ATC number, so eyeball it. */
-SELECT
-    HCO_PARENT_NAME,
-    PARENT_STATES,
-    MAX(CLASS_FINAL)             AS CLASS_FINAL,
-    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-WHERE CLASS_HYBRID = 'ATC: name fallback'
-GROUP BY 1, 2
-ORDER BY PATIENTS DESC;
-
-
-/* Q2C. Needs Review - names close to an authorized parent but not a clean match.
-   Kept out of ATC on purpose. Small list to eyeball for anything misfiled. */
-SELECT HCO_PARENT_NAME, COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-WHERE CLASS_FINAL = 'Needs Review'
-GROUP BY 1
-ORDER BY 2 DESC;
-
-
-/* ############################################################################
-   SECTION 3  -  ROSTER CORRECTION
-   ############################################################################ */
-
-/* Q3A. The four roster-gap orgs. Every row must read CLASS_FINAL = ATC. If any
-   shows non-ATC, the correction did not land in Step 1. */
+/* Q3A. Build sanity. The four roster orgs must every one read CLASS_FINAL = ATC.
+   If any shows non-ATC, the build broke - stop and tell me before the rest. */
 SELECT
     CASE
         WHEN UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%' THEN 'City of Hope'
@@ -115,28 +276,8 @@ GROUP BY 1, 2
 ORDER BY PATIENTS DESC;
 
 
-/* Q3B. The mirror check. Must return ZERO rows - none of the four can still be
-   sitting in a non-ATC bucket (which would leak them onto slides 7 and 8). */
-SELECT HCO_PARENT_NAME, CLASS_FINAL, COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-WHERE CLASS_FINAL <> 'ATC'
-  AND (UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%'
-    OR UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
-    OR UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%WEXNER%'
-    OR UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%HOAG%')
-GROUP BY 1, 2;
-
-
-/* ############################################################################
-   SECTION 4  -  ALIGNMENT EFFECTS
-   CHECK D and the slide 4 boxes, plus every other slide number that moved once
-   Steps 2 and 3 picked up the name fallback (year trend, claims strip, timing).
-   ############################################################################ */
-
-/* Q4A. CHECK D. With Steps 2 and 3 aligned, ATC_IN_JOURNEY should land near the
-   7,501 headline (about 7,638, slightly higher - a patient is flagged ATC on any
-   claim at a name-fallback site, the headline uses the primary site). Before the
-   alignment this was about 3,924. */
+/* Q4A. CHECK D. ATC_IN_JOURNEY should now sit near the 7,501 headline (about
+   7,638), not the old 3,924. Confirms Steps 2 and 3 are aligned. */
 WITH headline AS (
     SELECT COUNT(DISTINCT D_PATIENT_ID) AS ATC_HEADLINE
     FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL WHERE CLASS_FINAL = 'ATC'
@@ -182,33 +323,8 @@ GROUP BY 1, 2
 ORDER BY 3 DESC;
 
 
-/* Q4C. Start site by overall classification. Audit only - this is the cross that
-   the old slide 4 "3,701 moved to ATC" number came from. It is a first-site vs
-   classified cross, not a trajectory, which is why it is not the slide 4 story. */
-WITH ranked AS (
-    SELECT D_PATIENT_ID, IS_ATC_HCO,
-        ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID
-                           ORDER BY DATE_OF_SERVICE ASC, D_PRIMARY_HCO_COMPILE_ID) AS RN
-    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
-),
-first_claim AS (
-    SELECT D_PATIENT_ID, MAX(CASE WHEN RN = 1 THEN IS_ATC_HCO END) AS FIRST_ATC
-    FROM ranked GROUP BY 1
-)
-SELECT
-    CASE WHEN fc.FIRST_ATC = 1 THEN 'Started at an ATC' ELSE 'Started non-ATC' END AS FIRST_SITE,
-    CASE WHEN c.CLASS_FINAL = 'ATC' THEN 'Classified ATC' ELSE 'Classified non-ATC' END AS CLASSIFIED_AS,
-    COUNT(*) AS PATIENTS,
-    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT
-FROM first_claim fc
-JOIN COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL c ON fc.D_PATIENT_ID = c.D_PATIENT_ID
-GROUP BY 1, 2
-ORDER BY 3 DESC;
-
-
-/* Q4D. Year trend, aligned (slide 3 "rose from X% to Y%" bullet). ATC share by the
-   year each patient began treatment. Reads the year table, which is now aligned,
-   so read the new first-year and last-year percents off ATC_SHARE_PCT. */
+/* Q4D. Year trend, aligned (slide 3 "rose from X% to Y%" bullet). Read the first
+   and last year off ATC_SHARE_PCT. */
 WITH first_year AS (
     SELECT D_PATIENT_ID, MIN(TX_YEAR) AS FIRST_TX_YEAR
     FROM COMPILE_DEV.PUBLIC.ATC_PATIENT_HCO_YEAR
@@ -230,8 +346,7 @@ GROUP BY 1
 ORDER BY 1;
 
 
-/* Q4E. Claims per patient, aligned (slide 4 strip "X vs Y claims per patient").
-   Reads the journey, now aligned, so this replaces the old narrow number. */
+/* Q4E. Claims per patient, aligned (slide 4 strip "X vs Y claims per patient"). */
 WITH ranked AS (
     SELECT D_PATIENT_ID, IS_ATC_HCO,
         ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID
@@ -254,7 +369,7 @@ ORDER BY 2 DESC;
 
 
 /* Q4F. Diagnosis-to-first-treatment timing, aligned (appendix "about a 40-day
-   median" line). Splits by the journey ATC flag, now aligned. */
+   median" line). */
 WITH first_tx AS (
     SELECT D_PATIENT_ID, IS_ATC_HCO,
         DATEDIFF('day', FIRST_DX_DATE, DATE_OF_SERVICE) AS DAYS_DX_TO_TX,
@@ -270,68 +385,5 @@ SELECT
 FROM first_tx
 WHERE RN = 1
   AND DAYS_DX_TO_TX >= 0
-GROUP BY 1
-ORDER BY 2 DESC;
-
-
-/* ############################################################################
-   SECTION 5  -  DATA QUALITY
-   ############################################################################ */
-
-/* Q5A. State coverage. How many patients have no state, or a state not mapped to a
-   region (those drop out of slides 5 and 6). Confirms the Unmapped footnote count. */
-SELECT
-    CASE
-        WHEN a.PRIMARY_HCO_NPI_STATE IS NULL THEN 'null state'
-        WHEN r.STATE IS NULL                 THEN 'state not mapped to a region'
-        ELSE 'mapped'
-    END                          AS STATE_STATUS,
-    COUNT(DISTINCT a.D_PATIENT_ID) AS PATIENTS
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
-LEFT JOIN COMPILE_DEV.PUBLIC.STATE_REGION_MAP r ON a.PRIMARY_HCO_NPI_STATE = r.STATE
-GROUP BY 1
-ORDER BY 2 DESC;
-
-
-/* Q5B. Drug mix and ATC share by drug. */
-SELECT
-    DRUG,
-    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
-    COUNT(DISTINCT CASE WHEN IS_ATC_HCO = 1 THEN D_PATIENT_ID END) AS ATC_PATIENTS,
-    ROUND(100.0 * COUNT(DISTINCT CASE WHEN IS_ATC_HCO = 1 THEN D_PATIENT_ID END)
-          / NULLIF(COUNT(DISTINCT D_PATIENT_ID), 0), 1) AS PCT_ATC
-FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
-WHERE DRUG <> 'Other'
-GROUP BY 1
-ORDER BY 2 DESC;
-
-
-/* Q5C. Community-network share of non-ATC volume. */
-SELECT
-    COALESCE(HCO_COMMUNITY_NETWORK, 'Independent / Other') AS NETWORK,
-    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
-    ROUND(100.0 * COUNT(DISTINCT D_PATIENT_ID)
-          / SUM(COUNT(DISTINCT D_PATIENT_ID)) OVER (), 1) AS PCT_OF_NON_ATC
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-WHERE CLASS_FINAL LIKE 'Non-ATC%'
-GROUP BY 1
-ORDER BY 2 DESC;
-
-
-/* ############################################################################
-   SECTION 6  -  NEW-ATC READINESS (future use)
-   ############################################################################ */
-
-/* Q6. Before adding a new ATC to the roster, set the pattern below to its parent
-   name and run this to see how many patients it would pull in and which bucket
-   they sit in today. Run it once per new account. Change only the SET line. */
-SET new_atc_pattern = '%YOUR NEW ATC PARENT NAME%';
-
-SELECT
-    CLASS_FINAL,
-    COUNT(DISTINCT D_PATIENT_ID)          AS PATIENTS,
-    COUNT(DISTINCT PRIMARY_HCO_NPI_STATE) AS STATES
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-WHERE UPPER(TRIM(HCO_PARENT_NAME)) LIKE UPPER($new_atc_pattern)
 GROUP BY 1
 ORDER BY 2 DESC;
