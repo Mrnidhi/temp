@@ -53,6 +53,14 @@
        tables, every output below reads CLASS_FINAL / IS_ATC_HCO directly - there
        is no second, on-read correction anywhere in this file. Delete the four
        patterns in all three steps once the source roster carries these accounts.
+
+   JOURNEY ALIGNMENT (applied 2026-07-21, Steps 2 and 3)
+       Steps 2 and 3 now also carry the name-fallback branch, pulled from the
+       finished Step 1 table, so the journey and year-trend views use the SAME ATC
+       definition as the slide 3 headline. Before this, slide 4 sat on a narrower
+       definition (NPI + roster only) and told a false migration story. The honest
+       reading is retention, not migration: patients rarely switch networks once
+       treatment begins. See B4A and the CHECK D reconciliation in C2.
    ============================================================================ */
 
 
@@ -149,6 +157,16 @@ WITH auth_npi AS (
       AND "NPI" IS NOT NULL
       AND TRIM("NPI") NOT IN ('0', '', 'NPI')
 ),
+name_fallback_parents AS (
+    -- Parents Step 1 accepted as ATC on a name match (authorized parent in two
+    -- states or fewer). Read from the finished Step 1 table so the two-state guard
+    -- is already applied. Added so the trend uses the same ATC definition as the
+    -- slide 3 headline. Keep in sync with Step 3.
+    SELECT DISTINCT UPPER(TRIM(HCO_PARENT_NAME)) AS PARENT
+    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+    WHERE CLASS_HYBRID = 'ATC: name fallback'
+      AND CLASS_FINAL  = 'ATC'
+),
 diagnosed AS (
     SELECT DISTINCT D_PATIENT_ID
     FROM COMPILE_CLAIMS.OPEN_CLAIMS.IOV2501_MEDICAL_CLAIMS
@@ -182,6 +200,8 @@ SELECT
               OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
               OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%WEXNER%'
               OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%HOAG%' THEN 1
+            WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) IN
+                 (SELECT PARENT FROM name_fallback_parents) THEN 1
             ELSE 0
         END) AS IS_ATC_HCO,
     COUNT(*) AS CLAIMS
@@ -200,6 +220,13 @@ WITH auth_npi AS (
     WHERE UPPER(TRIM("Status")) = 'AUTHORIZED'
       AND "NPI" IS NOT NULL
       AND TRIM("NPI") NOT IN ('0', '', 'NPI')
+),
+name_fallback_parents AS (
+    -- Same set as Step 2. Keeps the journey ATC flag aligned with the headline.
+    SELECT DISTINCT UPPER(TRIM(HCO_PARENT_NAME)) AS PARENT
+    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+    WHERE CLASS_HYBRID = 'ATC: name fallback'
+      AND CLASS_FINAL  = 'ATC'
 ),
 diagnosed AS (
     SELECT D_PATIENT_ID, MIN(DATE_OF_SERVICE) AS FIRST_DX_DATE
@@ -245,6 +272,8 @@ SELECT
           OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
           OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%WEXNER%'
           OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%HOAG%' THEN 1
+        WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) IN
+             (SELECT PARENT FROM name_fallback_parents) THEN 1
         ELSE 0
     END AS IS_ATC_HCO
 FROM treated t
@@ -359,9 +388,16 @@ ORDER BY 1;
 
 
 /* ---------------------------------------------------------------------------
-   B4A. SLIDE 4, the patient journey. The four boxes, first treatment site by
-   last treatment site. The four PATIENTS values must sum to the journey
-   population and the four PCT values to 100.
+   B4A. SLIDE 4, the patient journey. First treatment site by last treatment
+   site, on the aligned ATC definition (name fallback now in Step 3, so this
+   matches the slide 3 headline). Expect about:
+       Started non-ATC, stayed non-ATC   8,775 (53.5%)
+       Started ATC, stayed ATC           7,482 (45.6%)
+       Started non-ATC, moved to ATC        99 (0.6%)
+       Started ATC, left                    48 (0.3%)
+   The story is retention, not migration: patients rarely switch networks once
+   treatment begins, so ATC share is set at first treatment. Do NOT say ATCs gain
+   patients over the course of care - only about 99 do.
    --------------------------------------------------------------------------- */
 WITH ranked AS (
     SELECT
@@ -698,12 +734,12 @@ ORDER BY 2 DESC;
 
 /* ---------------------------------------------------------------------------
    C2. CHECK D, headline versus journey reconciliation.
-   Step 1 counts a patient as ATC on NPI, the four roster patterns, OR a name
-   fallback for authorized parents in two states or fewer. Steps 2 and 3 (journey
-   and year trend) do NOT have the name-fallback branch. So the journey can sit on
-   a slightly narrower ATC definition than the slide 3 headline. This sizes the
-   gap: if NAME_FALLBACK_ONLY is small, leave it; if large, slide 4 and slide 3
-   disagree in a way a careful reader could catch.
+   Steps 2 and 3 now carry the same name-fallback branch as Step 1, so the journey
+   uses the SAME ATC definition as the slide 3 headline. This confirms it:
+   ATC_IN_JOURNEY should now land near the 7,501 headline (about 7,638, a touch
+   higher because the journey flags a patient ATC on any claim at a name-fallback
+   site while the headline uses the primary site), so DIFFERENCE goes slightly
+   negative. Before the alignment ATC_IN_JOURNEY was only about 3,924.
    --------------------------------------------------------------------------- */
 WITH headline AS (
     SELECT COUNT(DISTINCT D_PATIENT_ID) AS ATC_HEADLINE
