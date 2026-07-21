@@ -136,26 +136,36 @@ treated AS (
       AND DATE_OF_SERVICE <  DATE '2026-01-01'
       AND (D_NDC_CODE IN ('00003232711', '00003232822', '00003712511')
            OR D_PROCEDURE_CODE IN ('J9228', 'J9298'))
-)
-SELECT
-    t.D_PATIENT_ID,
-    t.TX_YEAR,
-    t.D_PRIMARY_HCO_COMPILE_ID,
-    -- Roster gap correction plus name fallback. Keep in sync with Steps 1 and 3.
-    MAX(CASE
+),
+flagged AS (
+    -- Flag each claim at the row level. Name fallback is matched by a join, NOT a
+    -- subquery inside the later aggregate - Snowflake cannot evaluate a subquery
+    -- inside an aggregate function.
+    SELECT
+        t.D_PATIENT_ID,
+        t.TX_YEAR,
+        t.D_PRIMARY_HCO_COMPILE_ID,
+        CASE
             WHEN n.NPI IS NOT NULL THEN 1
             WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%'
               OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
               OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%WEXNER%'
               OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%HOAG%' THEN 1
-            WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) IN
-                 (SELECT PARENT FROM name_fallback_parents) THEN 1
+            WHEN nf.PARENT IS NOT NULL THEN 1
             ELSE 0
-        END) AS IS_ATC_HCO,
-    COUNT(*) AS CLAIMS
-FROM treated t
-INNER JOIN diagnosed d ON t.D_PATIENT_ID = d.D_PATIENT_ID
-LEFT JOIN auth_npi   n ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI
+        END AS IS_ATC_CLAIM
+    FROM treated t
+    INNER JOIN diagnosed d ON t.D_PATIENT_ID = d.D_PATIENT_ID
+    LEFT JOIN auth_npi n ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI
+    LEFT JOIN name_fallback_parents nf ON UPPER(TRIM(t.HCO_PARENT_NAME)) = nf.PARENT
+)
+SELECT
+    D_PATIENT_ID,
+    TX_YEAR,
+    D_PRIMARY_HCO_COMPILE_ID,
+    MAX(IS_ATC_CLAIM) AS IS_ATC_HCO,
+    COUNT(*)          AS CLAIMS
+FROM flagged
 GROUP BY 1, 2, 3;
 
 
