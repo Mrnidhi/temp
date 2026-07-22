@@ -1,65 +1,45 @@
-You are editing the open PowerPoint deck (the Site of Care / ATC vs Non-ATC analysis).
-Make ONLY the changes listed below, slide by slide. Keep all existing fonts, colors,
-layout, and house style. Do not add accent stripes or restyle anything. Do not touch any
-slide or element not mentioned. Use plain text: no em-dashes, no arrows or math symbols.
+Build an Excel workbook: "ATC Site of Care — Patient Counts.xlsx" for a CEO request (row per ATC with patient counts, an opportunity view, and a methodology summary). Use openpyxl, Arial font throughout, and after building, recalculate the formulas. This is the real deliverable — no "SAMPLE" labels, and use the full query output (every row), not a subset.
 
-SLIDE 3 (Market structure)
-- Ensure the table reads exactly:
-  ATC 7,501 (46.2%) | Non-ATC Hospital 7,183 (44.2%) | Non-ATC Community network 1,317
-  (8.1%) | Non-ATC Other 245 (1.5%) | Total 16,246 (100%).
-- Headline bullet: about 54% of patients are treated outside the ATC Network, 46% inside.
-- Trend bullet: change it to read "The network's share rose from about 43% in 2021 to
-  about 52% in 2025." Remove any older "19% to 24%" or "to 50%" wording.
+Step 1 — run these three Snowflake queries (the base tables already exist):
 
-SLIDE 4 (Patient journey)
-- Change the title to: "Patients rarely switch networks once treatment begins."
-- The four boxes must read:
-  Started non-ATC, stayed non-ATC = 8,775 (53.5%)
-  Started ATC, stayed ATC = 7,482 (45.6%)
-  Started non-ATC, moved to ATC = 99 (0.6%)
-  Started ATC, left to non-ATC = 48 (0.3%)
-- One-line read: "Where a patient starts is where they stay. The network keeps about 99%
-  of who it starts with; almost nobody crosses either way, 99 in and 48 out."
-- Remove any "migration" or "moved to ATC" framing in the title or body.
-- DELETE the "claims per patient" stat/strip for now (do not show 6.9 vs 6.0). It is
-  pending a definition check. Leave the space or a note "claims per patient: pending".
+-- Q_SUMMARY : site-of-care split (must tie to the deck: ATC 7,501 / Hospital 7,100 / Community 1,317 / Other 328 / total 16,246)
+WITH bucketed AS (
+  SELECT D_PATIENT_ID,
+    CASE WHEN CLASS_FINAL = 'ATC' THEN 'ATC Network'
+         WHEN CLASS_FINAL = 'Non-ATC: Community Network' THEN 'Non-ATC: Community network'
+         WHEN CLASS_FINAL IN ('Non-ATC: Unknown','Needs Review') THEN 'Non-ATC: Other'
+         ELSE 'Non-ATC: Hospital' END AS SITE_OF_CARE
+  FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+)
+SELECT SITE_OF_CARE, COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS
+FROM bucketed GROUP BY 1 ORDER BY PATIENTS DESC;
 
-SLIDE 5 (Regional penetration)
-- Table:
-  Northeast 2,102 treated / 1,753 untapped / 55%
-  West 2,012 / 2,006 / 50%
-  Southeast 1,604 / 1,602 / 50%
-  Great Lakes 852 / 1,261 / 40%
-  Ohio Valley 665 / 1,238 / 35%
-  Central 266 / 751 / 26%
-- Footnote: "Unmapped geography excluded: 134 patients."
+-- Q_ATC : one row per ATC parent account (this is the core deliverable). Sum of PATIENTS ~ 7,501.
+SELECT HCO_PARENT_NAME AS ATC_ACCOUNT,
+       COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS,
+       COUNT(DISTINCT PRIMARY_HCO_NPI_STATE) AS STATES,
+       CASE WHEN COUNT_IF(CLASS_HYBRID = 'ATC: NPI confirmed') > 0 THEN 'NPI-confirmed'
+            WHEN COUNT_IF(CLASS_HYBRID = 'ATC: roster gap corrected') > 0 THEN 'Roster-confirmed'
+            ELSE 'Name-matched' END AS MATCH_BASIS
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+WHERE CLASS_FINAL = 'ATC'
+GROUP BY 1 ORDER BY PATIENTS DESC;
 
-SLIDE 6 (State scatter)
-- Keep the priority callout: Michigan 12%, Indiana 1%, Virginia 2% (high volume, low
-  penetration). Update the plotted/labeled points to: California about 49%, Florida
-  about 62%, Ohio about 55%, Texas about 33%, Alabama about 25%.
+-- Q_UNTAPPED : largest non-ATC accounts by region. Sum of PATIENTS ~ 8,745.
+SELECT COALESCE(NULLIF(TRIM(a.HCO_PARENT_NAME),''),'Unknown / unmapped') AS ACCOUNT,
+       r.REGION,
+       COUNT(DISTINCT a.D_PATIENT_ID) AS PATIENTS
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL a
+LEFT JOIN COMPILE_DEV.PUBLIC.STATE_REGION_MAP r ON a.PRIMARY_HCO_NPI_STATE = r.STATE
+WHERE a.CLASS_FINAL <> 'ATC'
+GROUP BY 1, 2 ORDER BY PATIENTS DESC;
+Step 2 — build the workbook, 4 tabs:
 
-SLIDE 7 (Non-ATC accounts by region)
-- Delete every dagger symbol and its footnote.
-- West: Sutter 186, CommonSpirit 76, Northwest Medical 65.
-- Northeast: Dartmouth 189, University of Virginia 138, Hartford 109.
-- Leave Southeast, Ohio Valley, Great Lakes, Central as they are.
+Summary — columns: Site of Care | Patients | % of total. Rows from Q_SUMMARY (ATC Network, Non-ATC: Hospital, Non-ATC: Community network, Non-ATC: Other) + a Total row using =SUM(). The % column is a formula (=Patients/Total), formatted 0.0%. Add a source line: "McKesson (Compile) medical claims, 2021–2025."
+ATC accounts — columns: ATC Account (Parent) | Patients | States | Match basis | % of ATC. All rows from Q_ATC, sorted by Patients desc. "% of ATC" is a formula = Patients / the ATC total on the Summary tab, formatted 0.0%. Add a Total row (=SUM).
+Untapped opportunity — columns: Non-ATC Account (Parent) | Region | Patients | % of non-ATC. All rows from Q_UNTAPPED. "% of non-ATC" = Patients / non-ATC total (Hospital+Community+Other from Summary), formatted 0.0%.
+Methodology & sources — a two-column label/value sheet with: Data source (McKesson Compile claims, IOV2501_MEDICAL_CLAIMS); Time window (2021–2025); Population (metastatic melanoma on Yervoy or Opdualag); Total patients (16,246); ATC definition (site rolls up to an authorized ATC parent — matched by NPI, the roster, or HCO parent name where NPI is missing; includes satellites); Patient assignment (counted once, at the site with the most treatment claims); ATC share (~46%; a large share rests on name-matching — no fully updated ATC roster with NPIs yet — so counts flagged "Name-matched" are close estimates; the NPI/roster-confirmed floor is materially lower); Correction (Jul 2026: City of Hope, NYU Langone, Ohio State Wexner, Hoag reconciled into ATC). Paste the three queries above at the bottom as documentation.
+Formatting: navy bold titles, green header row with white text, #,##0 for patient counts, 0.0% for percentages, thin borders on tables, gridlines off, sensible column widths. Only use Excel-2007-safe functions (SUM, division) — no XLOOKUP/UNIQUE/etc.
 
-SLIDE 8 (Non-ATC accounts by state)
-- Delete every dagger symbol and its footnote.
-- Remove New York from the state set and add Texas.
-- California: Sutter 186, Loma Linda 57, SF Oncology 51.
-- Leave Florida, Michigan, Ohio, Indiana as they are.
+Verify: sum of Q_ATC ≈ 7,501 and ties to the Summary ATC row; sum of Q_UNTAPPED ≈ 8,745; grand total 16,246. Flag if anything doesn't reconcile.
 
-SLIDE 9 (Appendix)
-- Satellite split: about 57% of ATC patients are at satellite sites, 43% NPI-confirmed.
-- Year trend: about 43% to 52%, 2021 to 2025.
-- Time to treatment: median about 40 days (38 non-ATC, 42 ATC).
-- DELETE the claims intensity 6.9 vs 6.0 line (pending, same as slide 4).
-
-SLIDE 2 (Methodology)
-- Add one line: "ATC is defined at the parent level (satellites count as ATC), matched on
-  provider NPI first, then parent name. NPI-confirmed floor is about 20%; the parent-level
-  definition used here is about 46%."
-
-After making the edits, list back every change you made per slide so I can confirm.
