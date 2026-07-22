@@ -1,94 +1,162 @@
-/* ==========================================================================
-   STEP 1 - REBUILD ATC_CLASSIFIED_FINAL WITH THE ROSTER GAP CORRECTION
-   Paste this whole file into Snowflake and run it. Then run the post-checks in
-   "Verify roster gap correction.sql".
+/* ============================================================================
+   PATIENT FLOW - Site of Care. Where patients start vs where they end up.
 
-   This is Step 1 of git/NewCode.sql with the roster_gap_parent correction added.
-   It REPLACES the existing ATC_CLASSIFIED_FINAL table (same as the original
-   pipeline does), so everything downstream reads the corrected classification.
+   WHAT THIS IS
+       The honest version of slide 4. One row per patient: the site type of their
+       FIRST treatment claim vs their LAST treatment claim. That is a real journey
+       (movement over time), not an overall bucket label. This is what "3,701"
+       was pretending to be - the true number of patients who start outside and
+       end inside the ATC network is about 99.
 
-   Nothing else in NewCode.sql changes.
-   ========================================================================== */
+   HOW TO RUN
+       Needs the MASTER base tables (ATC_TREATMENT_CLAIMS). Read-only, creates
+       nothing. Run FLOW-1 first; it reproduces the corrected slide 4 boxes.
 
-SET fallback_state_limit = 2;
+   BUCKETS
+       2-bucket  = ATC vs non-ATC          (rock solid, FLOW-1 / FLOW-2 / FLOW-4)
+       4-bucket  = ATC / Hospital / Community / Other  (FLOW-3 / FLOW-5, see note)
 
-CREATE OR REPLACE TRANSIENT TABLE COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL AS
-WITH auth_npi AS (
-    SELECT DISTINCT TRIM("NPI") AS NPI
-    FROM COMPILE_DEV.PUBLIC.CTAM_ATC_ALIGNMENT_2026
-    WHERE UPPER(TRIM("Status")) = 'AUTHORIZED'
-      AND "NPI" IS NOT NULL
-      AND TRIM("NPI") NOT IN ('0', '', 'NPI')
+   SNOWFLAKE NOTES
+       Aliases dodge reserved words (no ROWS / ROW / SOURCE / TARGET). The PCT
+       column uses SUM(COUNT(*)) OVER () after GROUP BY - same window-over-aggregate
+       pattern already proven in the MASTER and TEST files. Runs top to bottom.
+   ============================================================================ */
+
+
+/* ############################################################################
+   FLOW-1  -  First site vs last site, ATC vs non-ATC  (the corrected slide 4)
+   Expect 8,775 / 7,482 / 99 / 48. "Movement" spells out stay vs switch.
+   ############################################################################ */
+WITH ranked AS (
+    SELECT D_PATIENT_ID, IS_ATC_HCO,
+        ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID
+                           ORDER BY DATE_OF_SERVICE ASC,  D_PRIMARY_HCO_COMPILE_ID) AS RN_FIRST,
+        ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID
+                           ORDER BY DATE_OF_SERVICE DESC, D_PRIMARY_HCO_COMPILE_ID) AS RN_LAST
+    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
 ),
-auth_parent AS (
-    SELECT DISTINCT UPPER(TRIM("ATC HCO Parent Name (McKesson Claims)")) AS PARENT
-    FROM COMPILE_DEV.PUBLIC.CTAM_ATC_ALIGNMENT_2026
-    WHERE UPPER(TRIM("Status")) = 'AUTHORIZED'
-      AND "ATC HCO Parent Name (McKesson Claims)" IS NOT NULL
-      AND TRIM("ATC HCO Parent Name (McKesson Claims)") NOT IN ('', 'null')
-),
--- Roster gap correction (2026-07-16).
--- These four organisations are missing from CTAM_ATC_ALIGNMENT_2026, so their
--- patients scored Non-ATC. Each confirmed against Infinity's authoritative ATC
--- master (file_Veeva_Komodo_ATC_Mapping, 93 accounts).
--- They bypass the fallback_state_limit guard deliberately: confirmed authorized,
--- not inferred from a fuzzy name match.
--- Retire this CTE once the source roster itself is fixed.
-roster_gap_parent AS (
-    SELECT PARENT FROM VALUES
-        ('CITY OF HOPE'),
-        ('NYU LANGONE HEALTH SYSTEM'),
-        ('THE OHIO STATE UNIVERSITY WEXNER MEDICAL CENTER'),
-        ('HOAG HOSPITAL NEWPORT BEACH')
-    AS t(PARENT)
-),
-classified AS (
-    SELECT
-        p.*,
-        CASE
-            WHEN p.HCO_COMMUNITY_NETWORK IN (
-                    'THE US ONCOLOGY NETWORK',
-                    'ONE ONCOLOGY',
-                    'AMERICAN ONCOLOGY NETWORK')
-                THEN 'Non-ATC: Community Network'
-            WHEN n.NPI IS NOT NULL
-                THEN 'ATC: NPI confirmed'
-            WHEN rg.PARENT IS NOT NULL
-                THEN 'ATC: roster gap corrected'
-            WHEN ap.PARENT IS NOT NULL
-                THEN 'ATC: name fallback'
-            WHEN EXISTS (
-                    SELECT 1 FROM auth_parent x
-                    WHERE UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%' || x.PARENT || '%'
-                       OR x.PARENT LIKE '%' || UPPER(TRIM(p.HCO_PARENT_NAME)) || '%')
-                THEN 'Needs Review'
-            WHEN p.HCO_PARENT_NAME IS NULL
-                THEN 'Non-ATC: Unknown'
-            ELSE 'Non-ATC'
-        END AS CLASS_HYBRID
-    FROM COMPILE_DEV.PUBLIC.ATC_SOC_PATIENT_CLASSIFIED_2021_2025 p
-    LEFT JOIN auth_npi    n  ON TRIM(p.D_PRIMARY_HCO_NPI) = n.NPI
-    LEFT JOIN auth_parent ap ON UPPER(TRIM(p.HCO_PARENT_NAME)) = ap.PARENT
-    LEFT JOIN roster_gap_parent rg ON UPPER(TRIM(p.HCO_PARENT_NAME)) = rg.PARENT
-),
-fallback_footprint AS (
-    SELECT HCO_PARENT_NAME,
-           COUNT(DISTINCT PRIMARY_HCO_NPI_STATE) AS PARENT_STATES
-    FROM classified
-    WHERE CLASS_HYBRID = 'ATC: name fallback'
-    GROUP BY 1
+first_last AS (
+    SELECT D_PATIENT_ID,
+        MAX(CASE WHEN RN_FIRST = 1 THEN IS_ATC_HCO END) AS FIRST_ATC,
+        MAX(CASE WHEN RN_LAST  = 1 THEN IS_ATC_HCO END) AS LAST_ATC
+    FROM ranked GROUP BY 1
 )
 SELECT
-    c.*,
-    f.PARENT_STATES,
+    CASE WHEN FIRST_ATC = 1 THEN 'Started at an ATC' ELSE 'Started non-ATC' END AS FIRST_SITE,
+    CASE WHEN LAST_ATC  = 1 THEN 'Ended at an ATC'   ELSE 'Ended non-ATC'   END AS LAST_SITE,
     CASE
-        WHEN c.CLASS_HYBRID = 'ATC: NPI confirmed'                                              THEN 'ATC'
-        WHEN c.CLASS_HYBRID = 'ATC: roster gap corrected'                                       THEN 'ATC'
-        WHEN c.CLASS_HYBRID = 'ATC: name fallback' AND f.PARENT_STATES <= $fallback_state_limit THEN 'ATC'
-        WHEN c.CLASS_HYBRID = 'ATC: name fallback' AND f.PARENT_STATES >  $fallback_state_limit THEN 'Non-ATC: System sweep'
-        WHEN c.CLASS_HYBRID = 'Needs Review'                                                    THEN 'Needs Review'
-        ELSE c.CLASS_HYBRID
-    END AS CLASS_FINAL
-FROM classified c
-LEFT JOIN fallback_footprint f
-    ON c.HCO_PARENT_NAME = f.HCO_PARENT_NAME;
+        WHEN FIRST_ATC = 1 AND LAST_ATC = 1 THEN 'Stayed ATC'
+        WHEN FIRST_ATC = 0 AND LAST_ATC = 0 THEN 'Stayed non-ATC'
+        WHEN FIRST_ATC = 0 AND LAST_ATC = 1 THEN 'Moved INTO ATC'
+        ELSE                                     'Moved OUT to non-ATC'
+    END                                                AS MOVEMENT,
+    COUNT(*)                                           AS PATIENTS,
+    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT
+FROM first_last
+GROUP BY 1, 2, 3
+ORDER BY PATIENTS DESC;
+
+
+/* ############################################################################
+   FLOW-2  -  One-line version: stayers vs movers.
+   The headline: ~99% of patients never switch networks.
+   ############################################################################ */
+WITH ranked AS (
+    SELECT D_PATIENT_ID, IS_ATC_HCO,
+        ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID ORDER BY DATE_OF_SERVICE ASC,  D_PRIMARY_HCO_COMPILE_ID) AS RN_FIRST,
+        ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID ORDER BY DATE_OF_SERVICE DESC, D_PRIMARY_HCO_COMPILE_ID) AS RN_LAST
+    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
+),
+first_last AS (
+    SELECT D_PATIENT_ID,
+        MAX(CASE WHEN RN_FIRST = 1 THEN IS_ATC_HCO END) AS FIRST_ATC,
+        MAX(CASE WHEN RN_LAST  = 1 THEN IS_ATC_HCO END) AS LAST_ATC
+    FROM ranked GROUP BY 1
+)
+SELECT
+    CASE
+        WHEN FIRST_ATC = LAST_ATC       THEN 'Stayed put (never switched)'
+        WHEN FIRST_ATC = 0 AND LAST_ATC = 1 THEN 'Moved INTO ATC'
+        ELSE                                 'Moved OUT to non-ATC'
+    END                                                AS MOVEMENT,
+    COUNT(*)                                           AS PATIENTS,
+    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT
+FROM first_last
+GROUP BY 1
+ORDER BY PATIENTS DESC;
+
+
+/* ############################################################################
+   FLOW-3  -  First site vs last site, 4 buckets (ATC / Hospital / Community / Other)
+   Same idea as FLOW-1, one level deeper: does a community-network patient ever
+   graduate into an ATC, is Hospital the sticky one, etc.
+
+   ASSUMPTION - claim-level site sub-type. IS_ATC_HCO is confirmed on the claims
+   table. HCO_COMMUNITY_NETWORK and HCO_PARENT_NAME are assumed to sit on it too
+   (they exist on ATC_CLASSIFIED_FINAL). If the claims table does NOT carry them,
+   join a site/HCO dimension on D_PRIMARY_HCO_COMPILE_ID and build SITE_BUCKET
+   from that. Confirm the three column names, then this runs as-is.
+   ############################################################################ */
+WITH claims AS (
+    SELECT
+        D_PATIENT_ID,
+        DATE_OF_SERVICE,
+        D_PRIMARY_HCO_COMPILE_ID,
+        CASE
+            WHEN IS_ATC_HCO = 1                    THEN 'ATC'
+            WHEN HCO_COMMUNITY_NETWORK IS NOT NULL THEN 'Non-ATC: Community'
+            WHEN HCO_PARENT_NAME       IS NOT NULL THEN 'Non-ATC: Hospital'
+            ELSE                                        'Non-ATC: Other'
+        END AS SITE_BUCKET
+    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
+),
+ranked AS (
+    SELECT D_PATIENT_ID, SITE_BUCKET,
+        ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID ORDER BY DATE_OF_SERVICE ASC,  D_PRIMARY_HCO_COMPILE_ID) AS RN_FIRST,
+        ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID ORDER BY DATE_OF_SERVICE DESC, D_PRIMARY_HCO_COMPILE_ID) AS RN_LAST
+    FROM claims
+),
+first_last AS (
+    SELECT D_PATIENT_ID,
+        MAX(CASE WHEN RN_FIRST = 1 THEN SITE_BUCKET END) AS FIRST_BUCKET,
+        MAX(CASE WHEN RN_LAST  = 1 THEN SITE_BUCKET END) AS LAST_BUCKET
+    FROM ranked GROUP BY 1
+)
+SELECT
+    FIRST_BUCKET,
+    LAST_BUCKET,
+    CASE WHEN FIRST_BUCKET = LAST_BUCKET THEN 'Stayed' ELSE 'Switched' END AS MOVEMENT,
+    COUNT(*)                                           AS PATIENTS,
+    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT
+FROM first_last
+GROUP BY 1, 2, 3
+ORDER BY PATIENTS DESC;
+
+
+/* ############################################################################
+   FLOW-4  -  Sankey edge list, 2-bucket. Paste FROM_SITE / TO_SITE / PATIENTS
+   straight into Flourish, Power BI, or plotly. Start and end nodes are named
+   distinctly so the diagram reads left (start) to right (end).
+   ############################################################################ */
+WITH ranked AS (
+    SELECT D_PATIENT_ID, IS_ATC_HCO,
+        ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID ORDER BY DATE_OF_SERVICE ASC,  D_PRIMARY_HCO_COMPILE_ID) AS RN_FIRST,
+        ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID ORDER BY DATE_OF_SERVICE DESC, D_PRIMARY_HCO_COMPILE_ID) AS RN_LAST
+    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
+),
+first_last AS (
+    SELECT D_PATIENT_ID,
+        MAX(CASE WHEN RN_FIRST = 1 THEN IS_ATC_HCO END) AS FIRST_ATC,
+        MAX(CASE WHEN RN_LAST  = 1 THEN IS_ATC_HCO END) AS LAST_ATC
+    FROM ranked GROUP BY 1
+)
+SELECT
+    CASE WHEN FIRST_ATC = 1 THEN 'Start: ATC' ELSE 'Start: non-ATC' END AS FROM_SITE,
+    CASE WHEN LAST_ATC  = 1 THEN 'End: ATC'   ELSE 'End: non-ATC'   END AS TO_SITE,
+    COUNT(*)                                                           AS PATIENTS
+FROM first_last
+GROUP BY 1, 2
+ORDER BY PATIENTS DESC;
+
+/* FLOW-5. Sankey edge list, 4-bucket: just take FIRST_BUCKET, LAST_BUCKET,
+   PATIENTS from FLOW-3 (drop MOVEMENT and PCT) and feed the same tool. */
