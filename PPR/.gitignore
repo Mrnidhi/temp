@@ -1,0 +1,14 @@
+# real Infinity data must NEVER be committed (keep only data/README.md)
+data/*
+!data/README.md
+# regenerable pipeline outputs (rebuild by running the pipeline)
+synthetic_data/out/
+analysis/
+dashboard/
+# tableau hyper process logs (keep the .hyper extracts, drop the logs)
+tableau/*.log
+# noise
+__pycache__/
+*.pyc
+.DS_Store
+~$*
