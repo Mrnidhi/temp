@@ -5,6 +5,8 @@ data/*
 synthetic_data/out/
 analysis/
 dashboard/
+tableau/*.hyper
+tableau/*.log
 # tableau hyper process logs (keep the .hyper extracts, drop the logs)
 tableau/*.log
 # noise
