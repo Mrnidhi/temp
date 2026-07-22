@@ -14,7 +14,7 @@
 
    BUCKETS
        2-bucket  = ATC vs non-ATC          (rock solid, FLOW-1 / FLOW-2 / FLOW-4)
-       4-bucket  = ATC / Hospital / Community / Other  (FLOW-3 / FLOW-5, see note)
+       4-bucket  = ATC / Hospital / Community / Other  (FLOW-3 / FLOW-5 - DISABLED, see note)
 
    PATHWAYS (the full journey, not just first vs last)
        FLOW-6  = the whole ordered path per patient  (non-ATC -> ATC -> non-ATC ...)
@@ -26,6 +26,13 @@
    day's claims are ATC, ties -> ATC), then keep only the switches. That turns a
    wall of repeat claims into a clean journey and stops same-day billing noise
    from looking like a trip.
+
+   TIES TO THE MASTER
+       FLOW-1 is the MASTER's B4A query (identical first-vs-last logic) with a
+       plain-English Movement column added - it reproduces 8,775 / 7,482 / 99 / 48.
+       The pathway queries (FLOW-6/7/8) collapse to one site per DAY first, so they
+       will not tie to B4A patient-for-patient (B4A is per first/last CLAIM). Ask
+       for the per-claim variant if you need exact reconciliation to B4A.
 
    SNOWFLAKE NOTES
        Aliases dodge reserved words (no ROWS / ROW / SOURCE / TARGET). The PCT
@@ -99,27 +106,29 @@ ORDER BY PATIENTS DESC;
 
 /* ############################################################################
    FLOW-3  -  First site vs last site, 4 buckets (ATC / Hospital / Community / Other)
-   Same idea as FLOW-1, one level deeper: does a community-network patient ever
-   graduate into an ATC, is Hospital the sticky one, etc.
+   *** DISABLED - needs a per-claim site sub-type the claims table does not have ***
 
-   ASSUMPTION - claim-level site sub-type. IS_ATC_HCO is confirmed on the claims
-   table. HCO_COMMUNITY_NETWORK and HCO_PARENT_NAME are assumed to sit on it too
-   (they exist on ATC_CLASSIFIED_FINAL). If the claims table does NOT carry them,
-   join a site/HCO dimension on D_PRIMARY_HCO_COMPILE_ID and build SITE_BUCKET
-   from that. Confirm the three column names, then this runs as-is.
+   The claims table (ATC_TREATMENT_CLAIMS) only carries IS_ATC_HCO, the plain
+   ATC vs non-ATC flag. Hospital / Community / Other is a per-SITE property set in
+   the MASTER build; it only lands at the patient's PRIMARY site (on
+   ATC_CLASSIFIED_FINAL), not on every claim. So a truthful per-claim 4-bucket
+   flow can't come from these two tables, and inventing a mapping here would risk
+   numbers that don't tie back to slide 3 (7,100 / 1,317 / 328).
+
+   TO ENABLE: expose the MASTER's site -> {ATC, Hospital, Community, Other} lookup
+   keyed by D_PRIMARY_HCO_COMPILE_ID (or NPI), join it below, and set SITE_BUCKET
+   from it. Send me that logic and I'll wire it. Until then the 2-bucket flows
+   (FLOW-1 / 2 / 4 / 6 / 7 / 8) tell the whole story and all run clean.
+
+   Template kept below, commented out so the file runs top to bottom:
    ############################################################################ */
+/*
 WITH claims AS (
     SELECT
-        D_PATIENT_ID,
-        DATE_OF_SERVICE,
-        D_PRIMARY_HCO_COMPILE_ID,
-        CASE
-            WHEN IS_ATC_HCO = 1                    THEN 'ATC'
-            WHEN HCO_COMMUNITY_NETWORK IS NOT NULL THEN 'Non-ATC: Community'
-            WHEN HCO_PARENT_NAME       IS NOT NULL THEN 'Non-ATC: Hospital'
-            ELSE                                        'Non-ATC: Other'
-        END AS SITE_BUCKET
-    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
+        c.D_PATIENT_ID, c.DATE_OF_SERVICE, c.D_PRIMARY_HCO_COMPILE_ID,
+        b.SITE_BUCKET                                   -- from your site-level lookup
+    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS c
+    LEFT JOIN <site_bucket_lookup> b ON b.HCO_ID = c.D_PRIMARY_HCO_COMPILE_ID
 ),
 ranked AS (
     SELECT D_PATIENT_ID, SITE_BUCKET,
@@ -134,14 +143,14 @@ first_last AS (
     FROM ranked GROUP BY 1
 )
 SELECT
-    FIRST_BUCKET,
-    LAST_BUCKET,
+    FIRST_BUCKET, LAST_BUCKET,
     CASE WHEN FIRST_BUCKET = LAST_BUCKET THEN 'Stayed' ELSE 'Switched' END AS MOVEMENT,
     COUNT(*)                                           AS PATIENTS,
     ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT
 FROM first_last
 GROUP BY 1, 2, 3
 ORDER BY PATIENTS DESC;
+*/
 
 
 /* ############################################################################
@@ -169,8 +178,8 @@ FROM first_last
 GROUP BY 1, 2
 ORDER BY PATIENTS DESC;
 
-/* FLOW-5. Sankey edge list, 4-bucket: just take FIRST_BUCKET, LAST_BUCKET,
-   PATIENTS from FLOW-3 (drop MOVEMENT and PCT) and feed the same tool. */
+/* FLOW-5. Sankey edge list, 4-bucket (needs FLOW-3 enabled first): take
+   FIRST_BUCKET, LAST_BUCKET, PATIENTS from FLOW-3 and feed the same tool. */
 
 
 /* ############################################################################
