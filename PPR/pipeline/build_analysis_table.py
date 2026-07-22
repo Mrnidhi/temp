@@ -15,13 +15,13 @@ import numpy as np
 import pandas as pd
 
 HERE = os.path.dirname(__file__)
-# Data folder is set once in pipeline/config.py (DATA_DIR). Everything imports from there.
-from config import DATA_DIR, ANALYSIS_DIR
-INPUT_DIR = DATA_DIR
-OUT_DIR = ANALYSIS_DIR
+# Data folder + data date are set once in pipeline/config.py. Everything imports from there.
+import config
+INPUT_DIR = config.DATA_DIR
+OUT_DIR = config.ANALYSIS_DIR
 os.makedirs(OUT_DIR, exist_ok=True)
 
-TODAY = pd.Timestamp("2026-07-21")
+TODAY = pd.Timestamp(config.AS_OF_DATE)  # set in config.py (default: today's date)
 HEADER_ROW = 2  # real files carry a title banner; true header is row index 2
 
 # metric 7: drop-outs following TTP "due to patient health" (health-specific reasons)
