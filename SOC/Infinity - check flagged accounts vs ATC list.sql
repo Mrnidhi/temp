@@ -12,7 +12,7 @@
    ============================================================================ */
 
 -- Q1: how big is the ATC universe (for context)
-SELECT COUNT(*) AS ROWS, COUNT(DISTINCT VEEVA_NAME) AS DISTINCT_ATC_ACCOUNTS
+SELECT COUNT(*) AS TOTAL_ROWS, COUNT(DISTINCT VEEVA_NAME) AS DISTINCT_ATC_ACCOUNTS
 FROM file_Veeva_Komodo_ATC_Mapping;
 
 
