@@ -10,13 +10,13 @@
    This lists the site-level accounts and states under each parent so the authorized-site
    patients can be counted and the rest stay non-ATC.
 
-   If a column name errors (site column may be HCO_NAME or similar), run:
-   SELECT * FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL LIMIT 5;  and adjust. */
+   If PRIMARY_HCO_NPI_NAME errors, check the exact spelling of column 3 in
+   DESCRIBE TABLE COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL and swap it in. */
 
 SELECT
     HCO_PARENT_NAME                        AS PARENT,
-    HCO_NAME                               AS SITE,
-    STATE,
+    PRIMARY_HCO_NPI_NAME                   AS SITE,
+    HCO_STATE                              AS STATE,
     COUNT(DISTINCT D_PATIENT_ID)           AS PATIENTS
 FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
 WHERE CLASS_FINAL LIKE 'Non-ATC%'
