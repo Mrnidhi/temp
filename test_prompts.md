@@ -38,17 +38,20 @@ tab. Nothing fancy. If my data gives different totals, use those.
 
 
 
+
 Hi Tim,
 
-Thanks for the workbook, this was exactly what I needed.
+Thank you for the workbook, it was exactly what was needed.
 
-To answer your question: my matching was done by account name from the claims data, so the sites I did not match were mostly ones sitting under a different health system parent name. I went through your list today and reconciled all of them. 11 of your sites had patients on my non-ATC side, about 399 patients in total, the biggest being Indiana University Health (188), Mayo Clinic (56), and Intermountain (55). Kaiser, Providence, and the Colorado Blood site matched at the system level only, so I am splitting those by site before counting them, which could add up to 260 more.
+On the question: the original matching was done by account name from the claims data, so the unmatched sites were mostly those listed under a different health system parent name. The full list has now been reconciled against the roster.
 
-With these corrections the ATC share moves from about 46% to roughly 48.5%, possibly closer to 50% after the site level check. I also confirmed the reverse direction, the large non-ATC accounts like University of Michigan and Texas Oncology are correctly not on the roster, so the rest of the analysis holds.
+Findings: 11 of the roster sites had patients classified as non-ATC, about 399 patients in total. The largest are Indiana University Health (188), Mayo Clinic (56), and Intermountain (55). Kaiser, Providence, and the Colorado Blood site matched at the system level only, and since only one location in each system is authorized, those are being split by site before counting. That could add up to 260 more patients.
 
-I will use the new updated roster as the source list going forward and update everything downstream that depends on this.
+With these corrections the ATC share moves from about 46% to roughly 48.5%, possibly closer to 50% once the site level check is complete.
+
+The opposite direction was also verified: the largest non-ATC accounts, such as University of Michigan and Texas Oncology, are not on the roster and were classified correctly, so the remainder of the analysis holds.
+
+The roster will be used as the source list going forward and all downstream outputs will be updated accordingly.
 
 Thanks,
 Srinidhi
-
-I will use your roster as the source list going forward and update everything downstream that depends on this.
