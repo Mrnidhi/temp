@@ -41,17 +41,9 @@ tab. Nothing fancy. If my data gives different totals, use those.
 
 Hi Tim,
 
-Thank you for the workbook, it was exactly what was needed.
+Yes, that segmentation is possible. Each claim carries the site level account under its parent, and the analysis already tags every ATC claim as either the primary authorized location or a satellite site that rolls up to the same parent. So for any parent ATC, the claims can be split into primary ATC versus ATC satellites.
 
-On the question: the original matching was done by account name from the claims data, so the unmatched sites were mostly those listed under a different health system parent name. The full list has now been reconciled against the roster.
-
-Findings: 11 of the roster sites had patients classified as non-ATC, about 399 patients in total. The largest are Indiana University Health (188), Mayo Clinic (56), and Intermountain (55). Kaiser, Providence, and the Colorado Blood site matched at the system level only, and since only one location in each system is authorized, those are being split by site before counting. That could add up to 260 more patients.
-
-With these corrections the ATC share moves from about 46% to roughly 48.5%, possibly closer to 50% once the site level check is complete.
-
-The opposite direction was also verified: the largest non-ATC accounts, such as University of Michigan and Texas Oncology, are not on the roster and were classified correctly, so the remainder of the analysis holds.
-
-The roster will be used as the source list going forward and all downstream outputs will be updated accordingly.
+This breakdown will be added per parent account in the next version of the workbook, alongside the roster update.
 
 Thanks,
 Srinidhi
