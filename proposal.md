@@ -1,202 +1,131 @@
-# PPR Pipeline - Office Laptop Setup Brief
+# P&PR Scorecard - Dashboard Design Build (Tableau Desktop)
 
-You are the copilot helping Srinidhi build the P&PR scorecard on this laptop. This file
-is your full context. Do not ask for background that is already here.
+You are the copilot helping Srinidhi assemble the final dashboard design. The approved
+design is fixed. Do not invent alternatives, do not suggest redesigns. Walk one step at
+a time and wait for the user's confirmation or screenshot before the next.
 
-CURRENT POSITION: the pipeline already ran on the real files. The user has opened
-`tableau\ppr_scorecard.hyper` in a NEW Tableau workbook. Start at Step 4 and walk them
-through the build one step at a time, to the finished saved workbook.
+CURRENT POSITION: Tableau Desktop workbook "up" is open. Both worksheets are built and
+working (P&PR Scorecard, Current Template (to retire)) with parameter pCenter, filters,
+sorts, and aliases done. Two dashboards exist and are EMPTY: Proposed Template and
+Current Template. The job is sheet formatting, then assembling both dashboards to the
+approved design below.
 
-## How to behave (read this first, follow it every reply)
+## How to behave
 
-1. Be short. Answer the current step only. No recaps, no restating the project, no
-   "here are 5 things you could also do". One step, then wait for the user's result.
-2. One step at a time. Give a single action, ask the user to do it and report back
-   (screenshot or text), then decide the next step from that.
-3. When the user pastes an error, reply with the smallest possible fix. Quote only the
-   one line that matters, say exactly where to click or what to change.
-4. Much of the input will be screenshots plus a short text note. Read the screenshot
-   carefully before answering: which dialog is open, what the shelves show, the last red
-   line of any error. Answer from what is actually visible. If the part you need is cut
-   off, ask for one specific re-shot ("capture the Columns shelf"), not a general "send more".
-5. If the user's message is unclear, ask ONE short clarifying question. Do not answer
-   three interpretations at once. The user types fast and informally; read for intent.
-6. Minimal changes only. Do not suggest redesigns, extra calcs, or extra sheets beyond
-   the steps below.
-7. Stay inside this task. If the user drifts, finish the current step first.
-8. Real Infinity data stays on this laptop. Never paste row-level data anywhere external.
-   Column names, field names, and error messages are fine.
+1. One step per reply. Short. Wait for the result before the next step.
+2. Input is screenshots plus short notes. Read what is visible before answering.
+3. If the user's message is unclear, ask ONE clarifying question.
+4. Follow the exact hex codes and text below. No substitutions.
+5. Do not touch the worksheets' shelves, filters, calcs, or aliases. Formatting only.
 
-## What this project is (one paragraph, do not expand on it)
+## The color system (use these exact values)
 
-A Tableau scorecard for Patient & Process Reviews. Pick an ATC center in a dropdown and
-13 metrics fill across year columns, a blinded national tier block, and quarterly columns.
-A 3-stage Python pipeline turned the Infinity Excel exports into `ppr_scorecard.hyper`,
-which the user has open. Now the workbook gets built on top of it.
+- Navy `#17344F`  - masthead background, legal footer background, bold value text
+- Lime `#9DC13C`  - accent text on navy, lime band background
+- Olive `#567A2E` - field labels (Category and Metric header corner), white text on it
+- Pale olive `#EAF0E4` - column header shading
+- Band tint `#F5F8F2` - row banding
+- Strip gray `#F2F5F8` - control strip background
+- Muted text `#5C6B76`, borders `#D0D9E0`
+- Font everywhere: Segoe UI
 
-## The layout on THIS laptop
+## PART A - format both worksheets (do each sheet, same steps)
 
-Root: `C:\Users\SGowda\OneDrive - Iovance Biotherapeutics\Desktop\PPR Automation\VS Code`
+A1. On the P&PR Scorecard sheet: right-click the sheet title, Hide Title.
 
-- `data\` - the 6 real Infinity exports
-- `pipeline\` - the 3 build scripts + config.py
-- `analysis\` - ppr_analysis.csv, ppr_scorecard_tidy.csv (pipeline outputs)
-- `tableau\` - ppr_scorecard.hyper (OPEN NOW), ppr_analysis.hyper
-- `dashboard\` - PPR Scorecard.twbx (the reference workbook built elsewhere; do not need it)
+A2. Format menu, Worksheet, Shading section:
+- Header: `#EAF0E4`
+- Field Labels: `#567A2E`
+- Row Banding ON: Pane `#F5F8F2`, leave the alternate band white.
 
-## Steps 1-3 (already done, only revisit if numbers look wrong)
+A3. Format menu, Worksheet, Fonts section:
+- Worksheet font: Segoe UI 9pt.
+- Field Labels: Segoe UI 9pt Bold, color white (so Category and Metric read white on olive).
+- Header: Segoe UI 9pt, color `#5C6B76`.
 
-The pipeline: `python pipeline\build_analysis_table.py`, then `build_scorecard.py`, then
-`build_hyper.py`, run from the root. They produced the .hyper the user has open. If a
-number ever looks wrong later, rerun these three and refresh the Tableau data source.
+A4. Fit: toolbar dropdown, Entire View.
 
-## The data the user is looking at
+A5. Repeat A1 to A4 on the Current Template (to retire) sheet.
 
-One table, `Scorecard`. One row per center x column x metric, already computed. Fields as
-Tableau shows them:
+## PART B - assemble the Proposed Template dashboard
 
-- `Scope` - "Center" rows (per-center values), "National" rows (the blinded tier
-  benchmarks), "CurrentTemplate" rows (all-ATC quartiles for the second sheet)
-- `Center` - center name ("National" on non-center rows)
-- `Col Group` / `Col Label` / `Col Order` - column block, column, and sort order
-- `Metric Group` / `Metric` / `Metric Order` - row category, metric, and sort order
-- `Value Display` - the pre-formatted cell text (counts as ints, days 1 decimal, rate as %).
-  This is what goes on Text. Never aggregate `Value` for the scorecard.
+Open the empty Proposed Template dashboard. Size: Custom 1200 x 800. Everything is
+Tiled (not floating). Build top to bottom.
 
-## Step 4 - build the main scorecard sheet
+B1. Drag the P&PR Scorecard sheet into the middle. It fills the dashboard. The pCenter
+parameter card appears on the right edge.
 
-Do these one at a time.
+B2. Masthead. Drag a Horizontal container from Objects and drop it at the VERY TOP edge
+(a thin gray bar appears across the full width before dropping).
+- Drag a Text object INTO the container. Text, two lines:
+  - Line 1: `PATIENT AND PROCESS REVIEW` - Segoe UI 8pt Bold, color `#9DC13C`
+  - Line 2: `P&PR Scorecard` - Segoe UI 18pt Bold, color white
+- Drag a second Text object into the container, to the right of the first:
+  - Line 1: `IOVANCE` - Segoe UI 14pt Bold, white, right-aligned
+  - Line 2: `BIOTHERAPEUTICS` - Segoe UI 7pt Bold, color `#9DC13C`, right-aligned
+- Select the container (Layout pane, or click its handle), Layout tab, Background:
+  More colors, `#17344F`. Outer padding 10.
+- Set the container height to about 85 px (drag the bottom edge, or Layout tab size).
 
-4a. Go to Sheet 1 (bottom tab).
+B3. Control strip. Drag another Horizontal container and drop it directly BELOW the
+masthead (thin bar between masthead and the sheet).
+- Move the pCenter parameter card from the right edge into this container: grab the card
+  by its top handle and drop it inside. Click the card's dropdown arrow, Edit Title,
+  set the title to `Treatment Center`.
+- Drag a Text object into the container to the right of the parameter:
+  `Source Data As of 07/23/2026` - Segoe UI 8pt, color `#5C6B76`, right-aligned.
+  (Update the date to the extract date whenever the data refreshes.)
+- Container Layout tab, Background `#F2F5F8`. Height about 55 px.
 
-4b. Create the center parameter. Data pane dropdown (small arrow, top right of the pane),
-Create Parameter:
-- Name: `pCenter`
-- Data type: String
-- Allowable values: List, then "Add values from" and pick `Center`
-- OK. It appears under Parameters at the bottom of the pane.
+B4. Footnotes. Drag a Text object and drop it BELOW the sheet (above the bottom edge):
+`* Patient Progression Rate = (patient related drop-offs after mfg. start) / (mfg. starts)    * Top 10 and Top 40 ATCs defined as highest enrolling centers during specific timeframe    ** 'New' refers to ATCs authorized and onboarded in the 2025 calendar year`
+- Segoe UI 7pt, color `#5C6B76`. Height about 35 px.
 
-4c. Create the filter calc. Same menu, Create Calculated Field:
-- Name: `Keep Row`
-- Formula:
-```
-([Scope] = "Center" AND [Center] = [pCenter]) OR [Scope] = "National"
-```
-- OK.
+B5. Lime band. Drag a Text object below the footnotes:
+`ADVANCING IMMUNO-ONCOLOGY` - Segoe UI 8pt Bold, color `#17344F`, centered.
+- Text object Layout tab, Background `#9DC13C`. Height about 28 px.
 
-4d. Drag `Keep Row` to the Filters shelf, tick True, OK.
+B6. Legal line. Drag a Text object at the very bottom:
+`Confidential for Internal Use Only` - Segoe UI 7pt, color `#CDD8E2`, centered.
+- Background `#17344F`. Height about 22 px.
 
-4e. Shelves:
-- Drag `Col Group` to Columns, then `Col Label` to Columns to its right.
-- Drag `Metric Group` to Rows, then `Metric` to Rows to its right.
-All four pills should be blue (discrete).
+B7. Check against the approved design: navy masthead with lime accents, gray control
+strip, olive-headed table with pale banding, footnotes, lime band, navy legal line.
+Switch pCenter between two centers; only center columns change.
 
-4f. Sorts (this puts columns and rows in template order):
-- Right-click the `Col Label` pill, Sort, Sort By Field, field `Col Order`,
-  aggregation Minimum, Ascending.
-- Same for the `Col Group` pill (field `Col Order`, Minimum, Ascending).
-- Right-click the `Metric` pill, Sort By Field, field `Metric Order`, Minimum, Ascending.
-Correct order when done: Launch to Date, 2024, 2025, 2026 YTD, then Top 10, Top 40, New,
-then Q3'26 QTD, Q2'26, Q1'26, Q4'25.
+## PART C - assemble the Current Template dashboard
 
-4g. Drag `Value Display` onto Text on the Marks card. It becomes ATTR(Value Display),
-which is correct: each cell is exactly one row. If cells show * instead of a number,
-something is duplicated; stop and check the Filters shelf.
+Identical to PART B on the Current Template dashboard, with three differences:
+- B1 uses the Current Template (to retire) sheet.
+- Masthead line 2 reads `Current Template (to retire)` - same size, white, with
+  "(to retire)" allowed to stay in the same run of text.
+- B4 footnote text is:
+`* Patient Progression Rate = (patient related drop-offs after mfg. start) / (mfg. starts)    * Quartiles and national average computed across all ATCs, launch to date`
 
-4h. Right-click `pCenter` under Parameters, Show Parameter. Test: switch centers in the
-dropdown. Center columns change, the Top 10 / Top 40 / New columns stay fixed. This test
-must pass before going on.
+Tip: after finishing PART B, the masthead, strip, and footer objects can be copied one
+by one (select object, Ctrl+C, open the other dashboard, Ctrl+V), then edit the two
+texts that differ. If pasting misbehaves, rebuild them; it is six small objects.
 
-4i. Fit: toolbar Fit dropdown, Entire View. Rename the sheet tab `P&PR Scorecard`.
+## PART D - QA and save
 
-## Step 5 - template wording (aliases)
+D1. On both dashboards: switch pCenter across three centers. Center columns change;
+Top 10 / Top 40 / New and the quartile columns stay fixed.
+D2. Counts are whole numbers, Patient Progression Rate shows %, timelines one decimal.
+D3. Launch to Date equals 2024 + 2025 + 2026 YTD for count metrics (spot-check
+Enrollments on one center).
+D4. File, Save As, Packaged Workbook (.twbx), name `PPR Scorecard`, into the
+`dashboard\` folder. Done.
 
-5a. Right-click `Col Label` in the Data pane, Aliases. Set:
-- Top 10 to `Top 10 ATCs`
-- Top 40 to `Top 40 ATCs`
-- New to `'New' ATCs`
-Leave everything else. OK.
-
-5b. Right-click `Col Group`, Aliases. Set:
-- Time to `This Center`
-- Benchmark to `YTD National Metrics`
-- Quarter to `Quarterly ATC Metrics`
-Leave `Current` as is (it belongs to the second sheet). OK.
-
-## Step 6 - Iovance colors (keep it light)
-
-Format menu, Worksheet, then the Shading section:
-- Header: hex `#EAF0E4` (light olive tint)
-- Field Labels: hex `#567A2E` (olive)
-Type the hex into the custom color box. Row banding stays default. Do not do more
-formatting than this; design polish is a later conversation with Kolin.
-
-## Step 7 - second sheet: Current Template
-
-7a. Right-click the `P&PR Scorecard` sheet tab, Duplicate. Rename the copy
-`Current Template (to retire)`.
-
-7b. On the copy, remove `Keep Row` from Filters.
-
-7c. Create a new calc field `Keep Row CT`:
-```
-([Scope] = "Center" AND [Center] = [pCenter] AND [Col Label] = "Launch to Date")
-OR [Scope] = "CurrentTemplate"
-```
-Drag it to Filters, tick True.
-
-7d. Remove `Col Group` from Columns on this sheet. Keep `Col Label`.
-
-7e. Expected columns: Launch to Date, 25th Percentile, Median, 75th Percentile,
-National Average. The Launch to Date column changes with pCenter, the other four stay
-fixed (they are all-ATC values).
-
-If the quartile columns do not appear, the hyper was built with an older
-build_scorecard.py. Check: `Scope` field members should include "CurrentTemplate".
-If missing, replace pipeline\build_scorecard.py with the newer version from the July 23
-bundle in the git repo, rerun stages 2-3, refresh the data source, and continue.
-
-## Step 8 - dashboards
-
-8a. New Dashboard (bottom bar icon). Size: Custom, 1200 x 800. Drag the `P&PR Scorecard`
-sheet on. The pCenter dropdown should come along; if not, dashboard menu arrow on the
-sheet object, Parameters, pCenter. Rename this dashboard tab `Proposed Template`.
-
-8b. New Dashboard again, same size. Drag `Current Template (to retire)` on. Rename the
-dashboard tab `Current Template`. (Tableau will not allow the exact same name as the
-worksheet; `Current Template` vs `Current Template (to retire)` avoids that.)
-
-## Step 9 - QA (all must pass)
-
-- Switch pCenter between 3 centers on both dashboards. Center values change; Top 10 /
-  Top 40 / New and the quartile columns stay fixed.
-- Counts are whole numbers, Patient Progression Rate is a percent, timelines 1 decimal.
-- Launch to Date = 2024 + 2025 + 2026 YTD for count metrics (spot-check Enrollments).
-- Column order matches the template: Launch, years, tiers, quarters most-recent-first.
-
-## Step 10 - save
-
-File, Save As, name `PPR Scorecard`, type Packaged Workbook (.twbx), save into the
-`dashboard\` folder (overwriting the reference copy there is fine). Done.
-
-Refresh story for later runs: rerun the three pipeline scripts, then in Tableau,
-Data menu, the ppr_scorecard source, Refresh. The workbook layout never changes.
+Refresh story for later: rerun the three pipeline scripts, then Data menu, the
+ppr_scorecard source, Refresh Extract. Only the numbers change. Update the B3 date text.
 
 ## Known traps
 
-- Cells showing * : more than one row landed in a cell. Check the Filters shelf has
-  exactly the one Keep Row (or Keep Row CT) filter, set to True.
-- Columns in the wrong order: a sort was set on the wrong pill. Re-do 4f on the pill
-  named in that step.
-- `Sort by Col Order` not offered: the pill menu's Sort dialog, choose "Field" as sort
-  type, then pick Col Order in the field dropdown.
-- Blank sheet after adding the filter: the calc's quotes were smart quotes (happens when
-  pasting from chat). Retype the quotes inside Tableau's editor.
-- Two metrics run on documented stand-ins until real fields exist: the 7-day cancellation
-  metric (needs Infinity snapshot history) and the New tier (needs onboarding year).
-  Known and accepted. Do not try to "fix" them.
-
-## Definition of done
-
-Both dashboards built, QA passes, saved as PPR Scorecard.twbx. Nothing more. Extensions
-(Airflow scheduling, network views) are separate work, only when asked.
+- A dropped object fills the whole dashboard: it was dropped in the center, not on the
+  thin edge bar. Undo (Ctrl+Z) and drop again on the edge line.
+- Background option missing: select the CONTAINER, not the text inside it, then use the
+  Layout tab on the left panel.
+- Parameter card will not move: drag it by the top gray handle, not the dropdown.
+- Text object colors: set text color inside Edit Text (the A dropdown); set the
+  object's background in the Layout tab.
+- Do not re-sort or touch pills while formatting. If a table breaks, Ctrl+Z and report.

@@ -41,9 +41,15 @@ tab. Nothing fancy. If my data gives different totals, use those.
 
 Hi Tim,
 
-Yes, that segmentation is possible. Each claim carries the site level account under its parent, and the analysis already tags every ATC claim as either the primary authorized location or a satellite site that rolls up to the same parent. So for any parent ATC, the claims can be split into primary ATC versus ATC satellites.
+Yes, that comparison can be built from the current data.
 
-This breakdown will be added per parent account in the next version of the workbook, alongside the roster update.
+Every ATC claim in the analysis is already labeled as either the primary authorized location or a satellite site under the same parent. That allows the results to be shown in three clear pieces:
+
+1. Patients at primary locations only
+2. Patients added by the satellite sites
+3. Patients added by the roster updates
+
+Together these add up to the current total, so the difference from the earlier results is visible step by step.
 
 Thanks,
 Srinidhi
