@@ -14,8 +14,14 @@ import re
 import numpy as np
 import pandas as pd
 
-HERE = os.path.dirname(__file__)
+HERE = os.path.dirname(os.path.abspath(__file__))
 # Data folder + data date are set once in pipeline/config.py. Everything imports from there.
+# Put this script's own folder on the import path first, so `import config` finds
+# pipeline/config.py however the script is launched (python pipeline/build_analysis_table.py,
+# python -m pipeline.build_analysis_table, or from any working directory).
+import sys
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
 import config
 INPUT_DIR = config.DATA_DIR
 OUT_DIR = config.ANALYSIS_DIR
