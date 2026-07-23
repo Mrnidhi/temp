@@ -34,3 +34,21 @@ Tab 3 — "Data & method"  (plain bullet lines)
 
 Formatting: Arial, bold header row, numbers right-aligned, thin borders, one clean table per
 tab. Nothing fancy. If my data gives different totals, use those.
+
+
+
+
+Hi Tim,
+
+Thanks for the workbook, this was exactly what I needed.
+
+To answer your question: my matching was done by account name from the claims data, so the sites I did not match were mostly ones sitting under a different health system parent name. I went through your list today and reconciled all of them. 11 of your sites had patients on my non-ATC side, about 399 patients in total, the biggest being Indiana University Health (188), Mayo Clinic (56), and Intermountain (55). Kaiser, Providence, and the Colorado Blood site matched at the system level only, so I am splitting those by site before counting them, which could add up to 260 more.
+
+With these corrections the ATC share moves from about 46% to roughly 48.5%, possibly closer to 50% after the site level check. I also confirmed the reverse direction, the large non-ATC accounts like University of Michigan and Texas Oncology are correctly not on the roster, so the rest of the analysis holds.
+
+I will use the new updated roster as the source list going forward and update everything downstream that depends on this.
+
+Thanks,
+Srinidhi
+
+I will use your roster as the source list going forward and update everything downstream that depends on this.
