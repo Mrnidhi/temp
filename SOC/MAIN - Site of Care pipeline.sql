@@ -188,26 +188,36 @@ treated AS (
       AND DATE_OF_SERVICE <  DATE '2026-01-01'
       AND (D_NDC_CODE IN ('00003232711', '00003232822', '00003712511')
            OR D_PROCEDURE_CODE IN ('J9228', 'J9298'))
-)
-SELECT
-    t.D_PATIENT_ID,
-    t.TX_YEAR,
-    t.D_PRIMARY_HCO_COMPILE_ID,
-    -- Roster gap correction. Keep in sync with Steps 1 and 3.
-    MAX(CASE
+),
+flagged AS (
+    -- Flag each claim at the row level. Name fallback is matched by a join, NOT a
+    -- subquery inside the later aggregate - Snowflake cannot evaluate a subquery
+    -- inside an aggregate function. Keep in sync with Steps 1 and 3.
+    SELECT
+        t.D_PATIENT_ID,
+        t.TX_YEAR,
+        t.D_PRIMARY_HCO_COMPILE_ID,
+        CASE
             WHEN n.NPI IS NOT NULL THEN 1
             WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%'
               OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
               OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%WEXNER%'
               OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%HOAG%' THEN 1
-            WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) IN
-                 (SELECT PARENT FROM name_fallback_parents) THEN 1
+            WHEN nf.PARENT IS NOT NULL THEN 1
             ELSE 0
-        END) AS IS_ATC_HCO,
-    COUNT(*) AS CLAIMS
-FROM treated t
-INNER JOIN diagnosed d ON t.D_PATIENT_ID = d.D_PATIENT_ID
-LEFT JOIN auth_npi   n ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI
+        END AS IS_ATC_CLAIM
+    FROM treated t
+    INNER JOIN diagnosed d ON t.D_PATIENT_ID = d.D_PATIENT_ID
+    LEFT JOIN auth_npi n ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI
+    LEFT JOIN name_fallback_parents nf ON UPPER(TRIM(t.HCO_PARENT_NAME)) = nf.PARENT
+)
+SELECT
+    D_PATIENT_ID,
+    TX_YEAR,
+    D_PRIMARY_HCO_COMPILE_ID,
+    MAX(IS_ATC_CLAIM) AS IS_ATC_HCO,
+    COUNT(*)          AS CLAIMS
+FROM flagged
 GROUP BY 1, 2, 3;
 
 
@@ -265,20 +275,22 @@ SELECT
     t.HCO_PARENT_NAME,
     t.DRUG,
     d.FIRST_DX_DATE,
-    -- Roster gap correction. Keep in sync with Steps 1 and 2.
+    -- Roster gap correction. Keep in sync with Steps 1 and 2. Name fallback is
+    -- matched by a LEFT JOIN (nf), not an IN-subquery: Snowflake rejects a subquery
+    -- inside a SELECT-list CASE ("Unsupported subquery type"). Same pattern as Step 2.
     CASE
         WHEN n.NPI IS NOT NULL THEN 1
         WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%'
           OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
           OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%WEXNER%'
           OR UPPER(TRIM(t.HCO_PARENT_NAME)) LIKE '%HOAG%' THEN 1
-        WHEN UPPER(TRIM(t.HCO_PARENT_NAME)) IN
-             (SELECT PARENT FROM name_fallback_parents) THEN 1
+        WHEN nf.PARENT IS NOT NULL THEN 1
         ELSE 0
     END AS IS_ATC_HCO
 FROM treated t
 INNER JOIN diagnosed d ON t.D_PATIENT_ID = d.D_PATIENT_ID
-LEFT JOIN auth_npi n ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI;
+LEFT JOIN auth_npi n ON TRIM(t.D_PRIMARY_HCO_NPI) = n.NPI
+LEFT JOIN name_fallback_parents nf ON UPPER(TRIM(t.HCO_PARENT_NAME)) = nf.PARENT;
 
 
 -- Step 4: state to region lookup. Six regions. VA, MD, DC, DE sit in Northeast.
@@ -358,7 +370,7 @@ ORDER BY 2 DESC;
 
 /* ---------------------------------------------------------------------------
    B3C. SLIDE 3 trend bullet and SLIDE 9 appendix. ATC share by the year each
-   patient began treatment. The "rose from 19% to 24%, 2021 to 2025" line.
+   patient began treatment. The "rose from about 43% to 50%, 2021 to 2025" line.
    Read the first and last year off ATC_SHARE_PCT.
    --------------------------------------------------------------------------- */
 WITH first_year AS (
@@ -429,7 +441,7 @@ ORDER BY 3 DESC;
 
 /* ---------------------------------------------------------------------------
    B4B. SLIDE 4 strip and SLIDE 9 appendix. Claims per patient by starting site.
-   The "6.7 vs 6.0 claims per patient" line.
+   The "6.9 vs 6.0 claims per patient" line.
    --------------------------------------------------------------------------- */
 WITH ranked AS (
     SELECT
@@ -672,7 +684,7 @@ ORDER BY STATE_UNTAPPED DESC, PATIENTS DESC;
 
 /* ---------------------------------------------------------------------------
    B9A. SLIDE 9 appendix, the satellite split. Share of ATC patients by how they
-   were classified. The "53% of ATC patients are at satellite sites" line reads
+   were classified. The "57% of ATC patients are at satellite sites" line reads
    off the non-NPI-confirmed rows (roster gap corrected plus name fallback came
    in through the parent, i.e. satellites of an ATC parent).
    --------------------------------------------------------------------------- */

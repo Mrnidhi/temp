@@ -1,0 +1,154 @@
+/* SITE OF CARE. The only test file. Run in Snowflake, paste results back.
+
+   One table is used throughout:  COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+   Nothing here writes or changes anything.
+
+   ORDER OF WORK
+     Q1        run now. This decides which roster organisations get folded in.
+     PATCH     paste the block into MAIN (3 places), rerun MAIN whole.
+     Q2 to Q6  run after the rerun, before anything is shared.
+   ============================================================================ */
+
+
+/* ============================================================================
+   Q1. Site-level check on the eleven roster organisations. RUN THIS FIRST.
+
+   Tim's official roster (07/23) named eleven organisations sitting on our
+   non-ATC side, about 399 patients. Seven of them are multi-state systems.
+   Kaiser, Providence and St Luke's looked the same way and all three failed:
+   the authorized site held zero or one patient while the volume sat at other
+   sites in the system. This runs the same check before anything is added.
+
+   How to read it. Per organisation, if the patients sit at the site named on
+   the roster, fold it in. If they sit at other sites in the same system, leave
+   it out.
+   ============================================================================ */
+SELECT
+    HCO_PARENT_NAME                        AS PARENT,
+    PRIMARY_HCO_NPI_NAME                   AS SITE,
+    HCO_STATE                              AS STATE,
+    COUNT(DISTINCT D_PATIENT_ID)           AS PATIENTS
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+WHERE CLASS_FINAL LIKE 'Non-ATC%'
+  AND ( UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%IU HEALTH%'
+     OR UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%INDIANA UNIVERSITY%'
+     OR UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%MAYO%'
+     OR UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%INTERMOUNTAIN%'
+     OR UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%AVERA%'
+     OR UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%NORTHWELL%'
+     OR UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%ADVENTHEALTH%'
+     OR UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%ADVOCATE%'
+     OR UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%SANFORD%'
+     OR UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%SSM%'
+     OR UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%BAPTIST MEMORIAL%'
+     OR UPPER(TRIM(HCO_PARENT_NAME)) LIKE '%BAYLOR%' )
+GROUP BY 1, 2, 3
+ORDER BY PARENT, PATIENTS DESC;
+
+
+/* ============================================================================
+   PATCH. Not a query. Edit "MAIN - Site of Care pipeline.sql", then rerun it
+   from the top.
+
+   MAIN carries the roster gap correction as a LIKE block in three places, at
+   lines 108, 202 and 283. All three must stay identical.
+   Keep the four already there and add only the organisations that passed Q1:
+
+            WHEN UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%CITY OF HOPE%'
+              OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
+              OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%WEXNER%'
+              OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%HOAG%'
+              -- added 2026-07-24, Tim Logan's official roster, site-checked in Q1
+              OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%<passed org>%'
+                THEN 'ATC: roster gap corrected'
+
+   Two names to keep out of any new pattern. HUTCHINSON on its own catches
+   Hutchinson Regional in Kansas, which is not Fred Hutch. JEFFERSON catches
+   two Jefferson County hospitals that are not Thomas Jefferson.
+   ============================================================================ */
+
+
+/* ============================================================================
+   Q2. Does it still reconcile. Must return 16,246.
+   ============================================================================ */
+SELECT COUNT(DISTINCT D_PATIENT_ID) AS TOTAL_PATIENTS
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL;
+
+
+/* ============================================================================
+   Q3. Headline split. Baseline was ATC 7,501 at 46.2%. Expect about 7,900
+       and about 48.5% after the patch.
+   ============================================================================ */
+SELECT
+    CLASS_FINAL,
+    COUNT(DISTINCT D_PATIENT_ID)                          AS PATIENTS,
+    ROUND(100.0 * COUNT(DISTINCT D_PATIENT_ID)
+          / SUM(COUNT(DISTINCT D_PATIENT_ID)) OVER (), 1) AS PCT
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+/* ============================================================================
+   Q4. The three bridge tiers. This is what the Bridge tab reads.
+
+   Baseline: NPI confirmed 3,257, name fallback 4,029, roster gap corrected 566.
+   Note name fallback here is 4,029, but 351 of those fail the state limit and
+   land in Non-ATC: System sweep, so only 3,678 stay ATC. That is why bridge
+   step 2 is 3,678 and not 4,029.
+
+   NPI confirmed must stay at exactly 3,257 after the patch. If it moves, a new
+   pattern is catching sites it should not.
+   ============================================================================ */
+SELECT
+    CLASS_HYBRID,
+    COUNT(DISTINCT D_PATIENT_ID)                          AS PATIENTS,
+    ROUND(100.0 * COUNT(DISTINCT D_PATIENT_ID)
+          / SUM(COUNT(DISTINCT D_PATIENT_ID)) OVER (), 1) AS PCT_OF_ALL
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+/* ============================================================================
+   Q5. Which organisations the roster fix actually moved. Baseline was four:
+       City of Hope 298, NYU Langone 216, OSU Wexner 32, Hoag 20, total 566.
+       After the patch this list explains the change line by line.
+   ============================================================================ */
+SELECT
+    HCO_PARENT_NAME                        AS PARENT,
+    COUNT(DISTINCT D_PATIENT_ID)           AS PATIENTS
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+WHERE CLASS_HYBRID = 'ATC: roster gap corrected'
+GROUP BY 1
+ORDER BY PATIENTS DESC;
+
+
+/* ============================================================================
+   Q6. Satellite share by ATC parent. This is the effort story Tim asked for,
+       and it fills the third block of the Bridge tab.
+   ============================================================================ */
+SELECT
+    HCO_PARENT_NAME                                                     AS PARENT,
+    COUNT(DISTINCT D_PATIENT_ID)                                        AS ATC_PATIENTS,
+    COUNT(DISTINCT CASE WHEN CLASS_HYBRID <> 'ATC: NPI confirmed'
+                        THEN D_PATIENT_ID END)                          AS UNDER_THE_PARENT,
+    ROUND(100.0 * COUNT(DISTINCT CASE WHEN CLASS_HYBRID <> 'ATC: NPI confirmed'
+                        THEN D_PATIENT_ID END)
+          / NULLIF(COUNT(DISTINCT D_PATIENT_ID), 0), 1)                 AS PCT_UNDER_PARENT
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+WHERE CLASS_FINAL = 'ATC'
+GROUP BY 1
+HAVING COUNT(DISTINCT D_PATIENT_ID) >= 50
+ORDER BY ATC_PATIENTS DESC;
+
+
+/* ============================================================================
+   AFTER THE CHECKS PASS
+     1. run "Patient Data query (Snowflake).sql", export the grid as
+        patient_data.csv
+     2. put that csv next to build_workbook.py and run  python build_workbook.py
+     3. the workbook rebuilds, Bridge tab included, no manual typing
+     4. slide 3 numbers change and the name-matching footnote can come off
+     5. send to Tim
+   ============================================================================ */
