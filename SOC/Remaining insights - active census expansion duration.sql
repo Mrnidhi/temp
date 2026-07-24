@@ -1,40 +1,40 @@
-/* THREE UNMINED INSIGHTS from ATC_CLASSIFIED_FINAL. Run in SNOWFLAKE, paste back all rows.
-   These complete the extraction of the classified table (staged 07/23). */
+/* RERUN Q1 and Q2 (fixed 07/23 evening): the first run returned ACTIVE = 0 everywhere
+   because the windows anchored to CURRENT_DATE, but the claims data ends around late
+   2025. Now anchored to the data's own latest date. Q3 already ran fine, skip it.
+   Paste back all rows plus the DATA_CUTOFF value. */
 
--- Q1: ACTIVE CENSUS. Historical totals vs patients still in treatment recently.
---     The non-ATC recent rows are the real, still-referrable opportunity.
+-- Q0: what is the data cutoff? (report this back too)
+SELECT MAX(LAST_TREATMENT_DATE) AS DATA_CUTOFF
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL;
+
+-- Q1 fixed: ACTIVE CENSUS anchored to the data cutoff.
+--           Non-ATC recent rows = the still-referrable opportunity.
+WITH A AS (SELECT MAX(LAST_TREATMENT_DATE) AS MAXD
+           FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL)
 SELECT
-    CLASS_FINAL,
-    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS_ALL_TIME,
-    COUNT(DISTINCT CASE WHEN LAST_TREATMENT_DATE >= DATEADD(day, -90,  CURRENT_DATE) THEN D_PATIENT_ID END) AS ACTIVE_90D,
-    COUNT(DISTINCT CASE WHEN LAST_TREATMENT_DATE >= DATEADD(day, -180, CURRENT_DATE) THEN D_PATIENT_ID END) AS ACTIVE_180D
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+    C.CLASS_FINAL,
+    COUNT(DISTINCT C.D_PATIENT_ID) AS PATIENTS_ALL_TIME,
+    COUNT(DISTINCT CASE WHEN C.LAST_TREATMENT_DATE >= DATEADD(day, -90,  A.MAXD) THEN C.D_PATIENT_ID END) AS ACTIVE_90D,
+    COUNT(DISTINCT CASE WHEN C.LAST_TREATMENT_DATE >= DATEADD(day, -180, A.MAXD) THEN C.D_PATIENT_ID END) AS ACTIVE_180D
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL C
+CROSS JOIN A
 GROUP BY 1
 ORDER BY PATIENTS_ALL_TIME DESC;
 
--- Q2: EXPANSION CANDIDATES. Non-ATC parents ranked by how ATC-like they are:
---     volume, academic flag, hospital type, footprint, and recent activity.
+-- Q2 fixed: EXPANSION CANDIDATES with the corrected recent-activity window.
+WITH A AS (SELECT MAX(LAST_TREATMENT_DATE) AS MAXD
+           FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL)
 SELECT
-    HCO_PARENT_NAME                                   AS PARENT,
-    MAX(HCO_TYPE)                                     AS HCO_TYPE,
-    MAX(CASE WHEN HCO_ACADEMIC_FLAG THEN 1 ELSE 0 END) AS ACADEMIC,
-    MAX(PARENT_STATES)                                AS STATES,
-    COUNT(DISTINCT D_PATIENT_ID)                      AS PATIENTS,
-    COUNT(DISTINCT CASE WHEN LAST_TREATMENT_DATE >= DATEADD(day, -180, CURRENT_DATE) THEN D_PATIENT_ID END) AS ACTIVE_180D,
-    SUM(TREATMENT_CLAIMS)                             AS TOTAL_CLAIMS
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-WHERE CLASS_FINAL LIKE 'Non-ATC%'
+    C.HCO_PARENT_NAME                                    AS PARENT,
+    MAX(C.HCO_TYPE)                                      AS HCO_TYPE,
+    MAX(CASE WHEN C.HCO_ACADEMIC_FLAG THEN 1 ELSE 0 END) AS ACADEMIC,
+    COUNT(DISTINCT C.D_PATIENT_ID)                       AS PATIENTS,
+    COUNT(DISTINCT CASE WHEN C.LAST_TREATMENT_DATE >= DATEADD(day, -180, A.MAXD) THEN C.D_PATIENT_ID END) AS ACTIVE_180D,
+    SUM(C.TREATMENT_CLAIMS)                              AS TOTAL_CLAIMS
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL C
+CROSS JOIN A
+WHERE C.CLASS_FINAL LIKE 'Non-ATC%'
 GROUP BY 1
-HAVING COUNT(DISTINCT D_PATIENT_ID) >= 25
+HAVING COUNT(DISTINCT C.D_PATIENT_ID) >= 25
 ORDER BY ACTIVE_180D DESC, PATIENTS DESC
 LIMIT 40;
-
--- Q3: PERSISTENCE. Do ATC patients stay on therapy longer? Claims per patient by class.
-SELECT
-    CLASS_FINAL,
-    COUNT(DISTINCT D_PATIENT_ID)                    AS PATIENTS,
-    ROUND(AVG(TREATMENT_CLAIMS), 1)                 AS AVG_CLAIMS_PER_PATIENT,
-    ROUND(MEDIAN(TREATMENT_CLAIMS), 1)              AS MEDIAN_CLAIMS_PER_PATIENT
-FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
-GROUP BY 1
-ORDER BY PATIENTS DESC;
