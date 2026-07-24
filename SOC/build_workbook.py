@@ -164,6 +164,7 @@ s6=ws_new("S6 · State Scatter",NAVY)
 s7=ws_new("S7 · Non-ATC by Region",AMBER)
 s8=ws_new("S8 · Non-ATC by State",AMBER)
 s9=ws_new("S9 · Appendix",TEAL)
+brg=ws_new("Bridge · Prior vs Current",TEAL)
 meth=ws_new("Methodology",SLATE_D)
 
 # ================================================================ PATIENT DATA
@@ -307,7 +308,7 @@ def doughnut(ws,anchor,title,cats,data,colors,w=9,h=8):
     for i,col in enumerate(colors):
         dp=DataPoint(idx=i); dp.graphicalProperties.solidFill=col; dp.graphicalProperties.line.solidFill=WHITE; s.data_points.append(dp)
     ch.dataLabels=DataLabelList(); ch.dataLabels.showPercent=True; ch.dataLabels.numFmt='0.0%'
-    ws.add_chart(ch,anchor)
+    ws.add_chart(ch,anchor); return ch
 def barchart(ws,anchor,title,cats,data,colors,w=10,h=8,horizontal=False,labels=True,titles_from_data=False):
     ch=BarChart(); ch.type="bar" if horizontal else "col"; ch.title=title; ch.height=h; ch.width=w
     ch.add_data(data,titles_from_data=titles_from_data); ch.set_categories(cats); ch.legend=None
@@ -536,6 +537,102 @@ for net in ["Independent / Other","THE US ONCOLOGY NETWORK","ONE ONCOLOGY","AMER
     td(ws,r,1,net,al=LEF); td(ws,r,2,f'=COUNTIF({C_COMM},"{net}")',CNT); td(ws,r,3,f"=B{r}/{NONATCN}",PCT); r+=1
 print("S9 done")
 
+# ================================================================ BRIDGE · PRIOR vs CURRENT
+# Answers the two things Tim asked for: reconcile the earlier primary-only count with
+# this one, and show how much of the ATC base sits under the parent rather than at the
+# listed center. Everything reads off Patient Data, so it follows the real export.
+ws=brg; widths(ws,{"A":26,"B":13,"C":13,"D":13,"E":13,"F":13,"G":13,"H":13,"I":13,"J":13,"K":13,"L":13})
+titleband(ws,"Bridge · prior vs current",
+          "Same patients, same years, same two drugs. Three steps explain why the earlier read was 20 percent and this one is 46 percent.")
+TOT=f"COUNT({C_ATC})"; ATCN=f"COUNTIF({C_ATC},1)"
+NPI=f'COUNTIF({C_MATCH},"NPI-confirmed")'
+NAME=f'COUNTIF({C_MATCH},"Name-matched")'
+ROST=f'COUNTIF({C_MATCH},"Roster-confirmed")'
+
+kpi_card(ws,4,1,f"={NPI}/{TOT}","Prior method, listed sites only",SLATE_D,PCT,w=2)
+kpi_card(ws,4,3,f"=({NPI}+{NAME})/{TOT}","After rolling up satellite sites",AMBER,PCT,w=3)
+kpi_card(ws,4,6,f"={ATCN}/{TOT}","After the roster fixes, where we are now",GREEN,PCT,w=3)
+
+def plain_labels(ch,percent=False):
+    """Value only on the bars, no 'Series1' prefix, and read the hidden label column."""
+    dl=ch.dataLabels
+    dl.showSerName=False; dl.showCatName=False; dl.showLegendKey=False; dl.showBubbleSize=False
+    dl.showVal=not percent; dl.showPercent=percent
+    if percent:
+        ch.legend.position="b"; ch.legend.overlay=False
+    else:
+        ch.x_axis.delete=False; ch.y_axis.delete=False
+        ch.y_axis.majorGridlines=None
+
+r=8
+r=section(ws,r,"The three steps")
+th(ws,r,["What it counts","Patients added","Running total","Share of all patients"]); r+=1
+b0=r
+steps=[("Step 1. Listed ATC sites only",NPI,SLATE_D),
+       ("Step 2. Plus satellite sites",NAME,AMBER),
+       ("Step 3. Plus roster fixes",ROST,GREEN)]
+for lab,f_,col in steps:
+    td(ws,r,1,lab,al=LEF,color=col,b=True)
+    td(ws,r,2,f"={f_}",CNT)
+    td(ws,r,3,(f"=B{r}" if r==b0 else f"=C{r-1}+B{r}"),CNT,b=True)
+    td(ws,r,4,f"=C{r}/{TOT}",PCT,b=True)
+    r+=1
+td(ws,r,1,"Where the count stands today",b=True,al=LEF,fill=GREENBG)
+td(ws,r,2,"",fill=GREENBG); td(ws,r,3,f"={ATCN}",CNT,b=True,fill=GREENBG); td(ws,r,4,f"=C{r}/{TOT}",PCT,b=True,fill=GREENBG)
+brg_tot=r
+ch=barchart(ws,"F8","ATC patients counted at each step",
+         Reference(ws,min_col=1,min_row=b0,max_row=b0+2),
+         Reference(ws,min_col=3,min_row=b0,max_row=b0+2),[SLATE_D,AMBER,GREEN],w=13,h=7.5)
+plain_labels(ch)
+r+=2
+note(ws,r,c2=5,text="Step 1 counts only patients confirmed at a listed ATC by provider NPI, which is how the earlier "
+          "analysis counted, and it lands back on the same 20 percent. Step 2 adds sites that roll up to an ATC parent. "
+          "Step 3 adds centers that were authorized but missing from the roster we started with. The patient population "
+          "never changed. The only difference is that a site is now read against the parent it belongs to.")
+
+r=25
+r=section(ws,r,"What it takes to cover the whole ATC base",color=TEAL)
+th(ws,r,["Where the patient is actually treated","Patients","Share of ATC"],fill=TEAL); r+=1
+e0=r
+td(ws,r,1,"At the listed center",al=LEF,color=GREEN,b=True)
+td(ws,r,2,f"={NPI}",CNT); td(ws,r,3,f"=B{r}/{ATCN}",PCT); r+=1
+td(ws,r,1,"At a site under the parent",al=LEF,color=AMBER,b=True)
+td(ws,r,2,f"={NAME}+{ROST}",CNT); td(ws,r,3,f"=B{r}/{ATCN}",PCT); r+=1
+td(ws,r,1,"All ATC patients",b=True,al=LEF,fill=GREENBG); td(ws,r,2,f"={ATCN}",CNT,b=True,fill=GREENBG)
+td(ws,r,3,f"=B{r}/{ATCN}",PCT,b=True,fill=GREENBG)
+ch=doughnut(ws,"F25","Where ATC patients are actually treated",
+         Reference(ws,min_col=1,min_row=e0,max_row=e0+1),
+         Reference(ws,min_col=2,min_row=e0,max_row=e0+1),[GREEN,AMBER],w=13,h=7.5)
+plain_labels(ch,percent=True)
+r+=2
+note(ws,r,c2=5,text="The listed center is the site whose NPI sits on the roster. More than half of the patients we count "
+          "as in network are treated somewhere else under that same parent. Reaching the rest of the potential inside a "
+          "network means working the sites underneath each parent, which is a wider job than calling on the flagship alone.")
+
+r=42
+r=section(ws,r,"Where that work sits, by parent",color=TEAL)
+th(ws,r,["ATC parent","ATC patients","Under the parent","Share under the parent"],fill=TEAL); r+=1
+p0=r
+for p in atc_parents[:12]:
+    pq=p.replace('"','""')
+    td(ws,r,1,p,al=LEF)
+    td(ws,r,2,f'=COUNTIFS({C_PARENT},"{pq}",{C_ATC},1)',CNT)
+    td(ws,r,3,f'=COUNTIFS({C_PARENT},"{pq}",{C_ATC},1,{C_MATCH},"<>NPI-confirmed")',CNT)
+    td(ws,r,4,f"=IF(B{r}=0,0,C{r}/B{r})",PCT)
+    r+=1
+p1=r-1
+ws.conditional_formatting.add(f"D{p0}:D{p1}",DataBarRule(start_type="num",start_value=0,end_type="num",end_value=1,color=AMBER))
+ch=barchart(ws,"F42","Patients reached through sites under the parent",
+         Reference(ws,min_col=1,min_row=p0,max_row=p1),
+         Reference(ws,min_col=3,min_row=p0,max_row=p1),[AMBER],w=13,h=10,horizontal=True)
+plain_labels(ch)
+r=63
+note(ws,r,
+     "Read this next to the Methodology tab. A patient is in network if their site rolls up to an authorized parent. "
+     "Step 1 uses the provider NPI on the roster, step 2 matches the site name to its parent, step 3 adds centers that "
+     "were authorized but missing from the roster we started with.")
+print("bridge done")
+
 # ================================================================ PAGE 1 — ATC PATIENT COUNTS (the CEO data dump)
 ws=dump
 widths(ws,{"A":42,"B":12,"C":11,"D":8,"E":13,"F":2,"G":9,"H":9,"I":9,"J":9,"K":9,"L":9,"M":3})
@@ -637,7 +734,8 @@ r=23
 ws.cell(r,2,"Jump to a slide").font=Fnt(12,True,NAVY); r+=1
 nav=[("ATC Patient Counts (page 1)",dump.title),("S3 · Market Structure",s3.title),("S4 · Patient Journey",s4.title),
      ("S5 · Regional Penetration",s5.title),("S6 · State Scatter",s6.title),("S7 · Non-ATC by Region",s7.title),
-     ("S8 · Non-ATC by State",s8.title),("S9 · Appendix",s9.title),("Methodology",meth.title),
+     ("S8 · Non-ATC by State",s8.title),("S9 · Appendix",s9.title),("Bridge · Prior vs Current",brg.title),
+     ("Methodology",meth.title),
      ("Patient Data",pdata.title),("Load Data (SQL)",loadsql.title)]
 cc=2
 for lab,target in nav:
@@ -660,7 +758,7 @@ for name in wb.sheetnames:
 # order: data dump first (what the CEO asked for), then the analysis, then the plumbing
 order=["ATC Patient Counts","Cover","S3 · Market Structure","S4 · Patient Journey","S5 · Regional Penetration",
        "S6 · State Scatter","S7 · Non-ATC by Region","S8 · Non-ATC by State","S9 · Appendix",
-       "Methodology","Patient Data","Load Data (SQL)","Region Map"]
+       "Bridge · Prior vs Current","Methodology","Patient Data","Load Data (SQL)","Region Map"]
 wb._sheets=[wb[n] for n in order]
 wb.active=0
 from openpyxl.workbook.properties import CalcProperties
