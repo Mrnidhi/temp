@@ -609,18 +609,52 @@ note(ws,r,c2=5,text="The listed center is the site whose NPI sits on the roster.
           "as in network are treated somewhere else under that same parent. Reaching the rest of the potential inside a "
           "network means working the sites underneath each parent, which is a wider job than calling on the flagship alone.")
 
-# A per-parent version of the split above was built here and then pulled, 07-24.
-# Run against real data it came back bimodal, parents at 0% or at 100% with almost
-# nothing between. That is not a satellite footprint, it is whether the roster
-# carried that parent's own NPI, so it would have read as an effort story and been
-# wrong. Q7 in the test file replaces it with a site-count footprint that does not
-# depend on NPI matching. Rebuild this block once Q7 comes back.
+# Third block: how spread out each ATC's volume is across the sites underneath it.
+# This is a static snapshot from the current data (Q7 in the test file), not a live
+# formula, because Patient Data does not carry the treating-site name. Refresh these
+# rows after a roster rerun by re-running Q7 and pasting the new numbers here. The
+# earlier per-parent cut was pulled 07-24 (it measured NPI coverage, not footprint).
+# Columns: parent, ATC patients, distinct sites, at the biggest site, elsewhere, % elsewhere.
+Q7=[("Moffitt Cancer Center",933,1,933,0,0.0),
+    ("Banner Health",531,8,291,240,45.2),
+    ("Dana-Farber Cancer Institute",522,1,522,0,0.0),
+    ("Cleveland Clinic",454,11,302,152,33.5),
+    ("Fred Hutchinson Cancer Center",344,1,344,0,0.0),
+    ("University of California",317,14,179,138,43.5),
+    ("City of Hope",303,10,180,123,40.6),
+    ("Northwestern Medicine",299,7,172,127,42.5),
+    ("Thomas Jefferson University",270,10,138,132,48.9),
+    ("Stanford University",218,3,208,10,4.6),
+    ("NYU Langone Health",216,1,216,0,0.0),
+    ("Temple University",206,4,200,6,2.9)]
 
 r=42
+r=section(ws,r,"How far each ATC's patients spread beyond its main site",color=TEAL)
+th(ws,r,["ATC parent","ATC patients","Sites","At main site","Treated elsewhere","Share elsewhere"],fill=TEAL); r+=1
+q0=r
+for parent,atc,sites,big,els,pct in Q7:
+    td(ws,r,1,parent,al=LEF)
+    td(ws,r,2,atc,CNT); td(ws,r,3,sites,INT); td(ws,r,4,big,CNT); td(ws,r,5,els,CNT)
+    td(ws,r,6,pct/100.0,PCT)
+    r+=1
+q1=r-1
+ws.conditional_formatting.add(f"F{q0}:F{q1}",DataBarRule(start_type="num",start_value=0,end_type="num",end_value=1,color=TEAL))
+ch=barchart(ws,"H42","Share of patients treated away from the main site",
+         Reference(ws,min_col=1,min_row=q0,max_row=q1),
+         Reference(ws,min_col=6,min_row=q0,max_row=q1),[TEAL],w=13,h=10,horizontal=True)
+plain_labels(ch)
+ch.x_axis.numFmt='0%'; ch.x_axis.delete=False
+r+=2
+note(ws,r,c2=6,text="Snapshot from the current data. Some ATCs run their whole melanoma volume through one site, so there is "
+          "nothing to reach beyond the flagship. Others spread it wide: Banner across eight sites, Cleveland Clinic across "
+          "eleven, the University of California across fourteen. Those are the networks where covering the full patient "
+          "potential takes real work underneath the main center, which is the effort the count alone does not show.")
+r+=2
 note(ws,r,
      "Read this next to the Methodology tab. A patient is in network if their site rolls up to an authorized parent. "
      "Step 1 uses the provider NPI on the roster, step 2 matches the site name to its parent, step 3 adds centers that "
-     "were authorized but missing from the roster we started with.")
+     "were authorized but missing from the roster we started with. Sites counts distinct treating locations in the claims; "
+     "a system that bills all its volume under one entity shows as a single site.")
 print("bridge done")
 
 # ================================================================ PAGE 1 — ATC PATIENT COUNTS (the CEO data dump)
