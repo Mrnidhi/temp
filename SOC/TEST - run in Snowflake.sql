@@ -4,9 +4,16 @@
    Nothing here writes or changes anything.
 
    ORDER OF WORK
-     Q1        run now. This decides which roster organisations get folded in.
-     PATCH     paste the block into MAIN (3 places), rerun MAIN whole.
-     Q2 to Q6  run after the rerun, before anything is shared.
+     Q1 and Q7  run now. Q1 decides which roster organisations get folded in.
+                Q7 is the effort view for Tim. Send both grids back.
+     PATCH      paste the block into MAIN (3 places), rerun MAIN whole.
+     Q2 to Q5   run after the rerun, before anything is shared.
+     Q6         already run, internal check only, do not show a stakeholder.
+
+   STATUS 07-24 baseline, before the patch: total 16,246. ATC 7,501 at 46.2%.
+   Tiers: NPI confirmed 3,257, name fallback 4,029 of which 3,678 stay ATC,
+   roster gap corrected 566 across City of Hope 298, NYU Langone 216,
+   OSU Wexner 32, Hoag 20.
    ============================================================================ */
 
 
@@ -125,8 +132,21 @@ ORDER BY PATIENTS DESC;
 
 
 /* ============================================================================
-   Q6. Satellite share by ATC parent. This is the effort story Tim asked for,
-       and it fills the third block of the Bridge tab.
+   Q6. NPI coverage by ATC parent. ALREADY RUN 07-24, keep for reference.
+
+   This was built as a satellite view and it is not one. The result came back
+   bimodal: Moffitt 933 at 0.0, Dana-Farber 522 at 0.0, Cooper 83 at 0.0 on one
+   side, and Fred Hutchinson 344 at 100.0, MSK 193 at 100.0, NYU Langone 216 at
+   100.0, Temple 206 at 100.0 on the other, with almost nothing in between.
+
+   A real satellite footprint does not look like that. What the column measures
+   is whether the roster carried that parent's own NPI. At 100 the parent's NPI
+   never matched a claim, so every patient fell through to the name match. At 0
+   every patient matched by NPI and nothing came through the parent.
+
+   Keep this as an internal data-quality check. It shows exactly which parents
+   are missing an NPI in the roster. Do NOT put it in front of a stakeholder as
+   an effort or satellite story. Use Q7 for that.
    ============================================================================ */
 SELECT
     HCO_PARENT_NAME                                                     AS PARENT,
@@ -141,6 +161,58 @@ WHERE CLASS_FINAL = 'ATC'
 GROUP BY 1
 HAVING COUNT(DISTINCT D_PATIENT_ID) >= 50
 ORDER BY ATC_PATIENTS DESC;
+
+
+/* ============================================================================
+   Q7. Site footprint by ATC parent. RUN THIS, with Q1.
+
+   This is the effort question answered properly. For each authorized parent:
+   how many distinct sites its patients are actually treated at, how many sit
+   at the single biggest site, and therefore how much of the volume sits
+   everywhere else. It counts sites and patients only, so nothing here depends
+   on NPI matching and the Q6 problem cannot repeat.
+
+   How to read it. A parent with one site and 100% at the top site is reached by
+   calling on one place. A parent with twelve sites and 30% at the top site is
+   most of the work, because the other 70% is spread across eleven more.
+   ============================================================================ */
+WITH by_site AS (
+    SELECT
+        HCO_PARENT_NAME              AS PARENT,
+        PRIMARY_HCO_NPI_NAME         AS SITE,
+        COUNT(DISTINCT D_PATIENT_ID) AS PTS
+    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+    WHERE CLASS_FINAL = 'ATC'
+    GROUP BY 1, 2
+),
+parent_tot AS (
+    SELECT
+        HCO_PARENT_NAME              AS PARENT,
+        COUNT(DISTINCT D_PATIENT_ID) AS ATC_PATIENTS
+    FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+    WHERE CLASS_FINAL = 'ATC'
+    GROUP BY 1
+),
+ranked AS (
+    SELECT
+        PARENT, SITE, PTS,
+        ROW_NUMBER() OVER (PARTITION BY PARENT ORDER BY PTS DESC) AS RN
+    FROM by_site
+)
+SELECT
+    p.PARENT,
+    p.ATC_PATIENTS,
+    COUNT(*)                                                  AS SITES,
+    MAX(CASE WHEN r.RN = 1 THEN r.SITE END)                   AS BIGGEST_SITE,
+    MAX(CASE WHEN r.RN = 1 THEN r.PTS END)                    AS AT_BIGGEST_SITE,
+    p.ATC_PATIENTS - MAX(CASE WHEN r.RN = 1 THEN r.PTS END)   AS EVERYWHERE_ELSE,
+    ROUND(100.0 * (p.ATC_PATIENTS - MAX(CASE WHEN r.RN = 1 THEN r.PTS END))
+          / NULLIF(p.ATC_PATIENTS, 0), 1)                     AS PCT_ELSEWHERE
+FROM parent_tot p
+JOIN ranked r ON r.PARENT = p.PARENT
+GROUP BY p.PARENT, p.ATC_PATIENTS
+HAVING p.ATC_PATIENTS >= 50
+ORDER BY p.ATC_PATIENTS DESC;
 
 
 /* ============================================================================

@@ -609,24 +609,14 @@ note(ws,r,c2=5,text="The listed center is the site whose NPI sits on the roster.
           "as in network are treated somewhere else under that same parent. Reaching the rest of the potential inside a "
           "network means working the sites underneath each parent, which is a wider job than calling on the flagship alone.")
 
+# A per-parent version of the split above was built here and then pulled, 07-24.
+# Run against real data it came back bimodal, parents at 0% or at 100% with almost
+# nothing between. That is not a satellite footprint, it is whether the roster
+# carried that parent's own NPI, so it would have read as an effort story and been
+# wrong. Q7 in the test file replaces it with a site-count footprint that does not
+# depend on NPI matching. Rebuild this block once Q7 comes back.
+
 r=42
-r=section(ws,r,"Where that work sits, by parent",color=TEAL)
-th(ws,r,["ATC parent","ATC patients","Under the parent","Share under the parent"],fill=TEAL); r+=1
-p0=r
-for p in atc_parents[:12]:
-    pq=p.replace('"','""')
-    td(ws,r,1,p,al=LEF)
-    td(ws,r,2,f'=COUNTIFS({C_PARENT},"{pq}",{C_ATC},1)',CNT)
-    td(ws,r,3,f'=COUNTIFS({C_PARENT},"{pq}",{C_ATC},1,{C_MATCH},"<>NPI-confirmed")',CNT)
-    td(ws,r,4,f"=IF(B{r}=0,0,C{r}/B{r})",PCT)
-    r+=1
-p1=r-1
-ws.conditional_formatting.add(f"D{p0}:D{p1}",DataBarRule(start_type="num",start_value=0,end_type="num",end_value=1,color=AMBER))
-ch=barchart(ws,"F42","Patients reached through sites under the parent",
-         Reference(ws,min_col=1,min_row=p0,max_row=p1),
-         Reference(ws,min_col=3,min_row=p0,max_row=p1),[AMBER],w=13,h=10,horizontal=True)
-plain_labels(ch)
-r=63
 note(ws,r,
      "Read this next to the Methodology tab. A patient is in network if their site rolls up to an authorized parent. "
      "Step 1 uses the provider NPI on the roster, step 2 matches the site name to its parent, step 3 adds centers that "
