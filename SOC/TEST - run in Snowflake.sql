@@ -216,6 +216,26 @@ ORDER BY p.ATC_PATIENTS DESC;
 
 
 /* ============================================================================
+   Q8. Top non-ATC accounts in Texas, to fill the Texas card on the state slide.
+
+   The Texas card currently shows only Texas Oncology because the other two were
+   never in hand. This returns the real top accounts so no number is invented.
+   Sanity check: Texas Oncology should come back at about 211, the figure already
+   on the slide. If it does, the second and third rows are trustworthy. Paste the
+   top three back.
+   ============================================================================ */
+SELECT
+    HCO_PARENT_NAME              AS PARENT,
+    COUNT(DISTINCT D_PATIENT_ID) AS PATIENTS
+FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL
+WHERE CLASS_FINAL LIKE 'Non-ATC%'
+  AND HCO_STATE = 'TX'
+GROUP BY 1
+ORDER BY PATIENTS DESC
+LIMIT 5;
+
+
+/* ============================================================================
    AFTER THE CHECKS PASS
      1. run "Patient Data query (Snowflake).sql", export the grid as
         patient_data.csv
