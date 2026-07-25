@@ -236,6 +236,44 @@ LIMIT 5;
 
 
 /* ============================================================================
+   Q9. Patient-journey matrix on the 16,246 cohort, so slide 4 reconciles.
+
+   Slide 4's four boxes currently sum to 16,404, not 16,246. That is because the
+   journey (B4A in MAIN) is built from the treatment cohort, which is slightly
+   larger than the diagnosed cohort used everywhere else. This is the same query
+   as B4A, restricted to the 16,246 patients in ATC_CLASSIFIED_FINAL. The four
+   rows must now sum to exactly 16,246. Paste all four back and I will drop them
+   into slide 4.
+   ============================================================================ */
+WITH ranked AS (
+    SELECT
+        D_PATIENT_ID, IS_ATC_HCO,
+        ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID
+                           ORDER BY DATE_OF_SERVICE ASC,  D_PRIMARY_HCO_COMPILE_ID) AS RN_FIRST,
+        ROW_NUMBER() OVER (PARTITION BY D_PATIENT_ID
+                           ORDER BY DATE_OF_SERVICE DESC, D_PRIMARY_HCO_COMPILE_ID) AS RN_LAST
+    FROM COMPILE_DEV.PUBLIC.ATC_TREATMENT_CLAIMS
+    WHERE D_PATIENT_ID IN (SELECT D_PATIENT_ID FROM COMPILE_DEV.PUBLIC.ATC_CLASSIFIED_FINAL)
+),
+first_last AS (
+    SELECT
+        D_PATIENT_ID,
+        MAX(CASE WHEN RN_FIRST = 1 THEN IS_ATC_HCO END) AS FIRST_ATC,
+        MAX(CASE WHEN RN_LAST  = 1 THEN IS_ATC_HCO END) AS LAST_ATC
+    FROM ranked
+    GROUP BY 1
+)
+SELECT
+    CASE WHEN FIRST_ATC = 1 THEN 'Started at an ATC' ELSE 'Started non-ATC' END AS FIRST_SITE,
+    CASE WHEN LAST_ATC  = 1 THEN 'Ended at an ATC'   ELSE 'Ended non-ATC'   END AS LAST_SITE,
+    COUNT(*)                                          AS PATIENTS,
+    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT
+FROM first_last
+GROUP BY 1, 2
+ORDER BY 3 DESC;
+
+
+/* ============================================================================
    AFTER THE CHECKS PASS
      1. run "Patient Data query (Snowflake).sql", export the grid as
         patient_data.csv
