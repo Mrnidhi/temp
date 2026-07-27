@@ -14,6 +14,11 @@ Out: ../PPR Dashboard.twbx
 """
 import os
 import shutil
+from xml.sax.saxutils import escape
+
+def xattr(s: str) -> str:
+    """Escape a value for use inside a single-quoted XML attribute."""
+    return escape(s, {"'": "&apos;", '"': "&quot;"})
 import zipfile
 import xml.etree.ElementTree as ET
 
@@ -215,8 +220,8 @@ def main():
     import csv
     with open(SC_CSV) as f:
         centers = sorted({r["center"] for r in csv.DictReader(f) if r["scope"] == "Center"})
-    members = "\n".join(f"          <member value='&quot;{c}&quot;' />" for c in centers)
-    params = PARAMS.replace("__MEMBERS__", members).replace("__DEFAULT__", centers[0])
+    members = "\n".join(f"          <member value='&quot;{xattr(c)}&quot;' />" for c in centers)
+    params = PARAMS.replace("__MEMBERS__", members).replace("__DEFAULT__", xattr(centers[0]))
 
     twb = f"""<?xml version='1.0' encoding='utf-8' ?>
 <workbook original-version='18.1' source-build='2023.3.0' source-platform='mac' version='18.1'>
