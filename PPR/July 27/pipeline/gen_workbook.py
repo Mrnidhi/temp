@@ -176,6 +176,7 @@ WS_WINDOW = f"""  <worksheet name='Custom Date Window'>
         <encodings><text column='[{DW}].[usr:Calculation_res:nk]' /></encodings>
       </pane></panes>
       <rows>([{DW}].[none:metric_group:nk] / ([{DW}].[none:metric_order:nk] / [{DW}].[none:metric:nk]))</rows>
+      <cols />
     </table>
   </worksheet>"""
 
@@ -236,9 +237,6 @@ def main():
 {WS_WINDOW}
   </worksheets>
 {DASHBOARD}
-  <windows>
-    <window class='dashboard' name='P&amp;PR Dashboard'><viewpoints /></window>
-  </windows>
 </workbook>
 """
     ET.fromstring(twb)  # fail fast on malformed XML
