@@ -27,9 +27,9 @@ M7  = "Patient Related Drop-outs following TTP due to patient health"
 M8  = "OOS Products"
 M9  = "Patient Progression Rate"
 M10 = "AMTAGVI Infusions Performed"
-M11 = "Average Time From Enrollment Date to TTP (Days)"
-M12 = "Average Time From TTP to AMTAGVI Infusion (Days)"
-M13 = "Average Time From Final Product Delivery Date to AMTAGVI Infusion (Days)"
+M11 = "Median Time From Enrollment Date to TTP (Days)"
+M12 = "Median Time From TTP to AMTAGVI Infusion (Days)"
+M13 = "Median Time From Final Product Delivery Date to AMTAGVI Infusion (Days)"
 METRICS = [
     (1,  "Patient Identification & Enrollment", M1,  "count"),
     (2,  "Patient Identification & Enrollment", M2,  "count"),

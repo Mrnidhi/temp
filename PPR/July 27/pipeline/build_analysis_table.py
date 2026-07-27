@@ -31,17 +31,53 @@ os.makedirs(OUT_DIR, exist_ok=True)
 TODAY = pd.Timestamp("2026-07-21")
 HEADER_ROW = 2  # real files carry a title banner; true header is row index 2
 
-# metric 7: drop-outs following TTP "due to patient health" (health-specific reasons)
-HEALTH_DROPOUT = {"Patient health progressed", "Decline in Performance Status",
-                  "Disease Progression", "Brain Mets", "Patient death"}
-# Patient Progression Rate numerator: "patient related" drop-offs (patient-driven clinical /
-# decision reasons; excludes logistics, quality, physician, financial, duplicate).
-PATIENT_RELATED = {"Patient health progressed", "Decline in Performance Status",
-                   "Disease Progression", "Brain Mets", "Patient death",
-                   "Patient Choice", "Transition to Hospice", "NED/MRD"}
+# Cancellation reasons, categorised once. Metrics reference the categories, never raw
+# strings, so the difference between metric 7 and metric 9 is one visible line here
+# instead of two hardcoded sets that can drift apart.
+#   health    clinical deterioration
+#   choice    patient-driven, non-clinical
+#   favourable  came off the pathway because treatment was not needed
+REASON_CATEGORY = {
+    "Patient health progressed":      "health",
+    "Decline in Performance Status":  "health",
+    "Disease Progression":            "health",
+    "Brain Mets":                     "health",
+    "Patient death":                  "health",
+    "Transition to Hospice":          "health",   # hospice transition is clinical, not choice
+    "Patient Choice":                 "choice",
+    "NED/MRD":                        "favourable",
+    # Everything below is NOT patient-related, so it counts toward neither metric 7 nor 9.
+    # Listed explicitly so the categorisation is a decision on the record, not an omission.
+    "2nd Resection":                     "operational",  # planned re-procurement, not a drop-out
+    "Duplicate Patient":                 "operational",  # data artefact
+    "Physician decision":                "physician",
+    "Alternate Therapy":                 "physician",
+    "Clinical Trial/IST/Collaboration":  "physician",
+    "Financial Clearance":               "access",
+    "Peer to Peer Consult":              "access",
+    "Quality Status: Do Not Proceed":    "quality",
+    "Other":                             "other",
+    # Exact strings seen in the REAL picklist (10 values). Kept alongside the synthetic
+    # spellings above because the two sets do not match.
+    "Quality: Do Not Proceed":           "quality",
+    "Clinical Trial/IST":                "physician",
+    "Peer-to-Peer":                      "access",
+}
+# metric 7: drop-outs following TTP due to patient health
+HEALTH_DROPOUT = {r for r, c in REASON_CATEGORY.items() if c == "health"}
+# metric 9 numerator: patient-related drop-offs after manufacturing started.
+# NED/MRD is deliberately excluded: no evidence of disease means the patient responded,
+# so counting it as progression would report a good outcome as a failure.
+PATIENT_RELATED = {r for r, c in REASON_CATEGORY.items() if c in ("health", "choice")}
+# Manufacturing actually started. SM = starting material (the tumour courier leg), which
+# happens BEFORE manufacturing, so the two SM states are deliberately excluded. On real
+# data "SM Pick-up Scheduled" alone is 305 orders, so including it would inflate metric 9's
+# denominator by roughly a third and understate the progression rate.
 MFG_STARTED = {"MFG Start", "MFG End", "REP Initiation", "REP Scale Out",
-               "Released for Shipment by QA", "SM Pick-up Scheduled", "Shipment Ready",
-               "Courier Picked-Up FP", "Courier Delivered FP"}
+               "Released for Shipment by QA", "Shipment Ready",
+               "Courier Picked-Up FP", "Courier Delivered FP", "FP CAH"}
+SM_PRE_MFG = {"SM Pick-up Scheduled", "Courier Picked-Up SM", "Warehouse Received SM",
+              "MFG QA Released SM", "MFG Received SM"}   # pre-manufacturing, never counted
 
 def _resolve(stem):
     """Find the Excel file for a stem, tolerant of real-world naming (case, separators,
@@ -113,6 +149,13 @@ o = o.merge(mp2[["center_key", "veeva_name", "region", "territory", "atc_segment
 o["center_matched"] = o["veeva_name"].notna()
 
 # ------------------------------------------------------------------ derived metric fields
+# Straight from the Notes column of the Proposed Template:
+#   Completed TTPs -> "Tumor Tissue Pickup Date in past?"
+#   Scheduled TTPs -> "Tumor Tissue Pickup Date in future?"
+# So the two are deliberately DISJOINT, which is why the year-over-year slide can add
+# them as "Tumor Tissue Procurements (scheduled + completed)" without double counting.
+# NOTE: the OLD Current Template metric "Patients Scheduled for TTP" is a different,
+# cumulative measure (MSK shows 77 scheduled vs 71 completed). Do not conflate them.
 o["completed_ttp"] = o["tumor_pickup_date"].notna() & (o["tumor_pickup_date"] <= TODAY)
 o["scheduled_ttp"] = o["tumor_pickup_date"].notna() & (o["tumor_pickup_date"] > TODAY)
 o["oos_product"] = o["oos_status"] == "Confirmed OOS"
@@ -126,6 +169,15 @@ o["drop_after_mfg"] = o["mfg_started"] & o["patient_related_dropout"]
 # from Infinity's snapshot history (Jonathan's table, not in the file exports). resection_rescheduled_
 # is the closest available flag until that snapshot feed is wired in.
 o["ttp_cancel_le7"] = o["resection_rescheduled_"] == True
+
+# Guard rails: a new reason or status from Infinity must fail the build, not fall
+# silently into no bucket and quietly change a metric.
+_seen = set(o["til_order_cancellation_reason"].dropna().unique())
+_new = _seen - set(REASON_CATEGORY)
+if _new:
+    print(f"  WARNING: {len(_new)} unmapped cancellation reason(s), treated as uncategorised "
+          f"and excluded from metrics 7 and 9: {sorted(_new)}")
+    print("  -> add them to REASON_CATEGORY before trusting those two metrics.")
 
 o["days_enroll_to_ttp"] = (o["tumor_pickup_date"] - o["enrollment_date"]).dt.days
 o["days_ttp_to_infusion"] = (o["infusion_date"] - o["tumor_pickup_date"]).dt.days
