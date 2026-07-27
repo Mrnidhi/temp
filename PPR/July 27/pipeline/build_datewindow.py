@@ -41,9 +41,9 @@ def emit(df, order, metric, agg, datecol, valcol=None):
                      r[datecol].strftime("%Y-%m-%d"),
                      float(r[valcol]) if valcol else 1.0))
 
-# 1-2: enrollments by enrollment date; patients deduped to first enrollment
+# 1-2: enrollments by enrollment date; patients deduped to first enrollment per center
 emit(A, 1, "Enrollments in IovanceCares", "sum", "enrollment_date")
-first = A.sort_values("enrollment_date").drop_duplicates("iovance_patient_id")
+first = A.sort_values("enrollment_date").drop_duplicates(["atc", "iovance_patient_id"])
 emit(first, 2, "Patients Enrolled in IovanceCares", "sum", "enrollment_date")
 
 # 3-7: TTP metrics by pickup date
@@ -53,8 +53,8 @@ emit(A[A.ttp_cancel_le7 == 1], 3,
 emit(A[A.completed_ttp == 1], 4, "Completed TTPs", "sum", "tumor_pickup_date")
 emit(A[A.scheduled_ttp == 1], 5, "Scheduled TTPs", "sum", "tumor_pickup_date")
 ttp = A[A.tumor_pickup_date.notna()].sort_values("tumor_pickup_date")
-second = (ttp.drop_duplicates(["iovance_patient_id", "tumor_pickup_date"])
-             .groupby("iovance_patient_id").nth(1).reset_index())
+second = (ttp.drop_duplicates(["atc", "iovance_patient_id", "tumor_pickup_date"])
+             .groupby(["atc", "iovance_patient_id"]).nth(1).reset_index())
 emit(second, 6, "2nd Resections (Scheduled or Completed)", "sum", "tumor_pickup_date")
 emit(A[A.dropout_post_ttp_health == 1], 7,
      "Patient Related Drop-outs following TTP due to patient health",

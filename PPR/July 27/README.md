@@ -29,24 +29,20 @@ July 27/
 1. Install Python 3.9+ (check: `python --version`).
 2. `pip install pandas numpy openpyxl pantab`
 3. Have Tableau Desktop installed and licensed.
-4. Collect the seven Infinity exports into one folder, filenames containing:
-   `bai_list_of_orders`, `bai_infusion`, `bai_slot_data`, `bai_ttp_data`,
-   `bai_tumor_documentation`, `veeva_call_activity`, `veeva_komodo_atc_mapping`
-   (all `.xlsx`). Real data stays on the office laptop; only code travels through git.
+4. Create a `data/` folder next to `RUN_ALL.py` and drop the seven Infinity
+   exports in it, filenames containing: `bai_list_of_orders`, `bai_infusion`,
+   `bai_slot_data`, `bai_ttp_data`, `bai_tumor_documentation`,
+   `veeva_call_activity`, `veeva_komodo_atc_mapping` (all `.xlsx`).
+   Real data stays on the office laptop; only code travels through git.
 
 ## 3. Run the pipeline
 
-PowerShell:
 ```
-$env:PPR_INPUT_DIR="C:\path\to\real_files"
 python RUN_ALL.py
 ```
-CMD:
-```
-set PPR_INPUT_DIR=C:\path\to\real_files
-python RUN_ALL.py
-```
-Without `PPR_INPUT_DIR` it runs on the synthetic sample - use that for a dry run.
+Input is found automatically, first match wins: the `PPR_INPUT_DIR` env var if
+set, then the `data/` folder next to `RUN_ALL.py`, then the synthetic sample
+(dev only). The first line of output says which input it picked - check it.
 
 The run prints each stage. It ends with `wrote PPR Dashboard.twbx (... centers)`.
 Rerunning is always safe; every output is rebuilt from scratch.

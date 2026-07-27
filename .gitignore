@@ -1,2 +1,5 @@
 Meet/
 .DS_Store
+PPR/July 27/data/
+*.pyc
+__pycache__/

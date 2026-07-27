@@ -38,16 +38,16 @@ STEPS = [
 
 
 def main() -> int:
-    src = os.environ.get("PPR_INPUT_DIR")
+    # Input, first match wins: PPR_INPUT_DIR env var, then data/ next to this
+    # file, then the synthetic sample. Stage 1 applies the same order.
+    candidates = [os.environ.get("PPR_INPUT_DIR"),
+                  os.path.join(HERE, "data"),
+                  os.path.join(HERE, "..", "..", "..", "PPR Automation", "synthetic_data", "out")]
+    src = next((p for p in candidates if p and os.path.isdir(p)
+                and any(f.endswith(".xlsx") for f in os.listdir(p))), None)
     if not src:
-        print("PPR_INPUT_DIR is not set.\n")
-        print("Set it to the folder holding the 7 Infinity .xlsx files, then run again:")
-        print('  PowerShell:  $env:PPR_INPUT_DIR="C:\\path\\to\\real_files"')
-        print("  CMD:         set PPR_INPUT_DIR=C:\\path\\to\\real_files")
-        print("  Mac/Linux:   export PPR_INPUT_DIR=/path/to/real_files")
-        return 1
-    if not os.path.isdir(src):
-        print(f"PPR_INPUT_DIR points at a folder that does not exist:\n  {src}")
+        print("No input found. Create a data/ folder next to RUN_ALL.py holding the")
+        print("7 Infinity .xlsx files (or set PPR_INPUT_DIR to their folder).")
         return 1
 
     print("=" * 62)

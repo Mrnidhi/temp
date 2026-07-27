@@ -15,10 +15,16 @@ import numpy as np
 import pandas as pd
 
 HERE = os.path.dirname(__file__)
-# Point at the real Infinity files on the office laptop by setting the env var PPR_INPUT_DIR,
-# e.g.  (PowerShell)  $env:PPR_INPUT_DIR="C:\path\to\real_files"  then run this script.
-# Falls back to the synthetic data if the env var is not set.
-INPUT_DIR = os.environ.get("PPR_INPUT_DIR", os.path.join(HERE, "..", "synthetic_data", "out"))
+# Input resolution, first match wins:
+#   1. PPR_INPUT_DIR env var
+#   2. data/ next to RUN_ALL.py (office laptop: drop the 7 Infinity .xlsx there)
+#   3. synthetic sample (Mac dev only)
+_CANDIDATES = [os.environ.get("PPR_INPUT_DIR"),
+               os.path.join(HERE, "..", "data"),
+               os.path.join(HERE, "..", "synthetic_data", "out")]
+INPUT_DIR = next(p for p in _CANDIDATES
+                 if p and os.path.isdir(p) and any(f.endswith(".xlsx") for f in os.listdir(p)))
+print("input:", os.path.abspath(INPUT_DIR))
 OUT_DIR = os.path.join(HERE, "..", "analysis")
 os.makedirs(OUT_DIR, exist_ok=True)
 
