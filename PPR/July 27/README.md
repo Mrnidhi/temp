@@ -19,9 +19,11 @@ July 27/
     build_scorecard.py        computes the 13 metrics for every center and benchmark
     build_datewindow.py       one row per metric event with its own event date
     build_hyper.py            writes the three native Tableau .hyper extracts
+    build_center_decks.py     one P&PR PowerPoint per center (Launch-to-Date + YoY)
   analysis/                   pipeline outputs (CSV) - regenerated on every run
   tableau/                    ppr_scorecard.hyper (Scorecard), ppr_analysis.hyper
                               (Orders), ppr_datewindow.hyper (Events)
+  decks/                      one .pptx per center, ready to present
 ```
 
 ## 2. One-time setup (office laptop)
@@ -104,7 +106,7 @@ know it worked before moving on.
         Result
     Formula, copy it exactly as written:
         IF ATTR([agg]) = "rate" THEN STR(ROUND(AVG([value]) * 100, 1)) + "%"
-        ELSEIF ATTR([agg]) = "avg" THEN STR(ROUND(AVG([value]), 1))
+        ELSEIF ATTR([agg]) = "avg" THEN STR(ROUND(MEDIAN([value]), 1))
         ELSE STR(INT(SUM([value]))) END
     Click OK. No red error text should appear under the formula box.
 19. Drag `Result` onto the Text box in the Marks card (middle-left of the screen).
@@ -144,6 +146,26 @@ source (step 12)? Is the pill blue where it should be discrete (step 14)? Is the
 formula copied exactly, straight quotes not curly (steps 16 and 18)? If it still
 does not match, take a photo of the screen and send it.
 
+## 4b. The per-center decks (generated automatically)
+
+Every run also writes one PowerPoint per center to `decks/`, named
+`<Center Name> - P&PR Review.pptx`. Two slides, Iovance styled:
+
+- Slide 1 "Launch-to-Date Metrics": the center's 13 metrics next to the Top 10,
+  Top 40 and 'New' tier medians.
+- Slide 2 "Year over Year Metrics at ATC": 2025 vs 2026 YTD with a Difference
+  column, green when the change is an improvement, red when it is not
+  (the direction is flipped for metrics where lower is better).
+
+To regenerate only the centers you need for a meeting:
+
+```
+python pipeline/build_center_decks.py "Moffitt" "Yale"
+```
+
+Names are matched loosely, so part of the name is enough. Open the file, adjust
+the talk track if you want, present. No manual number entry anywhere.
+
 ## 5. How to use it (what Kolin does)
 
 - Pick a center in the dropdown: both tables switch to that center. Benchmarks stay fixed.
@@ -176,9 +198,15 @@ per-center decks ("timing metrics based upon the TTP or Infusion Date"):
 | 8 | OOS Products | final product delivery | count |
 | 9 | Patient Progression Rate | TTP pickup | drop-offs after mfg start / mfg starts |
 | 10 | AMTAGVI Infusions Performed | infusion | count |
-| 11 | Avg Time Enrollment to TTP (days) | TTP pickup | mean, 1 dp |
-| 12 | Avg Time TTP to Infusion (days) | infusion | mean, 1 dp |
-| 13 | Avg Time Final Product Delivery to Infusion (days) | infusion | mean, 1 dp |
+| 11 | Avg Time Enrollment to TTP (days) | TTP pickup | median, 1 dp |
+| 12 | Avg Time TTP to Infusion (days) | infusion | median, 1 dp |
+| 13 | Avg Time Final Product Delivery to Infusion (days) | infusion | median, 1 dp |
+
+Timing rows are medians, not averages. Kolin, Meet 6, on the existing Infinity
+scorecard: "what it shows you is essentially, like, the median for all these
+values." Medians also resist the big-center skew he flagged in Meet 4.5. The
+column headers still read "Average Time ..." because that is the wording in the
+mandated template; the number underneath is a median.
 
 Because of event dating, Launch-to-Date does NOT have to equal 2024+2025+2026 for a
 metric (events missing a date sit in Launch-to-Date only). That is correct behavior.

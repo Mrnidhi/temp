@@ -6,7 +6,8 @@ Tableau range-of-dates filter recomputes every metric for any window.
 
 Aggregation contract (column `agg`):
     sum  - counts; SUM(value) over the window
-    avg  - timelines; AVG(value) over the window, 1 decimal
+    avg  - timelines; MEDIAN(value) over the window, 1 decimal. Kolin (Meet 6):
+           the Infinity scorecard reports "the median for all these values"
     rate - Patient Progression Rate; one row per mfg start, value 1 if the
            patient dropped after mfg start else 0, so AVG(value) = the rate
 

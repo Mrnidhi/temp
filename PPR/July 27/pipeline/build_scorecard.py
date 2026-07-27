@@ -68,11 +68,12 @@ def _win(df, datecol, start, end):
     if end   is not None: m &= d <= pd.Timestamp(end)
     return df[m]
 
-def compute(df, start=None, end=None, avg="mean"):
+def compute(df, start=None, end=None, avg="median"):
     """13 metrics. Each is filtered on ITS OWN event date, so a column means
     'what happened in this period', matching Kolin's decks."""
     w = {m: _win(df, col, start, end) for m, col in EVENT_DATE.items()}
-    agg = (lambda s: s.median()) if avg == "median" else (lambda s: s.mean())
+    # Kolin, Meet 6: the Infinity scorecard shows "the median for all these values".
+    agg = (lambda s: s.mean()) if avg == "mean" else (lambda s: s.median())
 
     mfg = int(w[M9]["mfg_started"].sum())
     drop_after_mfg = int(w[M9]["drop_after_mfg"].sum())
