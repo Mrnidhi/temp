@@ -6,7 +6,6 @@ across the time cuts and quarters, plus the national ATC-tier benchmarks. Output
 tidy (one row per center x column x metric) so Tableau just renders it.
 
 Out: analysis/ppr_scorecard_tidy.csv   (the Tableau data source)
-     analysis/ppr_scorecard_wide_sample.csv  (human eyeball for one center)
 """
 import os
 import numpy as np
@@ -205,8 +204,7 @@ print(f"tidy scorecard: {len(tidy)} rows -> analysis/ppr_scorecard_tidy.csv")
 
 # ---- dashboard payload (single source, no ad-hoc inline step) ----
 import json
-DASH = os.path.join(HERE, "..", "dashboard")
-os.makedirs(DASH, exist_ok=True)
+DASH = os.path.join(HERE, "..", "dashboard")   # payload written only if this exists
 metrics = [{"metric_order": m[0], "metric_group": m[1], "metric": m[2], "value_type": m[3]} for m in METRICS]
 time_cols = [c for _, c, o, _, _ in sorted(TIME_COLS + QUARTER_COLS, key=lambda x: x[2])]
 bench_cols = [c for _, c, o, _ in sorted(BENCH_COLS, key=lambda x: x[2])]
@@ -258,6 +256,7 @@ for c in ["completed_ttp", "scheduled_ttp", "ttp_cancel_le7", "oos_product", "mf
     raw[c] = raw[c].astype(bool).astype(int)
 raw = raw.where(pd.notna(raw), None)
 
+DASH = os.path.join(HERE, "..", "dashboard")
 payload = {"metrics": metrics, "time_cols": time_cols, "bench_cols": bench_cols,
            "ct_cols": ct_cols, "qv": qv, "qranges": qranges, "qbounds": qbounds,
            "lower_is_better": sorted(LOWER_IS_BETTER),
@@ -265,8 +264,9 @@ payload = {"metrics": metrics, "time_cols": time_cols, "bench_cols": bench_cols,
            "centers": sorted(tidy[tidy.scope == "Center"].center.unique().tolist()),
            "cv": cv, "bv": bv, "asof": TODAY,
            "raw": raw.to_dict(orient="records")}
-json.dump(payload, open(os.path.join(DASH, "scorecard_payload.json"), "w"))
-print(f"dashboard payload -> dashboard/scorecard_payload.json ({len(payload['centers'])} centers)")
+if os.path.isdir(DASH):
+    json.dump(payload, open(os.path.join(DASH, "scorecard_payload.json"), "w"))
+    print(f"dashboard payload -> dashboard/scorecard_payload.json ({len(payload['centers'])} centers)")
 
 # ---- wide sample for one center + benchmarks, human eyeball ----
 top_center = A.groupby("atc")["order_request__til_order_name"].nunique().idxmax()
@@ -277,7 +277,6 @@ wide = (sample.sort_values(["metric_order", "col_order"])
         .sort_index(axis=1))
 wide.columns = [c[1] for c in wide.columns]
 wide = wide.reset_index().drop(columns="metric_order")
-wide.to_csv(os.path.join(OUT_DIR, "ppr_scorecard_wide_sample.csv"), index=False)
 print(f"\nSCORECARD for busiest center: {top_center}\n")
 with pd.option_context("display.width", 200, "display.max_columns", 20):
     print(wide.to_string(index=False))
