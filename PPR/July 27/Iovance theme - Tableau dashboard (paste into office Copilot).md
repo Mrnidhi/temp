@@ -135,6 +135,47 @@ applies.
     the bands name things.
 15. File, Save.
 
+## Step 4b. Exact position and size of every object (1400 by 900)
+
+These are pixel coordinates for a Fixed size dashboard set to 1400 wide by 900 tall.
+They only take effect on Floating objects, so for each object do this:
+
+- When you drop the object, set it to Floating (in the Objects area at the bottom left,
+  switch the toggle from Tiled to Floating before you drag, or right-click a placed
+  object and choose Floating).
+- Select the object, open the Layout pane (top left, the tab next to Dashboard).
+- In Position type the x and the y. In Size type the w and the h. All four are pixels
+  measured from the top-left corner of the dashboard.
+- For each worksheet, also set the toolbar Fit dropdown to Entire View so the sheet
+  fills its box exactly instead of leaving white space.
+
+Base layout, the scorecard with the date-window companion on the right:
+
+| Object | x | y | w | h | Fill |
+|---|---|---|---|---|---|
+| Top navy band (Text: I O V A N C E   P&PR Scorecard) | 0 | 0 | 1400 | 64 | navy #17344F |
+| Lime accent strip (Blank) | 0 | 64 | 1400 | 6 | lime #9DC13C |
+| Source Data As of (Text) | 16 | 82 | 420 | 28 | none |
+| Center dropdown (pCenter card) | 1085 | 80 | 300 | 34 | white |
+| P&PR Scorecard sheet | 16 | 124 | 896 | 720 | white |
+| Custom Date Window sheet | 924 | 124 | 460 | 604 | white |
+| Event date slider (event_date card) | 924 | 736 | 460 | 108 | white |
+| Bottom lime band (Text: ADVANCING IMMUNO-ONCOLOGY) | 0 | 852 | 1400 | 40 | lime #9DC13C |
+
+Optional confidentiality line: a Text object at x 984, y 860, w 400, h 24, navy text on
+top of the lime band, right aligned, reading the internal-use line from Step 4 item 13.
+
+Nothing overlaps: the scorecard ends at x 912, the right rail starts at x 924, a 12 px
+gutter between them. The scorecard and the slider both end at y 844, and the bottom band
+starts at y 852. Right and bottom margins are 16 px and 8 px. Adjust any number to taste,
+the layout holds as long as the right rail starts a few pixels past where the scorecard
+ends.
+
+If you put the two tables side by side feels too tight at 460 wide, an equally clean
+option is to stack them: scorecard at x 16, y 124, w 1368, h 470, and the date-window
+sheet at x 16, y 604, w 1368, h 150 with the slider at x 16, y 762, w 1368, h 82. Use
+whichever reads better once real data is in.
+
 ## Step 5. Optional KPI band across the top (the executive look)
 
 Only if Kolin wants the headline-first version. This adds a row of five colored number
@@ -150,6 +191,23 @@ tiles between the accent strip and the scorecard.
    strip, equal widths. Add a tiny label above each number in steel blue caps.
 5. Keep the full scorecard underneath. Now the center is read at a glance first, detail
    second.
+
+Exact positions for the KPI variant. The five tiles sit in a row at y 124, each 264
+wide and 96 tall with a 12 px gap, and the body below shifts down to make room:
+
+| Object | x | y | w | h |
+|---|---|---|---|---|
+| KPI tile 1 (Patients Enrolled) | 16 | 124 | 264 | 96 |
+| KPI tile 2 (Completed TTPs) | 292 | 124 | 264 | 96 |
+| KPI tile 3 (AMTAGVI Infusions) | 568 | 124 | 264 | 96 |
+| KPI tile 4 (Progression Rate) | 844 | 124 | 264 | 96 |
+| KPI tile 5 (Avg Enroll to TTP) | 1120 | 124 | 264 | 96 |
+| P&PR Scorecard sheet | 16 | 232 | 896 | 612 |
+| Custom Date Window sheet | 924 | 232 | 460 | 500 |
+| Event date slider | 924 | 740 | 460 | 104 |
+
+The top band, accent strip, controls, and bottom band keep the same coordinates as the
+base layout. Only the body drops from y 124 to y 232 to clear the tile row.
 
 ## Step 6. Check it before you show it
 
@@ -174,3 +232,83 @@ tiles between the accent strip and the scorecard.
 - Tableau cannot fill individual columns with different background colors the way a web
   page can. Use the block dividers from Step 2 item 4 to separate the three blocks. That
   is the correct Tableau way and it is what the house scorecards do.
+
+## Step 7. Make it production ready (punch list from the 07/27 screenshot)
+
+The theme is done. These are the fixes that make it correct and readable. Do the ones in
+group A first, they are the ones a viewer notices immediately. Do each fix on BOTH the
+P&PR Scorecard sheet and the Custom Date Window sheet so the two tables read together.
+
+### A. Correctness, fix these first
+
+1. **The metrics are in the wrong order. This is the biggest one.** Right now they sort
+   alphabetically, so AMTAGVI Regimen sits at the top and, inside a group, OOS Products
+   comes before Patient Progression Rate. Kolin's template order is Patient
+   Identification and Enrollment, then Tumor Tissue Procurement, then AMTAGVI Regimen,
+   then AMTAGVI Treatment Timelines, with the 13 metrics numbered inside that.
+   Fix: on the Rows shelf, right-click the metric_group pill, Sort, Sort By Field, choose
+   metric_order, Aggregation Minimum, Order Ascending. Then right-click the metric pill,
+   Sort, Sort By Field, metric_order, Minimum, Ascending. If a sort icon is showing on the
+   Metric header from an earlier click, clear it first (right-click, Clear Sort). Because
+   metric_order rises across the whole template, sorting both levels by it fixes the group
+   order and the within-group order at once.
+2. **Hide the field-label rows.** The table is showing Tableau's field names as headers:
+   "Col Group / Col Label" across the top and "Metric" twice on the left. Turn them off:
+   Analysis menu, uncheck Show Field Labels for Columns and Show Field Labels for Rows. Or
+   right-click the "Col Group / Col Label" text, Hide Field Labels for Columns, and the
+   same for Rows.
+3. **Show empty rows.** As you slide the date, metrics with no events in that window drop
+   out, which makes the table jump around. Analysis menu, Table Layout, tick Show Empty
+   Rows. Now all 13 always show, blank where there is nothing.
+
+### B. Legibility
+
+4. **Widen the metric name column.** Names are cut off ("Patient Relate..", "Average
+   Time .."). Drag its right border out, or double-click the border to auto-fit. Aim for
+   about 230 px so the longest name fits on one line.
+5. **Widen the group column so it stops stacking letters.** "AMTAGVI Regimen" is wrapping
+   down to "AMTAG VI Regi men" because the column is too narrow. Give it about 100 px, or
+   drop its font a point.
+6. **Fix the column headers being cut off.** "Laun..", "202..", "Top ..", "Q3'2.." are all
+   truncated. Two ways, use both: set the header font to 8 or 9 pt (Format, Font, Header),
+   and widen the number columns a little. If Top 10 and Top 40 still collide, that is fine,
+   they are short.
+7. **Right-align the numbers.** They currently sit on the left of each cell, which is why
+   the columns look ragged. Right-click the value field, Format, Alignment tab, set
+   Horizontal to Right. Do this on both sheets. The percent and decimal values that look
+   cut off ("12.5..", "20.0..") will show fully once the column is right-aligned and a
+   touch wider.
+
+### C. Keep it honest
+
+8. **Mark the cancellation metric as an estimate.** Add an asterisk to the "TTPs Cancelled
+   or Rescheduled" row label, and add one small Text object at the bottom of the dashboard
+   reading: "TTP cancellations are estimated until the Infinity snapshot feed is
+   connected." This is the proxy we already flagged.
+9. **Leave the timing headers as Average Time, but confirm the value is a median.** The
+   template wording stays. Check the Result calc still uses MEDIAN for the timing rows so
+   the number under the header is the median, matching Kolin's own deck.
+
+### D. Before you show it to the team
+
+10. **Test the dropdown.** Change pCenter to another center and confirm both tables update
+    and the benchmark columns (Top 10, Top 40, New) stay the same. Benchmarks are blinded
+    and must not move with the center.
+11. **Test the slider.** Drag the Event Date ends and confirm every number in the
+    date-window table recomputes. Set it near 04/27/2026 and confirm the center reproduces
+    the numbers on Kolin's real deck, which is the proof to show him.
+12. **Clean the tooltips.** Right-click each sheet, Tooltip, and write it in plain words:
+    the metric name, the column, and the value. No raw field names.
+13. **Keep only Dashboard 3 for showing.** The Current Template and Proposed Template
+    sheets are working tabs. The retiring quartile tab stays minimal. Present from the
+    themed dashboard only.
+14. **When it is signed off, publish.** Server menu, Publish Workbook, to Tableau Cloud, so
+    the team gets the same dropdown and slider in a browser. Refresh cadence is in
+    section 8: new export, run RUN_ALL, then Extract, Refresh.
+
+### One thing that is already right
+
+The right panel, windowed to 04/27/2026, is showing 10 patients enrolled, 7 completed
+TTPs, 3 infusions, 1 drop-out, 1 OOS, and a 14.3% progression rate. That matches Kolin's
+Albert B Chandler deck exactly. The build is correct. The work left here is order and
+legibility, not the numbers.
