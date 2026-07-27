@@ -1,9 +1,10 @@
 # P&PR Dashboard - complete build (July 27)
 
-One pipeline, one command, one finished Tableau workbook. Run RUN_ALL.py against the
-seven Infinity exports and it produces `PPR Dashboard.twbx`: the mandated 13-metric
-P&PR scorecard plus a custom date-window view, with a center dropdown and a draggable
-date slider on a single Iovance-styled dashboard.
+One pipeline, one command. RUN_ALL.py turns the seven Infinity exports into three
+native Tableau extracts: the mandated 13-metric P&PR scorecard, the order-grain table,
+and an event-level table that powers a draggable date filter. The workbook itself is
+built once in Tableau Desktop from these extracts (section 4, ~10 minutes, one time);
+afterwards every data refresh is just rerun + Extract > Refresh.
 
 ---
 
@@ -17,11 +18,10 @@ July 27/
     build_analysis_table.py   joins the 7 Infinity .xlsx into one order-grain table
     build_scorecard.py        computes the 13 metrics for every center and benchmark
     build_datewindow.py       one row per metric event with its own event date
-    build_hyper.py            native Tableau .hyper extracts (for repointing/refresh)
-    gen_workbook.py           authors the finished PPR Dashboard.twbx
+    build_hyper.py            writes the three native Tableau .hyper extracts
   analysis/                   pipeline outputs (CSV) - regenerated on every run
-  tableau/                    .hyper extracts - regenerated on every run
-  PPR Dashboard.twbx          the deliverable (appears here after a run)
+  tableau/                    ppr_scorecard.hyper (Scorecard), ppr_analysis.hyper
+                              (Orders), ppr_datewindow.hyper (Events)
 ```
 
 ## 2. One-time setup (office laptop)
@@ -44,25 +44,46 @@ Input is found automatically, first match wins: the `PPR_INPUT_DIR` env var if
 set, then the `data/` folder next to `RUN_ALL.py`, then the synthetic sample
 (dev only). The first line of output says which input it picked - check it.
 
-The run prints each stage. It ends with `wrote PPR Dashboard.twbx (... centers)`.
-Rerunning is always safe; every output is rebuilt from scratch.
+The run prints each stage and ends with the three extracts written. Rerunning is
+always safe; every output is rebuilt from scratch. Close Tableau Desktop first, it
+locks the .hyper files.
 
-## 4. Open and finish in Tableau Desktop (5 minutes)
+## 4. Build the workbook in Tableau Desktop (one time, ~10 minutes)
 
-1. Double-click `PPR Dashboard.twbx`. The "P&PR Dashboard" tab opens with:
-   - left: the P&PR Scorecard matrix (Launch to Date, 2024, 2025, 2026 YTD,
-     Top 10 / Top 40 / New benchmarks, quarterly columns)
-   - middle: the Custom Date Window table
-   - right: the center dropdown (pCenter) and the Event Date range slider
-2. If a sheet opens blank, click its tab, then Data menu > each source >
-   Extract > Refresh once. Save.
-3. Cosmetic pass (Tableau strips some hand-authored formatting on first open):
-   - On each sheet: Format > Shading > Header = navy `#17344F`, header font white bold.
-   - Dashboard title band should read navy with white text; bottom band lime `#9DC13C`
-     with navy text. Fix via the two Text objects if needed.
-   - On the Custom Date Window sheet, right-click the `metric_order` row header >
-     uncheck Show Header (it exists only to keep metrics in template order).
-4. Save. This file is the deliverable.
+Start from the existing workbook that already has the P&PR Scorecard sheet and the
+pCenter parameter (the one built from ppr_scorecard Extract). Two moves: refresh the
+old data, add the date-window sheet.
+
+A. Refresh the scorecard numbers
+1. Open the workbook. Data > ppr_scorecard Extract > Extract > Refresh
+   (point it at `tableau/ppr_scorecard.hyper` if it asks). Numbers update to the
+   corrected event-dated values. Done with this part.
+
+B. Add the Custom Date Window sheet
+2. Data > New Data Source > More... > `tableau/ppr_datewindow.hyper` > table `Events`.
+3. New worksheet, name it `Custom Date Window`.
+4. Drag `metric_group`, then `metric_order`, then `metric` to Rows (that order).
+   Right-click the metric_order pill > uncheck Show Header.
+5. Analysis > Create Calculated Field, name `Keep Center`:
+       [center] = [pCenter]
+   Drag it to Filters, tick True.
+6. Analysis > Create Calculated Field, name `Result`:
+       IF ATTR([agg]) = "rate" THEN STR(ROUND(AVG([value]) * 100, 1)) + "%"
+       ELSEIF ATTR([agg]) = "avg" THEN STR(ROUND(AVG([value]), 1))
+       ELSE STR(INT(SUM([value]))) END
+   Drag `Result` onto the Text mark.
+7. Drag `event_date` to Filters > Range of Dates > OK. Right-click the filter pill >
+   Show Filter. The slider card appears - that is the date window control.
+8. Format > Shading > Header: navy #17344F, white bold font (matches house style).
+
+C. Dashboard
+9. Open the existing dashboard (or new one, 1400 x 850). Drag `Custom Date Window`
+   next to the scorecard sheet.
+10. The pCenter dropdown already controls both sheets (same parameter). Keep the
+    Event Date slider card on the right rail.
+11. Add a top Text object: IOVANCE | P&PR Scorecard, white text on navy #17344F fill;
+    bottom Text object: ADVANCING IMMUNO-ONCOLOGY on lime #9DC13C fill.
+12. Save. This workbook is the deliverable; you never rebuild it again.
 
 ## 5. How to use it (what Kolin does)
 
@@ -109,6 +130,6 @@ in `build_analysis_table.py`.
 
 ## 8. Refresh cadence
 
-New Infinity export -> drop the 7 files in the input folder -> `python RUN_ALL.py` ->
-reopen the .twbx (or Extract > Refresh if you built extracts on the .hyper files).
-Numbers update; nothing else changes.
+New Infinity export -> drop the 7 files in `data/` -> close Tableau ->
+`python RUN_ALL.py` -> open the workbook > Data > each source > Extract > Refresh.
+Numbers update; the workbook never changes.

@@ -70,4 +70,12 @@ if os.path.exists(an_path):
     os.remove(an_path)
 pantab.frame_to_hyper(ana, an_path, table="Orders")
 print(f"ppr_analysis.hyper: {len(ana)} rows x {ana.shape[1]} cols, table 'Orders'")
+# event-level date-window source: one row per metric event, its own event date
+dw = pd.read_csv(os.path.join(ANA, "ppr_datewindow_long.csv"))
+dw["event_date"] = pd.to_datetime(dw["event_date"])
+dw_path = os.path.join(OUT, "ppr_datewindow.hyper")
+remove_if_exists(dw_path) if "remove_if_exists" in dir() else (os.remove(dw_path) if os.path.exists(dw_path) else None)
+pantab.frame_to_hyper(dw, dw_path, table="Events")
+print(f"ppr_datewindow.hyper: {len(dw)} rows, table 'Events'")
+
 print("Tableau extracts written ->", OUT)
