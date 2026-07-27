@@ -48,42 +48,101 @@ The run prints each stage and ends with the three extracts written. Rerunning is
 always safe; every output is rebuilt from scratch. Close Tableau Desktop first, it
 locks the .hyper files.
 
-## 4. Build the workbook in Tableau Desktop (one time, ~10 minutes)
+## 4. Build the workbook in Tableau Desktop (one time, about 15 minutes)
 
-Start from the existing workbook that already has the P&PR Scorecard sheet and the
-pCenter parameter (the one built from ppr_scorecard Extract). Two moves: refresh the
-old data, add the date-window sheet.
+You will do two things: refresh the old scorecard numbers, then add one new sheet
+with the date slider. Follow in order. Each step says what you should see, so you
+know it worked before moving on.
 
-A. Refresh the scorecard numbers
-1. Open the workbook. Data > ppr_scorecard Extract > Extract > Refresh
-   (point it at `tableau/ppr_scorecard.hyper` if it asks). Numbers update to the
-   corrected event-dated values. Done with this part.
+### Part A. Refresh the scorecard numbers (2 minutes)
 
-B. Add the Custom Date Window sheet
-2. Data > New Data Source > More... > `tableau/ppr_datewindow.hyper` > table `Events`.
-3. New worksheet, name it `Custom Date Window`.
-4. Drag `metric_group`, then `metric_order`, then `metric` to Rows (that order).
-   Right-click the metric_order pill > uncheck Show Header.
-5. Analysis > Create Calculated Field, name `Keep Center`:
-       [center] = [pCenter]
-   Drag it to Filters, tick True.
-6. Analysis > Create Calculated Field, name `Result`:
-       IF ATTR([agg]) = "rate" THEN STR(ROUND(AVG([value]) * 100, 1)) + "%"
-       ELSEIF ATTR([agg]) = "avg" THEN STR(ROUND(AVG([value]), 1))
-       ELSE STR(INT(SUM([value]))) END
-   Drag `Result` onto the Text mark.
-7. Drag `event_date` to Filters > Range of Dates > OK. Right-click the filter pill >
-   Show Filter. The slider card appears - that is the date window control.
-8. Format > Shading > Header: navy #17344F, white bold font (matches house style).
+1. Open Tableau Desktop.
+2. File > Open > your existing workbook (the one with the P&PR Scorecard sheet,
+   e.g. `up.twb` in the tableau folder).
+3. Click the Data menu at the top. You will see your data source name in the list,
+   something like "ppr_scorecard Extract".
+4. Hover over that name. In the submenu, click Refresh. If Refresh is greyed out,
+   in the same submenu go to Extract > Refresh instead.
+5. If a file picker opens asking where the file is, browse to the `tableau` folder
+   and pick `ppr_scorecard.hyper`.
+6. Check it worked: open the P&PR Scorecard sheet, look at "AMTAGVI Infusions
+   Performed". The 2024/2025 numbers should have changed from before. That is the
+   corrected event dating coming through.
 
-C. Dashboard
-9. Open the existing dashboard (or new one, 1400 x 850). Drag `Custom Date Window`
-   next to the scorecard sheet.
-10. The pCenter dropdown already controls both sheets (same parameter). Keep the
-    Event Date slider card on the right rail.
-11. Add a top Text object: IOVANCE | P&PR Scorecard, white text on navy #17344F fill;
-    bottom Text object: ADVANCING IMMUNO-ONCOLOGY on lime #9DC13C fill.
-12. Save. This workbook is the deliverable; you never rebuild it again.
+### Part B. Connect the new date-window data (2 minutes)
+
+7. Data menu > New Data Source.
+8. Under "To a File", click More..., then browse to the `tableau` folder and pick
+   `ppr_datewindow.hyper`.
+9. A canvas opens showing one table named Events. If it is not already on the
+   canvas, drag Events onto it.
+10. Check it worked: at the bottom left you should see columns named center,
+    metric_group, metric, metric_order, agg, event_date, value.
+
+### Part C. Build the Custom Date Window sheet (7 minutes)
+
+11. Click the new-worksheet icon at the bottom (next to the sheet tabs). Rename the
+    new sheet: right-click its tab > Rename > type `Custom Date Window`.
+12. Make sure the left Data pane shows the NEW source (ppr_datewindow / Events).
+    If not, click its name at the top of the Data pane.
+13. Drag `metric_group` from the left pane onto the Rows shelf.
+14. Drag `metric_order` onto the Rows shelf, to the RIGHT of metric_group.
+    It will land as a green pill. Right-click that green pill and click Discrete.
+    It turns blue. Then right-click the same pill again and untick Show Header.
+    (It exists only to keep the metrics in template order. Hiding the header just
+    hides the number column; the sorting still works.)
+15. Drag `metric` onto the Rows shelf, to the RIGHT of metric_order.
+16. Analysis menu > Create Calculated Field. In the name box type exactly:
+        Keep Center
+    In the formula box type exactly:
+        [center] = [pCenter]
+    Click OK. (pCenter is the same dropdown parameter your scorecard already uses,
+    so one dropdown will drive both sheets.)
+17. Drag `Keep Center` from the left pane onto the Filters shelf. A small dialog
+    opens with True and False. Tick True. Click OK.
+18. Analysis menu > Create Calculated Field. Name it exactly:
+        Result
+    Formula, copy it exactly as written:
+        IF ATTR([agg]) = "rate" THEN STR(ROUND(AVG([value]) * 100, 1)) + "%"
+        ELSEIF ATTR([agg]) = "avg" THEN STR(ROUND(AVG([value]), 1))
+        ELSE STR(INT(SUM([value]))) END
+    Click OK. No red error text should appear under the formula box.
+19. Drag `Result` onto the Text box in the Marks card (middle-left of the screen).
+    Numbers appear in the table. Counts show as whole numbers, the progression
+    rate as a percent, the three timing rows with one decimal.
+20. Drag `event_date` onto the Filters shelf. In the dialog pick Range of Dates,
+    click Next if shown, then OK.
+21. Right-click the event_date pill on the Filters shelf > Show Filter. A slider
+    card with two handles appears on the right side of the sheet.
+22. Test it now, before the dashboard: drag the left handle right and the right
+    handle left. Every number in the table should change as you drag. Drag both
+    handles back to the ends when done.
+23. Optional look: Format menu > Shading > under Header pick the dark navy
+    (#17344F). White bold header font via Format > Font > Header.
+
+### Part D. Put it on the dashboard (3 minutes)
+
+24. Open your existing dashboard tab (or Dashboard menu > New Dashboard,
+    size 1400 x 850).
+25. Drag `Custom Date Window` from the Sheets list on the left onto the dashboard,
+    next to the scorecard.
+26. If the date slider card did not come along: click the Custom Date Window sheet
+    on the dashboard, click the small dropdown arrow at its top-right corner, then
+    Filters > event_date. The slider card appears on the right rail.
+27. Same check for the center dropdown: if it is not visible, click either sheet,
+    dropdown arrow > Parameters > pCenter.
+28. Title bands if you want the house look: two Text objects, top one reads
+    IOVANCE | P&PR Scorecard (white text, navy #17344F background), bottom one
+    reads ADVANCING IMMUNO-ONCOLOGY (navy text, lime #9DC13C background).
+29. File > Save. Done. You never rebuild any of this again; from now on it is
+    only data refreshes (section 8).
+
+### If something does not match
+
+Stop at the step where your screen differs and check: are you on the right data
+source (step 12)? Is the pill blue where it should be discrete (step 14)? Is the
+formula copied exactly, straight quotes not curly (steps 16 and 18)? If it still
+does not match, take a photo of the screen and send it.
 
 ## 5. How to use it (what Kolin does)
 
