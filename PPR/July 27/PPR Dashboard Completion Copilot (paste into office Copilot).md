@@ -242,3 +242,79 @@ When all boxes except possibly the last are ticked, tell Srinidhi: the dashboard
 - Do not rename or drop any metric, or relabel the Average Time headers.
 - Do not rebuild a sheet from scratch unless Srinidhi confirms it is truly missing.
 - Do not move any verified number. If a number looks wrong, flag it and ask, do not silently change a calc.
+
+---
+---
+
+## ADDED SCOPE (07/27) from Kolin's feedback and the real Excel template
+
+Four more things: split into two tabs, let Kolin pick which columns and rows show, add color coding, and make the table match the real Excel template. Do these after the Step 7 list. Kolin's exact asks: there are too many columns and rows, so he wants to show a subset and screenshot it, and he wants color coding to make it look good.
+
+### First, what the real Excel template looks like (this is the target to match)
+
+Kolin's Excel has two tabs, both photographed. The Proposed Template tab is what the dashboard must look like.
+
+**Proposed Template (the target):**
+- Three block headers over the columns: the center name over the "This Center" block, then "YTD National Metrics", then "Quarterly ATC Metrics".
+- Columns in order: Category, Metric, Launch to Date, 2024, 2025, 2026 (YTD), Top 10 ATCs, Top 40 ATCs, New ATCs, Q3'26 QTD, Q2'26, Q1'26, Q4'25.
+- The Category column is one merged block per group, shaded in blues: Patient Identification light, Tumor Tissue light blue, AMTAGVI Regimen a stronger blue, Treatment Timelines light blue.
+- The four year columns (Launch to Date, 2024, 2025, 2026 YTD) have a light green header shading.
+- The three National columns (Top 10, Top 40, New) sit inside a heavy black border box, with a red note above reading "Pick one comparative arm depending on ATC". You show the one benchmark that matches the center's tier.
+- Metric names are full, never cut off. Footnotes under the table: the progression-rate definition, "Top 10 and Top 40 ATCs defined as highest enrolling centers during a specific timeframe", and "New refers to ATCs authorized and onboarded in the 2025 calendar year".
+- There is also a Notes column on the far right of the Excel that explains each metric's data source. That is a working note. LEAVE IT OFF the dashboard. Kolin wants fewer columns, not more.
+
+**Current Template (being retired):** this is where the color idea comes from. The center's Launch-to-Date cell is heat-colored from red to green by how it compares, red worst, green best, and the direction is flipped for metrics where lower is better (cancellations, drop-outs, OOS, progression rate, and the delivery-to-infusion timing). Do NOT bring back the quartile range columns. Only borrow the color idea.
+
+### Task 15. Split the scorecard and the date window into two tabs
+
+GOAL: the scorecard reads as one clean page like the Excel, and the date window is its own tab.
+
+DO:
+- Make two dashboards. Name the first "P&PR Scorecard" and put only the scorecard sheet on it, with the bands and the center dropdown. Name the second "Custom Date Window" and put the date-window sheet and the slider on it.
+- Right-click a dashboard tab to rename it. Take the Custom Date Window sheet off the scorecard dashboard.
+- Keep the same navy and lime bands on both tabs so they match.
+
+CHECK: the scorecard tab shows a single table, full width, no second table beside it. The date window has its own tab.
+
+### Task 16. Let Kolin pick which columns and rows to show (his request)
+
+GOAL: he ticks a few columns and a few rows, the table shrinks to just those, and he screenshots it. This is easy in Tableau with two filter controls.
+
+DO, on the scorecard sheet:
+- Columns: drag the column field (col_group, or col_label for finer control) to the Filters shelf. Right-click it, Show Filter. On the filter card dropdown, set it to Multiple Values, dropdown style. Now he ticks which columns appear. This also covers the "pick one comparative arm" idea, he can show just Top 40 if he wants.
+- Rows: drag metric_group to the Filters shelf (use metric for single-row control). Show Filter, Multiple Values dropdown. Now he ticks which groups or metrics appear.
+- Put both filter cards in a corner, or make them floating so they do not eat table space.
+- To screenshot: he ticks what he wants, the table redraws, then Dashboard menu, Export, Image, or a normal screen capture.
+
+CHECK: unticking a column or a metric group removes it live and the table tightens up. Ticking it back restores it.
+
+### Task 17. Add the color coding (his visual-appeal request)
+
+Two parts. Part A makes it look like the Excel template. Part B is the value heat Kolin means by color coding.
+
+**Part A, structural color:**
+- Category column: shade each group in blues like the Excel. Right-click the group cells, Format, Shading, set each group. You have the Excel open, so match it by eye.
+- Year headers: give Launch to Date, 2024, 2025, 2026 a light green header shading (Format, Shading, Header).
+- Benchmark block: put a heavy border around Top 10, Top 40, New (Format, Borders) so it reads as one boxed block like the template.
+
+**Part B, value heat (red to green versus the benchmark):**
+- Goal: the center's Launch-to-Date value is colored by how it compares to the benchmark, green when better, red when worse, and the direction flips for metrics where lower is better.
+- Make a calculated field called Compare Score. In words: for a lower-is-better metric it is benchmark minus the center value, otherwise it is the center value minus the benchmark. A positive score always means better.
+- Drag Compare Score onto the Color mark and choose a red-to-green diverging palette, green for positive, red for negative.
+- If the mark type is Text, the number gets colored. To fill the whole cell like the Excel heat, change the mark type to Square and put the value on the Label.
+- Keep the heat on the Launch-to-Date column to match the template. Extend to the year columns only if Kolin asks.
+- On the Custom Date Window tab or a year-over-year view, color the Difference the same way, green for an improvement, red for a slip.
+
+NOTE: comparing the center value to the benchmark inside one cell can be awkward with a table calc, because they sit in different columns. If it fights you, STOP and tell Srinidhi. A small compare-score field can be added to the pipeline so this becomes a simple drag onto Color. That is the one place a pipeline change may help, and only with his say-so.
+
+### DEFINITION OF DONE, added boxes
+
+Layout and template match
+- [ ] Scorecard and Custom Date Window are on separate tabs.
+- [ ] A column picker and a row picker are on the scorecard dashboard.
+- [ ] Category shading, green year headers, and the boxed benchmark block match the Excel template.
+- [ ] Full metric names show, footnotes present, Notes column left off.
+
+Color coding
+- [ ] Center values are heat-colored versus the benchmark, green better, red worse, direction-aware.
+- [ ] The year-over-year Difference is colored green for better, red for worse.
