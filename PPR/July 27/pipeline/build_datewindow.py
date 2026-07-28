@@ -26,6 +26,7 @@ for c in ["enrollment_date", "tumor_pickup_date", "fp_delivery_date", "infusion_
 from metrics import NAME, GROUP as GROUPS
 
 rows = []
+undated = []   # (center, metric, order id, missing field) - Kolin asked for these 07/28
 def emit(df, order, metric, agg, datecol, valcol=None, unitcol=None):
     """One row per event. Events with no date are still emitted: they are real events that
     simply cannot be placed in a period (an out-of-spec product never delivered, a
@@ -34,6 +35,9 @@ def emit(df, order, metric, agg, datecol, valcol=None, unitcol=None):
     d = df[df[valcol].notna()] if valcol else df
     for _, r in d.iterrows():
         dt = r[datecol]
+        if pd.isna(dt):
+            undated.append((r["atc"], metric,
+                            r.get("order_request__til_order_name", ""), datecol))
         rows.append((r["atc"], GROUPS[order], metric, order, agg,
                      dt.strftime("%Y-%m-%d") if pd.notna(dt) else "",
                      float(r[valcol]) if valcol else 1.0,
@@ -143,31 +147,56 @@ live = ev.copy()
 live["col_label"], live["col_order"] = SELECTED
 tagged.append(live)
 
-# ---- national tier benchmarks (Top 10 / Top 40 / New) --------------------------------
-# These are a two-stage aggregate: a per-centre value, then the MEDIAN across the centres
-# in the tier. An event table cannot reproduce that by summing rows, so they are carried
-# across already computed rather than recalculated here. Stage 2 owns the definition
-# (bench_median in build_scorecard.py); this reads its output so there is one definition.
+# ---- the one benchmark arm per centre (Kolin, 07/28 Daily Connect) -------------------
+# His template's red note says "Pick one comparative arm depending on ATC". The rule from
+# the meeting: the arm is the centre's own tier. Froedtert (a New centre) compares to New;
+# MSK compares to the Top 10. So instead of three shared "National" columns, every centre
+# gets 13 rows carrying ITS tier's medians, under its own centre name. Keep Center in the
+# workbook then needs no special case.
 #
-# agg="preagg" tells Tableau to print the stored display string instead of aggregating.
-# The formatted value rides in the `unit` column, which is unused for these rows.
-BENCH_ORDER = {"Top 10": 8, "Top 40": 9, "New": 10}
+# Stage 2 owns the median definition (bench_median); this carries its output across so
+# there is one definition. agg="preagg" tells the workbook to print the stored display
+# string (in `unit`) instead of aggregating.
+#
+# ASSUMED, flag to Kolin: centres in the "Other" tier (rank 41+, not new) see Top 40,
+# the nearest peer group. He named the rule for Top 10 and New only.
+ARM_FOR_TIER = {"Top 10": "Top 10", "Top 40": "Top 40", "New": "New", "Other": "Top 40"}
+BENCH_COL_ORDER = 8
+
 sc = pd.read_csv(os.path.join(ANA, "ppr_scorecard_tidy.csv"))
-nat = sc[sc.scope == "National"].copy()
-missing = set(BENCH_ORDER) - set(nat.col_label)
+nat = sc[sc.scope == "National"]
+missing = set(ARM_FOR_TIER.values()) - set(nat.col_label)
 if missing:
     raise SystemExit(f"benchmark tiers missing from the scorecard: {sorted(missing)}")
+
+tier_of = A.drop_duplicates("atc").set_index("atc")["atc_tier"]
+_untiered = tier_of[~tier_of.isin(ARM_FOR_TIER)].index.tolist()
+if _untiered:
+    raise SystemExit(f"centre(s) with an unknown tier: {_untiered[:5]}")
+
+bench_parts = []
+for arm, g in nat.groupby("col_label"):
+    centres = tier_of[tier_of.map(ARM_FOR_TIER) == arm].index
+    if len(centres) == 0:
+        continue
+    block = g[["metric_group", "metric", "metric_order", "value", "value_display"]]
+    for c in centres:
+        b = block.copy()
+        b["center"] = c
+        bench_parts.append(b)
+bench_all = pd.concat(bench_parts, ignore_index=True)
 bench = pd.DataFrame({
-    "center": "National",
-    "metric_group": nat.metric_group,
-    "metric": nat.metric,
-    "metric_order": nat.metric_order,
+    "center": bench_all.center,
+    "metric_group": bench_all.metric_group,
+    "metric": bench_all.metric,
+    "metric_order": bench_all.metric_order,
     "agg": "preagg",
     "event_date": pd.NaT,
-    "value": nat.value,
-    "unit": nat.value_display.fillna(""),
-    "col_label": nat.col_label,
-    "col_order": nat.col_label.map(BENCH_ORDER),
+    "value": bench_all.value,
+    "unit": bench_all.value_display.fillna(""),
+    # the column label names the arm, so the header says which tier this centre sees
+    "col_label": tier_of.loc[bench_all.center].map(ARM_FOR_TIER).values,
+    "col_order": BENCH_COL_ORDER,
 })
 tagged.append(bench)
 
@@ -199,9 +228,16 @@ if _nc:
 out["col_group_order"] = out.groupby("col_group").col_order.transform("min")
 
 _b = out[out["agg"] == "preagg"]
-assert len(_b) == 3 * out.metric.nunique(), (
-    f"expected 3 tiers x {out.metric.nunique()} metrics = {3*out.metric.nunique()} "
-    f"benchmark rows, got {len(_b)}")
+_nc = out[out["agg"] != "preagg"].center.nunique()
+assert len(_b) == 13 * _nc, (
+    f"expected 13 benchmark rows for each of {_nc} centres = {13*_nc}, got {len(_b)}")
+assert _b.groupby("center").col_label.nunique().max() == 1, (
+    "a centre carries more than one benchmark arm")
+und = pd.DataFrame(undated, columns=["center", "metric", "order_id", "missing_date_field"])
+und.to_csv(os.path.join(ANA, "undated_events.csv"), index=False)
+print(f"undated events for review: {len(und):,} -> analysis/undated_events.csv "
+      "(Kolin asked to see these, 07/28)")
+
 out.to_csv(os.path.join(ANA, "ppr_datewindow_long.csv"), index=False)
 print(f"datewindow events: {len(ev):,} events -> {len(out):,} column-tagged rows, "
       f"{out.metric.nunique()} metrics -> analysis/ppr_datewindow_long.csv")
