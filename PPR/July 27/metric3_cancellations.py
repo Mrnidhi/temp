@@ -45,7 +45,18 @@ ALIASES = {
     "load": ["load_datetime"],
     "ttp": ["tumor_tissue_pick_up_date", "tumor_pickup_date"],
     "atc": ["atc"],
+    "fp": ["fp_status"],
+    "reason": ["til_order_cancellation_reason"],
 }
+
+
+def optional(df, key):
+    """Same as pick(), but returns None instead of exiting when the column is absent."""
+    cols = {str(c).lower().strip(): c for c in df.columns}
+    for a in ALIASES[key]:
+        if a in cols:
+            return cols[a]
+    return None
 
 
 def find_file():
@@ -148,6 +159,55 @@ def main():
     print("\nAUDIT TRAIL, first 15 - use these to defend any number")
     cols = ["atc", "ord", "prev_ttp", "ttp", "snap", "days_notice", "kind"]
     print(late[cols].head(15).to_string(index=False))
+
+    # ---- two questions the history table answers on its own ----
+    # Both were nearly sent to the source-system owner. Neither needed to be.
+    c_fp, c_rsn = optional(df, "fp"), optional(df, "reason")
+
+    if c_fp is not None and c_rsn is not None:
+        h = pd.DataFrame({
+            "ord": df[c_ord].astype(str).str.strip(),
+            "rec": pd.to_numeric(df[c_rec], errors="coerce"),
+            "fp": df[c_fp].astype(str).str.strip().replace({"nan": "", "None": ""}),
+            "rsn": df[c_rsn].astype(str).str.strip().replace({"nan": "", "None": ""}),
+        }).sort_values(["ord", "rec"])
+
+        print("\n" + "=" * 64)
+        print("Q: is fp_status overwritten when an order is cancelled?")
+        print("   (decides whether the progression-rate denominator decays over time)")
+        cancelled = h[h.rsn != ""].ord.unique()
+        last = h[h.ord.isin(cancelled)].groupby("ord").tail(1)
+        MFG = {"MFG Start", "MFG End", "REP Initiation", "REP Scale Out",
+               "Released for Shipment by QA", "SM Pick-up Scheduled", "Shipment Ready",
+               "Courier Picked-Up FP", "Courier Delivered FP"}
+        ever_mfg = h[h.fp.isin(MFG)].ord.unique()
+        both = set(cancelled) & set(ever_mfg)
+        kept = last[last.ord.isin(both) & last.fp.isin(MFG)].ord.nunique()
+        print(f"   cancelled orders                     {len(cancelled):,}")
+        print(f"   of those, ever held a mfg status     {len(both):,}")
+        print(f"   still holding a mfg status at latest {kept:,}")
+        if len(both):
+            pct = kept / len(both) * 100
+            print(f"   -> {pct:.0f}% retain it. "
+                  + ("Denominator is SAFE, status is not overwritten."
+                     if pct > 90 else
+                     "Denominator DECAYS - metric 9 undercounts and must be rebuilt from history."))
+
+        print("\nQ: when was each order cancelled?")
+        print("   (the load date of the first snapshot carrying a reason)")
+        firstc = (h[h.rsn != ""].groupby("ord").rec.min().rename("first_rec").reset_index())
+        snapmap = d[["ord", "rec", "snap"]].rename(columns={"rec": "first_rec"})
+        cdates = firstc.merge(snapmap, on=["ord", "first_rec"], how="left")
+        got = cdates.snap.notna().sum()
+        print(f"   recovered a cancellation date for {got:,} of {len(cdates):,} cancelled orders")
+        if got:
+            print(f"   range {cdates.snap.min().date()} to {cdates.snap.max().date()}")
+            out = os.path.join(HERE, "cancellation_dates.csv")
+            cdates[["ord", "snap"]].rename(columns={"snap": "cancelled_on"}).to_csv(out, index=False)
+            print(f"   wrote {out}  <- the missing event date, recovered not requested")
+    else:
+        print("\n(fp_status / cancellation reason not in this export - "
+              "re-export with those two columns to answer the other two questions)")
 
 
 if __name__ == "__main__":
