@@ -158,7 +158,7 @@ missing = set(BENCH_ORDER) - set(nat.col_label)
 if missing:
     raise SystemExit(f"benchmark tiers missing from the scorecard: {sorted(missing)}")
 bench = pd.DataFrame({
-    "atc": "National",
+    "center": "National",
     "metric_group": nat.metric_group,
     "metric": nat.metric,
     "metric_order": nat.metric_order,
@@ -191,6 +191,10 @@ _unmapped = set(out.col_label) - set(COL_GROUP)
 if _unmapped:
     raise SystemExit(f"column(s) with no block: {sorted(_unmapped)}. Add them to COL_GROUP.")
 out["col_group"] = out.col_label.map(COL_GROUP)
+# Every row must carry a centre, or the workbook's centre filter silently drops it.
+_nc = int(out["center"].isna().sum())
+if _nc:
+    raise SystemExit(f"{_nc} rows have no centre. They would vanish from the workbook.")
 # Blocks must sort in the same order as the columns inside them, or Tableau interleaves.
 out["col_group_order"] = out.groupby("col_group").col_order.transform("min")
 
