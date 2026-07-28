@@ -113,14 +113,16 @@ BUCKETS = [
     ("2024",           2,  "2024-01-01", "2024-12-31"),
     ("2025",           3,  "2025-01-01", "2025-12-31"),
     ("2026 YTD",       4,  "2026-01-01", TODAY),
-    ("Undated",        5,  None,         None),   # no event date at all
-    ("After as-of",    6,  TODAY,        None),   # dated beyond the extract
-    ("Q3'26 QTD",     10,  "2026-07-01", TODAY),
-    ("Q2'26",         11,  "2026-04-01", "2026-06-30"),
-    ("Q1'26",         12,  "2026-01-01", "2026-03-31"),
-    ("Q4'25",         13,  "2025-10-01", "2025-12-31"),
+    ("Undated",        6,  None,         None),   # no event date at all
+    ("After as-of",    7,  TODAY,        None),   # dated beyond the extract
+    ("Q3'26 QTD",     11,  "2026-07-01", TODAY),
+    ("Q2'26",         12,  "2026-04-01", "2026-06-30"),
+    ("Q1'26",         13,  "2026-01-01", "2026-03-31"),
+    ("Q4'25",         14,  "2025-10-01", "2025-12-31"),
 ]
-SELECTED = ("Selected window", 7)   # Tableau applies the date parameters to these rows only
+# Sits with the other time columns rather than after the diagnostics, so the eye reads
+# Launch to Date, the years, then the live window, then the benchmarks, then the quarters.
+SELECTED = ("Selected window", 5)   # Tableau applies the date parameters to these rows only
 
 d = pd.to_datetime(ev.event_date, errors="coerce")
 tagged = []
@@ -141,7 +143,61 @@ live = ev.copy()
 live["col_label"], live["col_order"] = SELECTED
 tagged.append(live)
 
+# ---- national tier benchmarks (Top 10 / Top 40 / New) --------------------------------
+# These are a two-stage aggregate: a per-centre value, then the MEDIAN across the centres
+# in the tier. An event table cannot reproduce that by summing rows, so they are carried
+# across already computed rather than recalculated here. Stage 2 owns the definition
+# (bench_median in build_scorecard.py); this reads its output so there is one definition.
+#
+# agg="preagg" tells Tableau to print the stored display string instead of aggregating.
+# The formatted value rides in the `unit` column, which is unused for these rows.
+BENCH_ORDER = {"Top 10": 8, "Top 40": 9, "New": 10}
+sc = pd.read_csv(os.path.join(ANA, "ppr_scorecard_tidy.csv"))
+nat = sc[sc.scope == "National"].copy()
+missing = set(BENCH_ORDER) - set(nat.col_label)
+if missing:
+    raise SystemExit(f"benchmark tiers missing from the scorecard: {sorted(missing)}")
+bench = pd.DataFrame({
+    "atc": "National",
+    "metric_group": nat.metric_group,
+    "metric": nat.metric,
+    "metric_order": nat.metric_order,
+    "agg": "preagg",
+    "event_date": pd.NaT,
+    "value": nat.value,
+    "unit": nat.value_display.fillna(""),
+    "col_label": nat.col_label,
+    "col_order": nat.col_label.map(BENCH_ORDER),
+})
+tagged.append(bench)
+
 out = pd.concat(tagged, ignore_index=True)
+
+# ---- block header, so the table reads as three groups rather than 13 equal columns ----
+# Kolin's template puts a second header row over the columns: the centre's own figures,
+# the national comparison, the quarterly trend. Those are three different questions and
+# labelling them is what stops the table reading as a data dump.
+# The centre block is left generic here; Tableau swaps in the selected centre's name.
+COL_GROUP = {
+    "Launch to Date": "This Center", "2024": "This Center", "2025": "This Center",
+    "2026 YTD": "This Center", "Selected window": "This Center",
+    "Undated": "This Center", "After as-of": "This Center",
+    "Top 10": "YTD National Metrics", "Top 40": "YTD National Metrics",
+    "New": "YTD National Metrics",
+    "Q3'26 QTD": "Quarterly ATC Metrics", "Q2'26": "Quarterly ATC Metrics",
+    "Q1'26": "Quarterly ATC Metrics", "Q4'25": "Quarterly ATC Metrics",
+}
+_unmapped = set(out.col_label) - set(COL_GROUP)
+if _unmapped:
+    raise SystemExit(f"column(s) with no block: {sorted(_unmapped)}. Add them to COL_GROUP.")
+out["col_group"] = out.col_label.map(COL_GROUP)
+# Blocks must sort in the same order as the columns inside them, or Tableau interleaves.
+out["col_group_order"] = out.groupby("col_group").col_order.transform("min")
+
+_b = out[out["agg"] == "preagg"]
+assert len(_b) == 3 * out.metric.nunique(), (
+    f"expected 3 tiers x {out.metric.nunique()} metrics = {3*out.metric.nunique()} "
+    f"benchmark rows, got {len(_b)}")
 out.to_csv(os.path.join(ANA, "ppr_datewindow_long.csv"), index=False)
 print(f"datewindow events: {len(ev):,} events -> {len(out):,} column-tagged rows, "
       f"{out.metric.nunique()} metrics -> analysis/ppr_datewindow_long.csv")
@@ -162,7 +218,10 @@ sc = sc[(sc.scope == "Center") & sc.col_label.isin([b[0] for b in BUCKETS])]
 
 KEY = ["center", "metric", "col_label"]
 _parts = []
-for _a, _g in out[out.col_label != SELECTED[0]].groupby("agg"):
+# Benchmarks are excluded: they are a median across centres, carried over already
+# computed, so there is no per-centre cell to reconcile them against.
+_chk = out[(out.col_label != SELECTED[0]) & (out["agg"] != "preagg")]
+for _a, _g in _chk.groupby("agg"):
     if _a == "sum":        _r = _g.groupby(KEY)["value"].sum()
     elif _a == "distinct": _r = _g.groupby(KEY)["unit"].nunique().astype(float)
     elif _a == "avg":      _r = _g.groupby(KEY)["value"].median().round(1)

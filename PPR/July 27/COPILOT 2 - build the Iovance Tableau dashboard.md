@@ -282,13 +282,24 @@ Send this to Srinidhi exactly as written.
 > above them, is a box labelled **Filters**. Below Filters is a box called the **Marks card**,
 > which has buttons down its side labelled Color, Size, Text, Detail, Tooltip.
 >
+> **Before you drag anything**, two fields need converting. `Col Order` and `Metric Order`
+> hold whole numbers, so Tableau files them as things to add up. They are actually labels
+> that carry the left-to-right and top-to-bottom order. If you skip this, they arrive on the
+> shelf as green `SUM(Col Order)` pills and the table comes out wrong.
+>
+> In the left panel, right-click **Col Order** and choose **Convert to Dimension**. It jumps
+> up into the group of blue fields. Do the same for **Metric Order**.
+>
+> Now build the table.
+>
 > 1. From the left panel, drag **Keep Center** onto the **Filters** box. A small window opens
 >    listing True and False. Tick **True** only. Click OK.
 > 2. Drag **Keep Row** onto the **Filters** box. Tick **True** only. Click OK.
-> 3. Drag **Col Order** onto the **Columns** shelf. It appears as a green rounded rectangle.
->    Right-click it and choose **Discrete**. It turns blue. Right-click the same blue one
->    again and untick **Show Header**. This field only holds the left-to-right order of the
->    columns; nobody needs to see it.
+> 3. Drag **Col Order** onto the **Columns** shelf. It should arrive **blue**, because you
+>    converted it a moment ago. Right-click it and untick **Show Header**. This field only
+>    holds the left-to-right order of the columns; nobody needs to see it.
+>    If it arrived green and says `SUM(Col Order)`, the conversion did not happen. Drag it off
+>    and redo the Convert to Dimension step.
 > 4. Drag **Col Label** onto the **Columns** shelf, dropping it to the right of col_order.
 > 5. Drag **Metric Group** onto the **Rows** shelf.
 > 6. Drag **Metric Order** onto the **Rows** shelf, to the right of metric_group. Right-click
@@ -743,4 +754,6 @@ Match his symptom to this table. Give him the one fix, not the whole task again.
 | Columns are in alphabetical order | `Col Order` is not on the Columns shelf, to the left of `Col Label`. Task 4 step 3. |
 | Row groups are in alphabetical order | `Metric Order` is not on the Rows shelf between Metric Group and Metric, or the sort in Task 6 was not applied. |
 | Every cell says "Abc" | Nothing is on the Text button of the Marks card. Drag `Result` onto it. Task 4 step 8. |
+| A pill is green and says SUM(something) | That field is being added up instead of used as a label. Drag it off, right-click it in the Data pane, choose Convert to Dimension, drag it back. |
+| Far fewer columns than expected, or far more rows | Same cause: `Col Order` or `Metric Order` is on a shelf as a green SUM pill. Convert both to dimensions. |
 | Anything not on this list | Say: "That is not in my instructions. Ask Claude on the Mac and paste me the answer." Do not guess. |
