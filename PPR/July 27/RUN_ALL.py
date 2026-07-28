@@ -27,7 +27,6 @@ Order:
     3. build_datewindow.py      -> analysis/ppr_datewindow_long.csv (date-filter source)
     4. build_hyper.py           -> tableau/*.hyper                  (Tableau extracts)
     5. build_dashboard_html.py  -> dashboard/ppr_scorecard.html     (standalone browser view)
-    6. build_center_decks.py    -> decks/*.pptx                    (per-center decks)
 
 Then build/refresh the workbook in Tableau Desktop from the .hyper extracts.
 One-time build recipe: README.md section 4. After that, refresh only.
@@ -45,7 +44,6 @@ STEPS = [
     ("build_datewindow.py",     "building the event-level date-window source"),
     ("build_hyper.py",          "writing the Tableau .hyper extracts"),
     ("build_dashboard_html.py", "rendering the standalone HTML scorecard"),
-    ("build_center_decks.py",   "generating one P&PR PowerPoint per center"),
 ]
 
 # After a run: python pipeline/baseline.py diff
@@ -115,7 +113,6 @@ def main() -> int:
     print("  tableau/ppr_analysis.hyper", flush=True)
     print("  tableau/ppr_datewindow.hyper", flush=True)
     print("  dashboard/ppr_scorecard.html       (standalone, open in any browser)", flush=True)
-    print("  decks/<center> - P&PR Review.pptx  (one per center)", flush=True)
     print("\nNext: Tableau Desktop. First time: README.md section 4. After: just refresh extracts.", flush=True)
     print("=" * 62, flush=True)
     return 0

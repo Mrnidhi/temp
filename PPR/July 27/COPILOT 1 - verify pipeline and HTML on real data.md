@@ -32,8 +32,10 @@ transfer repo, overwriting:
 - pipeline\build_datewindow.py
 - pipeline\build_hyper.py
 - pipeline\build_dashboard_html.py
-- pipeline\build_center_decks.py
 - pipeline\baseline.py
+
+Delete pipeline\build_center_decks.py if present. The PowerPoint stage was removed on
+purpose; the dashboard covers it.
 
 Leave alone: data\, analysis\, dashboard\, tableau\, up.twb, PPR Dashboard.twbx.
 
@@ -58,7 +60,7 @@ py -3.12 -m pip install -r requirements.txt
 
 and use `py -3.12` in place of `python` for every later step.
 
-CHECK: `python -c "import pandas, numpy, openpyxl, pantab, pptx; print('ok')"` prints ok.
+CHECK: `python -c "import pandas, numpy, openpyxl, pantab; print('ok')"` prints ok.
 
 ## Step 3. The seven exports
 

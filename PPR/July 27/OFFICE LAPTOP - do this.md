@@ -56,12 +56,14 @@ ONE DASHBOARD - Tableau build.md
 OFFICE LAPTOP - do this.md      (this file)
 pipeline\baseline.py
 pipeline\build_analysis_table.py
-pipeline\build_center_decks.py
 pipeline\build_dashboard_html.py
 pipeline\build_datewindow.py
 pipeline\build_hyper.py
 pipeline\build_scorecard.py
 ```
+
+Delete `pipeline\build_center_decks.py` if it is there. The PowerPoint stage was removed;
+the dashboard filters and screenshots cover it. The `decks\` folder can go too.
 
 **Leave alone:** `data\`, `analysis\`, `dashboard\`, `tableau\`, `PPR Dashboard.twbx`,
 `up.twb`. Those are yours and hold real output.
@@ -102,7 +104,7 @@ The header prints the folder it is reading and how many `.xlsx` it found. It mus
 and name the missing one. If it is reading the synthetic sample it prints a row of
 exclamation marks saying so; every number after that would be made up.
 
-Six stages run in order. Takes a couple of minutes, mostly the 85 PowerPoints.
+Five stages run in order. A minute or so.
 
 **Expect assertions to fire that never fired on synthetic data.** That is them working.
 If a stage stops with a message about cells not reconciling, or a column it did not

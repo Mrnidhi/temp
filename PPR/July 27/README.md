@@ -25,13 +25,11 @@ July 27/
     build_datewindow.py       one row per metric event with its own event date
     build_hyper.py            writes the three native Tableau .hyper extracts
     build_dashboard_html.py   renders the standalone browser scorecard
-    build_center_decks.py     one P&PR PowerPoint per center (Launch-to-Date + YoY)
     baseline.py               freeze / diff, to prove a change moved only what it should
   analysis/                   pipeline outputs (CSV) - regenerated on every run
   tableau/                    ppr_scorecard.hyper (Scorecard), ppr_analysis.hyper
                               (Orders), ppr_datewindow.hyper (Events)
   dashboard/                  ppr_scorecard.html, opens in any browser, no Tableau
-  decks/                      one .pptx per center, ready to present
 ```
 
 Everything below `analysis/` is gitignored. All of it is regenerable in one command, and
@@ -40,7 +38,7 @@ all of it holds real patient rows once the pipeline runs on real data.
 ## 2. One-time setup (office laptop)
 
 1. Install Python 3.9+ (check: `python --version`).
-2. `pip install pandas numpy openpyxl pantab python-pptx`
+2. `pip install -r requirements.txt`
 3. Have Tableau Desktop installed and licensed.
 4. Create a `data/` folder next to `RUN_ALL.py` and drop the seven Infinity
    exports in it, filenames containing: `bai_list_of_orders`, `bai_infusion`,
@@ -77,25 +75,9 @@ so there is no second sheet and no second data source to keep in step.
 `tableau/ppr_scorecard.hyper` is still written on every run, but it is not what the
 dashboard reads. It is the reference the event table gets checked against.
 
-## 4b. The per-center decks (generated automatically)
-
-Every run also writes one PowerPoint per center to `decks/`, named
-`<Center Name> - P&PR Review.pptx`. Two slides, Iovance styled:
-
-- Slide 1 "Launch-to-Date Metrics": the center's 13 metrics next to the Top 10,
-  Top 40 and 'New' tier medians.
-- Slide 2 "Year over Year Metrics at ATC": 2025 vs 2026 YTD with a Difference
-  column, green when the change is an improvement, red when it is not
-  (the direction is flipped for metrics where lower is better).
-
-To regenerate only the centers you need for a meeting:
-
-```
-python pipeline/build_center_decks.py "Moffitt" "Yale"
-```
-
-Names are matched loosely, so part of the name is enough. Open the file, adjust
-the talk track if you want, present. No manual number entry anywhere.
+A per-center PowerPoint stage (build_center_decks.py) used to run here. Removed
+2026-07-28: the dashboard already shows any center for any window, so Kolin filters
+and screenshots what he needs directly. Recoverable from this repo's history.
 
 ## 5. How to use it (what Kolin does)
 
