@@ -23,47 +23,8 @@ import json as _json
 RUN_META = _json.load(open(_META_PATH))
 TODAY = RUN_META["asof"]
 
-# ---- metric registry: exact (Proposed) P&PR Metrics.xlsx template wording ----
-M1  = "Enrollments in IovanceCares"
-M2  = "Patients Enrolled in IovanceCares"
-M3  = "TTPs Cancelled or Rescheduled within 7 Days Prior to Slot Reservation"
-M4  = "Completed TTPs"
-M5  = "Scheduled TTPs"
-M6  = "2nd Resections (Scheduled or Completed)"
-M7  = "Patient Related Drop-outs following TTP due to patient health"
-M8  = "OOS Products"
-M9  = "Patient Progression Rate"
-M10 = "AMTAGVI Infusions Performed"
-M11 = "Median Time From Enrollment Date to TTP (Days)"
-M12 = "Median Time From TTP to AMTAGVI Infusion (Days)"
-M13 = "Median Time From Final Product Delivery Date to AMTAGVI Infusion (Days)"
-METRICS = [
-    (1,  "Patient Identification & Enrollment", M1,  "count"),
-    (2,  "Patient Identification & Enrollment", M2,  "count"),
-    (3,  "Patient Identification & Enrollment", M3,  "count"),
-    (4,  "Tumor Tissue Procurement",            M4,  "count"),
-    (5,  "Tumor Tissue Procurement",            M5,  "count"),
-    (6,  "Tumor Tissue Procurement",            M6,  "count"),
-    (7,  "AMTAGVI Regimen",                     M7,  "count"),
-    (8,  "AMTAGVI Regimen",                     M8,  "count"),
-    (9,  "AMTAGVI Regimen",                     M9,  "rate"),
-    (10, "AMTAGVI Regimen",                     M10, "count"),
-    (11, "AMTAGVI Treatment Timelines",         M11, "days"),
-    (12, "AMTAGVI Treatment Timelines",         M12, "days"),
-    (13, "AMTAGVI Treatment Timelines",         M13, "days"),
-]
-
-# Which date each metric is counted on. Confirmed by Kolin's real per-center decks
-# (footnote: "Timing metrics based upon the TTP or Infusion Date") - a metric belongs to
-# the period its EVENT happened in, not the period the patient enrolled in. So the 2025
-# column of "AMTAGVI Infusions Performed" means infusions performed in 2025.
-EVENT_DATE = {
-    M1:  "enrollment_date",    M2:  "enrollment_date",   M3:  "tumor_pickup_date",
-    M4:  "tumor_pickup_date",  M5:  "tumor_pickup_date", M6:  "tumor_pickup_date",
-    M7:  "tumor_pickup_date",  M8:  "fp_delivery_date",  M9:  "tumor_pickup_date",
-    M10: "infusion_date",      M11: "tumor_pickup_date", M12: "infusion_date",
-    M13: "infusion_date",
-}
+from metrics import (METRICS, EVENT_DATE, NON_ADDITIVE,
+                     M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13)
 
 def _win(df, datecol, start, end):
     """Rows whose event date for this metric falls inside the window (None = no bound)."""
@@ -101,8 +62,14 @@ def compute(df, start=None, end=None, avg="median", undated=False, future=False)
     # Kolin, Meet 6: the Infinity scorecard shows "the median for all these values".
     agg = (lambda s: s.mean()) if avg == "mean" else (lambda s: s.median())
 
-    mfg = int(w[M9]["mfg_started"].sum())
-    drop_after_mfg = int(w[M9]["drop_after_mfg"].sum())
+    # Metrics 7 and 9 describe patients, and a patient can hold several orders, so
+    # counting orders over-weights them. Always understates the rate.
+    def patients(frame, flag):
+        f = frame[flag].fillna(False).astype(bool)
+        return frame.loc[f, "iovance_patient_id"].nunique()
+
+    mfg = patients(w[M9], "mfg_started")
+    drop_after_mfg = patients(w[M9], "drop_after_mfg")
     # 2nd Resections = distinct PATIENTS with 2+ real TTP dates (Kolin, Meet 6)
     ttp = w[M6].dropna(subset=["tumor_pickup_date"])
     mult = ttp.groupby("iovance_patient_id")["tumor_pickup_date"].nunique()
@@ -118,7 +85,7 @@ def compute(df, start=None, end=None, avg="median", undated=False, future=False)
         M4:  int(w[M4]["completed_ttp"].sum()),
         M5:  int(w[M5]["scheduled_ttp"].sum()),
         M6:  int((mult >= 2).sum()),
-        M7:  int(w[M7]["dropout_post_ttp_health"].sum()),
+        M7:  patients(w[M7], "dropout_post_ttp_health"),
         M8:  int(w[M8]["oos_product"].sum()),
         M9:  round(drop_after_mfg / mfg, 3) if mfg else np.nan,
         M10: int(w[M10]["amtagvi_infused"].sum()),
@@ -209,10 +176,6 @@ tidy["row_label"] = tidy["metric_order"].map(lambda i: f"{i:02d}  {[m[2] for m i
 # cancelled so never performed) would otherwise vanish from every period column while still
 # appearing in Launch to Date, biasing the periods optimistic.
 #
-# Applies to ADDITIVE counts only. Patients Enrolled and 2nd Resections are distinct counts
-# over patients: one patient with orders in two years is counted once launch-to-date but
-# once in each year, so they legitimately do not sum. Excluded by name rather than silently.
-NON_ADDITIVE = {M2, M6}
 _chk = tidy[(tidy.scope == "Center") & (tidy.value_type == "count")
             & (~tidy.metric.isin(NON_ADDITIVE))]
 _ltd = _chk[_chk.col_label == "Launch to Date"].set_index(["center", "metric"]).value

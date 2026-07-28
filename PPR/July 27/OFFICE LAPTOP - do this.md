@@ -54,6 +54,7 @@ RUN_ALL.py
 metric3_cancellations.py
 ONE DASHBOARD - Tableau build.md
 OFFICE LAPTOP - do this.md      (this file)
+pipeline\metrics.py
 pipeline\baseline.py
 pipeline\build_analysis_table.py
 pipeline\build_dashboard_html.py

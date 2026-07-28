@@ -200,6 +200,17 @@ if _new:
     print(f"  WARNING: {len(_new)} unmapped cancellation reason(s), treated as uncategorised "
           f"and excluded from metrics 7 and 9: {sorted(_new)}")
     print("  -> add them to REASON_CATEGORY before trusting those two metrics.")
+    # A spacing variant of a known reason and a genuinely new reason need different fixes.
+    def _squash(s):
+        return "".join(str(s).lower().split()).replace("-", "")
+    _known = {_squash(k): k for k in REASON_CATEGORY}
+    for _r in sorted(_new):
+        _hit = _known.get(_squash(_r))
+        if _hit:
+            print(f"     '{_r}'  looks like a spacing variant of '{_hit}' "
+                  f"({REASON_CATEGORY[_hit]}) - add the exact string above")
+        else:
+            print(f"     '{_r}'  is genuinely new - decide its category with Kolin")
 
 o["days_enroll_to_ttp"] = (o["tumor_pickup_date"] - o["enrollment_date"]).dt.days
 o["days_ttp_to_infusion"] = (o["infusion_date"] - o["tumor_pickup_date"]).dt.days

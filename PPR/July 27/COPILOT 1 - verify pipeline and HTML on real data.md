@@ -27,6 +27,7 @@ transfer repo, overwriting:
 - RUN_ALL.py
 - requirements.txt
 - metric3_cancellations.py
+- pipeline\metrics.py
 - pipeline\build_analysis_table.py
 - pipeline\build_scorecard.py
 - pipeline\build_datewindow.py

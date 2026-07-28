@@ -20,6 +20,7 @@ July 27/
   ONE DASHBOARD - Tableau ...  the only Tableau build recipe
   metric3_cancellations.py    real cancellation logic from the snapshot history
   pipeline/
+    metrics.py                the 13 metric names, groups and event dates - one definition
     build_analysis_table.py   joins the 7 Infinity .xlsx into one order-grain table
     build_scorecard.py        computes the 13 metrics for every center and benchmark
     build_datewindow.py       one row per metric event with its own event date
