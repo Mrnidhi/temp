@@ -9,6 +9,7 @@ This is the portable automation: point INPUT_DIR at the real files and rerun.
 
 Out: analysis/ppr_analysis.csv  (one row per order, 2,250 rows on synthetic data)
 """
+import json
 import os
 import re
 import numpy as np
@@ -28,8 +29,13 @@ print("input:", os.path.abspath(INPUT_DIR))
 OUT_DIR = os.path.join(HERE, "..", "analysis")
 os.makedirs(OUT_DIR, exist_ok=True)
 
-TODAY = pd.Timestamp("2026-07-21")
 HEADER_ROW = 2  # real files carry a title banner; true header is row index 2
+
+# As-of date. Never read the clock: same inputs must give the same outputs on any day.
+# PPR_ASOF (YYYY-MM-DD) wins when set; otherwise the newest order-creation date in the
+# extract stands in for the export date, since orders are created daily across 85
+# centers. Recorded in analysis/run_meta.json and shown on every output.
+_ASOF_ENV = os.environ.get("PPR_ASOF")
 
 # Cancellation reasons, categorised once. Metrics reference the categories, never raw
 # strings, so the difference between metric 7 and metric 9 is one visible line here
@@ -112,6 +118,22 @@ tumor  = rd("tumor_documentation")
 inf    = rd("infusion")
 slot   = rd("slot_data")
 mp     = rd("komodo_atc_mapping")
+
+# ------------------------------------------------------------------ as-of + run metadata
+if _ASOF_ENV:
+    TODAY = pd.Timestamp(_ASOF_ENV)
+else:
+    TODAY = to_dt(orders["order_request__created_date"]).max()
+    if pd.isna(TODAY):
+        raise SystemExit("Cannot derive an as-of date: no parseable order creation dates. "
+                         "Set PPR_ASOF=YYYY-MM-DD and rerun.")
+_meta = {"asof": TODAY.strftime("%Y-%m-%d"),
+         "asof_source": "PPR_ASOF" if _ASOF_ENV else "max order_request__created_date",
+         "input_dir": os.path.abspath(INPUT_DIR),
+         "synthetic": "synthetic" in os.path.abspath(INPUT_DIR).lower()}
+with open(os.path.join(OUT_DIR, "run_meta.json"), "w") as _f:
+    json.dump(_meta, _f, indent=1)
+print(f"as-of: {_meta['asof']} ({_meta['asof_source']})  synthetic: {_meta['synthetic']}")
 
 # ------------------------------------------------------------------ clean orders
 o = orders.copy()

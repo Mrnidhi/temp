@@ -105,7 +105,10 @@ ev = pd.DataFrame(rows, columns=["center", "metric_group", "metric", "metric_ord
 # The "Selected window" copy is the live one: in Tableau a single filter calc applies the
 # date parameters to those rows only, leaving the fixed columns untouched. Without the
 # split, dragging the slider would blank out the 2024 and 2025 columns.
-TODAY = "2026-07-21"
+# As-of from stage 1, one definition for every stage (see build_analysis_table.py).
+import json as _json
+TODAY = _json.load(open(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "analysis", "run_meta.json")))["asof"]
 BUCKETS = [
     ("Launch to Date", 1,  None,         None),
     ("2024",           2,  "2024-01-01", "2024-12-31"),

@@ -126,6 +126,19 @@ tbody tr:hover td.bench-col{background:var(--bench-tint);filter:brightness(.985)
 .winrow .vs{color:var(--ink-soft);font-size:11px;font-weight:700;margin:0 4px}
 .chip.go{background:var(--olive);color:#fff;border:1px solid var(--olive);border-radius:6px}
 #winClear{border:1px solid var(--line);border-radius:6px}
+/* Two range inputs stacked on one track. Only the thumbs take pointer events, so
+   whichever handle you grab is the one that moves. */
+.slider{position:relative;height:26px;margin:8px 2px 0;min-width:340px}
+.slider .track,.slider .fill{position:absolute;top:11px;height:4px;border-radius:2px}
+.slider .track{left:0;right:0;background:var(--line)}
+.slider .fill{background:var(--olive)}
+.slider input[type=range]{position:absolute;top:0;left:0;width:100%;height:26px;margin:0;
+  background:none;-webkit-appearance:none;appearance:none;pointer-events:none}
+.slider input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;pointer-events:auto;
+  width:16px;height:16px;border-radius:50%;background:var(--surface);border:2px solid var(--olive);
+  cursor:grab;box-shadow:0 1px 3px rgba(20,40,60,.25)}
+.slider input[type=range]::-moz-range-thumb{pointer-events:auto;width:16px;height:16px;
+  border-radius:50%;background:var(--surface);border:2px solid var(--olive);cursor:grab}
 td.diff{background:rgba(47,93,138,.07);font-weight:600}
 
 .notes{margin:16px 0 4px;font-size:11.5px;color:var(--ink-soft);line-height:1.6}
@@ -165,21 +178,23 @@ td.diff{background:rgba(47,93,138,.07);font-weight:600}
       </div>
     </div>
     <div class="field" id="winFields">
-      <span class="lab">Compare date windows (each metric counts by its own event date)</span>
+      <span class="lab">Date window (each metric counts by its own event date)</span>
       <div class="winrow">
-        <input type="date" id="a0" title="Window A start"><span class="dash">to</span><input type="date" id="a1" title="Window A end">
-        <span class="vs">vs</span>
-        <input type="date" id="b0" title="Window B start"><span class="dash">to</span><input type="date" id="b1" title="Window B end">
-        <button class="chip go" id="winApply">Apply</button>
-        <button class="chip" id="winClear">Clear</button>
-        <div class="toggles" id="aggT" style="display:none">
+        <input type="date" id="w0" title="Window start"><span class="dash">to</span><input type="date" id="w1" title="Window end">
+        <button class="chip" id="winClear">Reset</button>
+        <div class="toggles" id="aggT">
           <button class="chip" data-agg="median" aria-pressed="true">Median</button>
           <button class="chip" data-agg="mean" aria-pressed="false">Avg</button>
         </div>
       </div>
+      <div class="slider" id="slider">
+        <div class="track"></div><div class="fill" id="sfill"></div>
+        <input type="range" id="s0" min="0" max="100" value="0">
+        <input type="range" id="s1" min="0" max="100" value="100">
+      </div>
     </div>
     <div class="spacer"></div>
-    <div class="asof">Source Data As of <b id="asof"></b><br>Synthetic preview build</div>
+    <div class="asof">Source Data As of <b id="asof"></b><br><span id="buildtag"></span></div>
   </div>
 
   <div class="body">
@@ -199,6 +214,11 @@ const BENCH_LABEL={"Top 10":"Top 10 ATCs","Top 40":"Top 40 ATCs","New":"'New' AT
 const active={Time:true,Benchmark:true,Quarter:true};
 let center=DEFAULT;
 document.getElementById("asof").textContent=SC.asof;
+// Label the data source honestly. Synthetic numbers must never pass as real, and real
+// numbers must never carry a synthetic caption.
+document.getElementById("buildtag").textContent =
+  SC.synthetic ? "SYNTHETIC DATA - preview only" : "Infinity extract";
+if(SC.synthetic)document.getElementById("buildtag").style.color="#C0392B";
 
 const dl=document.getElementById("centerlist");
 SC.centers.forEach(c=>{const o=document.createElement("option");o.value=c;dl.appendChild(o);});
@@ -311,21 +331,18 @@ function renderProposed(){
   document.getElementById("matrix").innerHTML=h+"</tbody>";
 }
 function renderWindows(){
-  const A=computeWin(rowsFor(center),win.a0,win.a1), B=computeWin(rowsFor(center),win.b0,win.b1);
+  // The window column sits beside Launch to Date on purpose: the anchor is what makes
+  // a windowed number readable, and it makes an impossible value (window > all time)
+  // obvious on sight.
+  const W=computeWin(rowsFor(center),win.w0,win.w1);
   let h="<thead><tr><th class='grp metric-h cat-col' rowspan='2'>Category</th>"+
         "<th class='grp metric-h' rowspan='2'>Metric</th>"+
-        `<th class='grp ctr' colspan='3'>${center}</th></tr><tr>`+
-        `<th class='lab-h'>${win.a0} to ${win.a1}</th>`+
-        `<th class='lab-h'>${win.b0} to ${win.b1}</th>`+
-        "<th class='lab-h'>Difference</th></tr></thead><tbody>";
-  h+=bodyRows(m=>{
-    const a=A[m.metric], b=B[m.metric];
-    const bad=isNaN(a)||isNaN(b)||a==null||b==null;
-    const d=bad?NaN:b-a;
-    return `<td class='val ltd'>${fmtv(m.metric,a)}</td>`+
-           `<td class='val ltd'>${fmtv(m.metric,b)}</td>`+
-           `<td class='val diff'>${d===0?"-":fmtd(m.metric,d)}</td>`;
-  });
+        `<th class='grp ctr' colspan='2'>${center}</th></tr><tr>`+
+        "<th class='lab-h'>Launch to Date</th>"+
+        `<th class='lab-h'>${win.w0} to ${win.w1}</th></tr></thead><tbody>`;
+  h+=bodyRows(m=>
+    `<td class='val'>${cval(m.metric,"Launch to Date")||"-"}</td>`+
+    `<td class='val ltd'>${fmtv(m.metric,W[m.metric])}</td>`);
   document.getElementById("matrix").innerHTML=h+"</tbody>";
 }
 const NOTES_PROPOSED=[
@@ -335,32 +352,69 @@ const NOTES_PROPOSED=[
 ];
 const NOTES_WINDOW=[
   ["*","Each metric is counted on its own event date (enrollment, TTP pickup, delivery, or infusion), matching Kolin's decks."],
-  ["*","Set the two windows to a slide's date ranges to reproduce its Year-over-Year table."],
+  ["*","Launch to Date is shown beside the window as an anchor. A window can never exceed it."],
 ];
-// window controls
-document.getElementById("winApply").addEventListener("click",()=>{
-  const a0=a0i.value,a1=a1i.value,b0=b0i.value,b1=b1i.value;
-  if(!(a0&&a1&&b0&&b1)){alert("Fill all four dates.");return;}
-  win={a0,a1,b0,b1}; document.getElementById("aggT").style.display=""; render();
-});
-document.getElementById("winClear").addEventListener("click",()=>{
-  win=null; document.getElementById("aggT").style.display="none"; render();
-});
+
+// ---- one date window: drag the handles or type the dates, they drive each other ----
+const DATEF=[...new Set(Object.values(SC.event_date))];
+let DMIN=null,DMAX=null;
+SC.raw.forEach(r=>DATEF.forEach(f=>{const v=r[f];
+  if(v){ if(!DMIN||v<DMIN)DMIN=v; if(!DMAX||v>DMAX)DMAX=v; }}));
+const DAY=86400000;
+const d2n=s=>Math.round((Date.parse(s)-Date.parse(DMIN))/DAY);
+const n2d=n=>new Date(Date.parse(DMIN)+n*DAY).toISOString().slice(0,10);
+const SPAN=Math.max(1,d2n(DMAX));
+
+const s0=document.getElementById("s0"),s1=document.getElementById("s1"),
+      w0i=document.getElementById("w0"),w1i=document.getElementById("w1"),
+      sfill=document.getElementById("sfill");
+[s0,s1].forEach(s=>{s.min=0;s.max=SPAN;});
+[w0i,w1i].forEach(i=>{i.min=DMIN;i.max=DMAX;});
+
+function paint(){
+  const a=Math.min(+s0.value,+s1.value), b=Math.max(+s0.value,+s1.value);
+  sfill.style.left=(a/SPAN*100)+"%";
+  sfill.style.right=(100-b/SPAN*100)+"%";
+}
+function fromSlider(){
+  const a=Math.min(+s0.value,+s1.value), b=Math.max(+s0.value,+s1.value);
+  win={w0:n2d(a),w1:n2d(b)};
+  w0i.value=win.w0; w1i.value=win.w1;
+  paint(); render();
+}
+function fromDates(){
+  if(!(w0i.value&&w1i.value))return;              // half-typed date, wait
+  let a=w0i.value,b=w1i.value; if(a>b)[a,b]=[b,a];
+  win={w0:a,w1:b};
+  s0.value=Math.max(0,Math.min(SPAN,d2n(a)));
+  s1.value=Math.max(0,Math.min(SPAN,d2n(b)));
+  paint(); render();
+}
+function resetWin(){
+  win=null; s0.value=0; s1.value=SPAN;
+  w0i.value=DMIN; w1i.value=DMAX;
+  paint(); render();
+}
+s0.addEventListener("input",fromSlider);
+s1.addEventListener("input",fromSlider);
+w0i.addEventListener("change",fromDates);
+w1i.addEventListener("change",fromDates);
+document.getElementById("winClear").addEventListener("click",resetWin);
 document.querySelectorAll("#aggT .chip").forEach(b=>b.addEventListener("click",()=>{
   aggMode=b.dataset.agg;
   document.querySelectorAll("#aggT .chip").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
   if(win)render();}));
-const a0i=document.getElementById("a0"),a1i=document.getElementById("a1"),
-      b0i=document.getElementById("b0"),b1i=document.getElementById("b1");
 
 function render(){
   document.getElementById("colToggles").style.display = win ? "none" : "";
+  document.getElementById("aggT").style.display = win ? "" : "none";
   if(win)renderWindows(); else renderProposed();
   const notes = win?NOTES_WINDOW:NOTES_PROPOSED;
   document.getElementById("notes").innerHTML=
     notes.map(([s,t])=>`<div class="nt"><span class="st">${s}</span><span>${t}</span></div>`).join("");
 }
-render();
+w0i.value=DMIN; w1i.value=DMAX; s0.value=0; s1.value=SPAN;
+paint(); render();
 </script>
 """
 html = HTML.replace("__SC__", json.dumps(sc)).replace("__DEFAULT__", default_center)

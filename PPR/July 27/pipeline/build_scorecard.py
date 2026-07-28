@@ -14,7 +14,14 @@ import pandas as pd
 HERE = os.path.dirname(__file__)
 OUT_DIR = os.path.join(HERE, "..", "analysis")
 A = pd.read_csv(os.path.join(OUT_DIR, "ppr_analysis.csv"), low_memory=False)
-TODAY = "2026-07-21"   # extract as-of date; keep in step with build_analysis_table.TODAY
+# As-of date comes from stage 1, one definition for every stage. run_meta.json also
+# says whether this run is on the synthetic sample, so the dashboard can label itself.
+_META_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "analysis", "run_meta.json")
+if not os.path.exists(_META_PATH):
+    raise SystemExit("analysis/run_meta.json missing. Run build_analysis_table.py (stage 1) first.")
+import json as _json
+RUN_META = _json.load(open(_META_PATH))
+TODAY = RUN_META["asof"]
 
 # ---- metric registry: exact (Proposed) P&PR Metrics.xlsx template wording ----
 M1  = "Enrollments in IovanceCares"
@@ -284,7 +291,7 @@ DASH = os.path.join(HERE, "..", "dashboard")
 payload = {"metrics": metrics, "time_cols": time_cols, "bench_cols": bench_cols,
            "event_date": EVENT_DATE,
            "centers": sorted(tidy[tidy.scope == "Center"].center.unique().tolist()),
-           "cv": cv, "bv": bv, "asof": TODAY,
+           "cv": cv, "bv": bv, "asof": TODAY, "synthetic": RUN_META["synthetic"],
            "raw": raw.to_dict(orient="records")}
 os.makedirs(DASH, exist_ok=True)     # build_dashboard_html.py is a RUN_ALL step, so always write
 json.dump(payload, open(os.path.join(DASH, "scorecard_payload.json"), "w"))
