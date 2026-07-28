@@ -1,0 +1,10 @@
+# PPR pipeline dependencies.
+#   pip install -r requirements.txt
+#
+# Python 3.9 to 3.12. On 3.13+ pantab and pandas may have no prebuilt wheel yet and
+# pip will try to compile them; if that fails, install 3.12 and use `py -3.12 -m pip`.
+pandas>=1.5
+numpy>=1.23
+openpyxl>=3.1        # pandas needs this to read the Infinity .xlsx exports
+pantab>=4.0          # writes the native Tableau .hyper extracts
+python-pptx>=0.6.21  # one P&PR deck per center

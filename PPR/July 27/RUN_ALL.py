@@ -1,16 +1,25 @@
-"""
+r"""
 PPR pipeline - run everything, in order.
 
-Usage (office laptop, real Infinity files):
-    set PPR_INPUT_DIR to the folder holding the 7 Infinity .xlsx files, then:
+OFFICE LAPTOP
+    The project lives at:
+        C:\Users\SGowda\OneDrive - Iovance Biotherapeutics\Desktop\PPR Automation\VS Code
+
+    Put the seven Infinity .xlsx exports in the data\ folder already sitting there,
+    then from that folder:
         python RUN_ALL.py
 
-    PowerShell:  $env:PPR_INPUT_DIR="C:\\path\\to\\real_files"
-                 python RUN_ALL.py
-    CMD:         set PPR_INPUT_DIR=C:\\path\\to\\real_files
-                 python RUN_ALL.py
+    Nothing else to configure. data\ is found automatically because it is next to
+    this file. Real data never leaves the laptop; only code and printed numbers travel.
 
-Without PPR_INPUT_DIR it runs on the synthetic sample, which is fine for a dry run.
+    To read from somewhere else instead, set PPR_INPUT_DIR first:
+        PowerShell:  $env:PPR_INPUT_DIR="C:\path\to\real_files"
+        CMD:         set PPR_INPUT_DIR=C:\path\to\real_files
+
+MAC / DEV
+    With no data\ folder it falls back to the synthetic sample. That is fine for a dry
+    run, and the header says so in a block of exclamation marks you cannot miss. Every
+    number from a synthetic run is a property of the generator, not of the world.
 
 Order:
     1. build_analysis_table.py  -> analysis/ppr_analysis.csv        (one row per order)
@@ -53,15 +62,32 @@ def main() -> int:
     src = next((p for p in candidates if p and os.path.isdir(p)
                 and any(f.endswith(".xlsx") for f in os.listdir(p))), None)
     if not src:
-        print("No input found. Create a data/ folder next to RUN_ALL.py holding the")
-        print("7 Infinity .xlsx files (or set PPR_INPUT_DIR to their folder).")
+        print("No input found. Put the 7 Infinity .xlsx exports in:", flush=True)
+        print("   " + os.path.abspath(os.path.join(HERE, "data")), flush=True)
+        print("(or set PPR_INPUT_DIR to the folder holding them).", flush=True)
         return 1
 
     src = os.path.abspath(src)
-    print("=" * 62)
-    print("PPR pipeline")
-    print("input:", src)
-    print("=" * 62)
+    xlsx = sorted(f for f in os.listdir(src) if f.endswith(".xlsx"))
+    print("=" * 62, flush=True)
+    print("PPR pipeline", flush=True)
+    print("input:", src, flush=True)
+    print(f"found: {len(xlsx)} .xlsx files", flush=True)
+    print("=" * 62, flush=True)
+
+    # A synthetic run that looks like a real one is the dangerous case, and the path
+    # above is easy to skim past. Say it outright instead.
+    if "synthetic" in src.lower():
+        print("!" * 62, flush=True)
+        print("  SYNTHETIC DATA. Every number this run produces is made up.", flush=True)
+        print("  For real numbers put the seven Infinity exports in:", flush=True)
+        print("     " + os.path.abspath(os.path.join(HERE, "data")), flush=True)
+        print("!" * 62, flush=True)
+    if len(xlsx) < 7:
+        print(f"\nOnly {len(xlsx)} of the 7 expected exports are here:", flush=True)
+        for f in xlsx:
+            print("   " + f, flush=True)
+        print("Stage 1 will stop and name whichever one it cannot find.\n", flush=True)
 
     # Hand the resolved folder down rather than letting each stage resolve it again.
     # They apply the same rules, but a stage reading a different folder than the one
@@ -71,27 +97,27 @@ def main() -> int:
     for i, (script, what) in enumerate(STEPS, 1):
         path = os.path.join(PIPE, script)
         if not os.path.exists(path):
-            print(f"\n[{i}/{len(STEPS)}] MISSING {script} - stopping.")
+            print(f"\n[{i}/{len(STEPS)}] MISSING {script} - stopping.", flush=True)
             return 1
-        print(f"\n[{i}/{len(STEPS)}] {script}: {what}")
+        print(f"\n[{i}/{len(STEPS)}] {script}: {what}", flush=True)
         r = subprocess.run([sys.executable, path], cwd=PIPE, env=env)
         if r.returncode != 0:
-            print(f"\nFAILED at {script}. Nothing after this step ran.")
-            print("Fix the error above and run again.")
+            print(f"\nFAILED at {script}. Nothing after this step ran.", flush=True)
+            print("Fix the error above and run again.", flush=True)
             return r.returncode
 
-    print("\n" + "=" * 62)
-    print("Done. Outputs:")
-    print("  analysis/ppr_analysis.csv")
-    print("  analysis/ppr_scorecard_tidy.csv")
-    print("  analysis/ppr_datewindow_long.csv")
-    print("  tableau/ppr_scorecard.hyper")
-    print("  tableau/ppr_analysis.hyper")
-    print("  tableau/ppr_datewindow.hyper")
-    print("  dashboard/ppr_scorecard.html       (standalone, open in any browser)")
-    print("  decks/<center> - P&PR Review.pptx  (one per center)")
-    print("\nNext: Tableau Desktop. First time: README.md section 4. After: just refresh extracts.")
-    print("=" * 62)
+    print("\n" + "=" * 62, flush=True)
+    print("Done. Outputs:", flush=True)
+    print("  analysis/ppr_analysis.csv", flush=True)
+    print("  analysis/ppr_scorecard_tidy.csv", flush=True)
+    print("  analysis/ppr_datewindow_long.csv", flush=True)
+    print("  tableau/ppr_scorecard.hyper", flush=True)
+    print("  tableau/ppr_analysis.hyper", flush=True)
+    print("  tableau/ppr_datewindow.hyper", flush=True)
+    print("  dashboard/ppr_scorecard.html       (standalone, open in any browser)", flush=True)
+    print("  decks/<center> - P&PR Review.pptx  (one per center)", flush=True)
+    print("\nNext: Tableau Desktop. First time: README.md section 4. After: just refresh extracts.", flush=True)
+    print("=" * 62, flush=True)
     return 0
 
 

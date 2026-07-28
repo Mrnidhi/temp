@@ -100,6 +100,12 @@ thead .lab-h{background:var(--surface2);color:var(--ink-soft);font-weight:700;fo
 thead .lab-h.bench{background:var(--bench-tint)}
 .cat-col{width:150px;min-width:150px}
 th.metric-h{min-width:250px;width:250px}
+/* Category and Metric stay pinned while the value columns scroll right. Without this
+   you lose which row you are reading the moment you look at a quarterly column. */
+th.cat-col,td.cat{position:sticky;left:0}
+th.metric-h:not(.cat-col),td.metric{position:sticky;left:150px}
+td.cat,td.metric{z-index:2}
+th.cat-col,th.metric-h{z-index:6}
 td.cat{background:var(--band);color:var(--olive2);font-weight:700;font-size:9.5px;letter-spacing:.06em;
   text-transform:uppercase;text-align:left;white-space:normal;vertical-align:middle;line-height:1.35}
 td.metric{background:var(--surface);text-align:left;font-weight:500;color:var(--body);white-space:normal;

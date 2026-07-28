@@ -8,38 +8,74 @@ Steps 1 to 5 give you a working dashboard with no Tableau at all. Do those first
 
 ---
 
-## 0. One-time setup (skip if you have done it before)
+## Where everything lives
+
+```
+C:\Users\SGowda\OneDrive - Iovance Biotherapeutics\Desktop\PPR Automation\VS Code
+```
+
+Open a PowerShell terminal there. In VS Code that is Terminal > New Terminal, which
+already opens in this folder. Every command below runs from there.
+
+---
+
+## 0. One-time setup
 
 ```
 python --version
 ```
-Needs 3.9 or higher. If the command is not found, install Python and tick "Add to PATH".
+
+VS Code is showing **Python 3.14**, which is newer than pandas and pantab reliably ship
+wheels for. Run the install and watch what happens:
 
 ```
-pip install pandas numpy openpyxl pantab python-pptx
+pip install -r requirements.txt
 ```
+
+If any package fails to build, that is the 3.14 problem, not your machine. Install
+Python 3.12 alongside it and use that instead:
+
+```
+py -3.12 -m pip install -r requirements.txt
+```
+
+and run everything below with `py -3.12` in place of `python`. Tell me which one you
+ended up on so the rest of the notes match.
 
 ---
 
 ## 1. Get the latest code
 
-In the folder holding this repo:
+Your `VS Code` folder is not a git clone, so there is nothing to pull. Copy these across
+from the repo, overwriting what is there:
 
 ```
-git pull
+RUN_ALL.py
+metric3_cancellations.py
+ONE DASHBOARD - Tableau build.md
+OFFICE LAPTOP - do this.md      (this file)
+pipeline\baseline.py
+pipeline\build_analysis_table.py
+pipeline\build_center_decks.py
+pipeline\build_dashboard_html.py
+pipeline\build_datewindow.py
+pipeline\build_hyper.py
+pipeline\build_scorecard.py
 ```
 
-**You should see** `pipeline/build_dashboard_html.py` appear, and RUN_ALL.py change.
-If it says your branch has local changes, you edited something here. Tell me before
-overwriting it.
+**Leave alone:** `data\`, `analysis\`, `dashboard\`, `tableau\`, `PPR Dashboard.twbx`,
+`up.twb`. Those are yours and hold real output.
+
+Delete `pipeline\__pycache__` after copying. Stale `.pyc` files from the old versions
+are the one thing that can make a fresh script behave like the old one.
 
 ---
 
 ## 2. Put the real exports in place
 
-Make a folder named `data` next to `RUN_ALL.py`, and download these seven from Infinity
-into it as `.xlsx`. Only the part of the name in backticks has to match; export-date
-suffixes are fine, so `BAI - List of Orders 07.28.xlsx` matches `bai_list_of_orders`.
+You already have a `data` folder. Download these seven from Infinity into it as `.xlsx`.
+Only the part of the name in backticks has to match; export-date suffixes are fine, so
+`BAI - List of Orders 07.28.xlsx` matches `bai_list_of_orders`.
 
 | Needs to contain | Infinity report |
 |---|---|
@@ -61,9 +97,10 @@ suffixes are fine, so `BAI - List of Orders 07.28.xlsx` matches `bai_list_of_ord
 python RUN_ALL.py
 ```
 
-**Check the first line of output.** It prints `input:` and a folder. It must be your
-`data` folder. If it names anything with `synthetic` in it, step 2 did not take and every
-number after this is fake.
+The header prints the folder it is reading and how many `.xlsx` it found. It must be your
+`data` folder and it must say 7. If it found fewer it lists them, and stage 1 will stop
+and name the missing one. If it is reading the synthetic sample it prints a row of
+exclamation marks saying so; every number after that would be made up.
 
 Six stages run in order. Takes a couple of minutes, mostly the 85 PowerPoints.
 
@@ -167,10 +204,15 @@ whether he believes the other twelve.
 
 | Symptom | Cause |
 |---|---|
-| `input:` names a synthetic folder | `data/` is missing, empty, or has no `.xlsx` |
+| Row of `!!!!` saying synthetic | `data\` is missing, empty, or has no `.xlsx` |
 | `PermissionError` on a `.hyper` | Tableau Desktop is open. Close it and rerun |
 | `Could not find a file matching...` | one of the seven exports is missing or misnamed |
 | A stage stops on an assertion | real data disagrees with an assumption. Send the message |
 | `ModuleNotFoundError` | rerun the `pip install` line in step 0 |
+| `pip install` fails building a wheel | Python 3.14. Use `py -3.12` (step 0) |
+| A script behaves like the old version | stale `pipeline\__pycache__`. Delete the folder |
 
 Rerunning is always safe. Every output is rebuilt from scratch.
+
+Nothing here writes outside the `VS Code` folder, and nothing sends data anywhere. Only
+what you copy into chat leaves the laptop.
