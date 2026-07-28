@@ -60,7 +60,9 @@ def freeze(asof):
     with open(os.path.join(REF, "baseline.json"), "w") as f:
         json.dump(meta, f, indent=2)
     print(f"\nreference written to {os.path.relpath(REF, HERE)}")
-    print("Diff against it after every change. Commit it so the office run has the same reference.")
+    print("Diff against it after every change. Machine-local, never committed: a reference")
+    print("frozen on synthetic data says nothing about real data, and re-freezing on the")
+    print("office laptop would put real rows in the repo.")
 
 
 def diff():

@@ -183,31 +183,12 @@ def bench_median(tiername):
 for cg, label, order, tiername in BENCH_COLS:
     emit("National", "National", cg, label, order, bench_median(tiername))
 
-# ---- Current Template (to retire): the workbook's second sheet ----
-# Kolin's old Excel (Meet 6): pick an ATC, see its launch-to-date metrics against
-# quartiles and the national average across all centers. Same 13 metrics.
-CT_COLS = [
-    ("Current", "25th Percentile",  12),
-    ("Current", "Median",           13),
-    ("Current", "75th Percentile",  14),
-    ("Current", "National Average", 15),
-]
-per_center_ltd = [compute(g) for _, g in A.groupby("center_key")]
-ct_vals = {label: {} for _, label, _ in CT_COLS}
-for mname in mreg:
-    vals = [pc[mname] for pc in per_center_ltd
-            if pc[mname] is not None and not (isinstance(pc[mname], float) and np.isnan(pc[mname]))]
-    if vals:
-        q1, med, q3 = np.percentile(vals, [25, 50, 75])
-        ct_vals["25th Percentile"][mname] = float(q1)
-        ct_vals["Median"][mname] = float(med)
-        ct_vals["75th Percentile"][mname] = float(q3)
-        ct_vals["National Average"][mname] = float(np.mean(vals))
-    else:
-        for _, label, _ in CT_COLS:
-            ct_vals[label][mname] = np.nan
-for cg, label, order in CT_COLS:
-    emit("CurrentTemplate", "National", cg, label, order, ct_vals[label])
+# The old Excel view (25th/50th/75th percentile and national average across all ATCs)
+# used to be emitted here as a "CurrentTemplate" scope, so the new and old could be shown
+# side by side. Removed 2026-07-27. Kolin, Meet 6: quartiles "confuse the hell out of our
+# sales folks" and "we are actively trying to move away from them". The mandated benchmark
+# is the Top 10 / Top 40 / New tier median above, so nothing here is unreplaced.
+# It also freed col_order 12-15, which the quartile block shared with Q1'26 and Q4'25.
 
 tidy = pd.DataFrame(rows)
 
@@ -275,37 +256,13 @@ DASH = os.path.join(HERE, "..", "dashboard")   # payload written only if this ex
 metrics = [{"metric_order": m[0], "metric_group": m[1], "metric": m[2], "value_type": m[3]} for m in METRICS]
 time_cols = [c for _, c, o, _, _ in sorted(TIME_COLS + QUARTER_COLS, key=lambda x: x[2])]
 bench_cols = [c for _, c, o, _ in sorted(BENCH_COLS, key=lambda x: x[2])]
-cv, bv, qv = {}, {}, {}
+cv, bv = {}, {}
 # value_display lookups keyed [center][metric][col_label] and [metric][col_label]
 for _, r in tidy.iterrows():
     if r["scope"] == "Center":
         cv.setdefault(r["center"], {}).setdefault(r["metric"], {})[r["col_label"]] = r["value_display"]
     elif r["scope"] == "National":
         bv.setdefault(r["metric"], {})[r["col_label"]] = r["value_display"]
-    else:  # CurrentTemplate quartile / average columns
-        qv.setdefault(r["metric"], {})[r["col_label"]] = r["value_display"]
-ct_cols = [label for _, label, _ in CT_COLS]
-
-# ---- quartile RANGE columns, the way Kolin's real Launch-to-Date slide shows them ----
-# Four columns worst -> best, each a range like "1 - 5", and the center's own cell is
-# heat-colored by which band it falls in. Lower-is-better metrics have the direction
-# flipped so the best band is always rightmost.
-LOWER_IS_BETTER = {M3, M7, M8, M9, M13}
-qranges, qbounds = {}, {}
-for mname in mreg:
-    vals = sorted(pc[mname] for pc in per_center_ltd
-                  if pc[mname] is not None and not (isinstance(pc[mname], float) and np.isnan(pc[mname])))
-    if not vals:
-        continue
-    cuts = [float(np.min(vals)), *[float(x) for x in np.percentile(vals, [25, 50, 75])], float(np.max(vals))]
-    edges = list(zip(cuts[:-1], cuts[1:]))          # ascending bands
-    if mname in LOWER_IS_BETTER:
-        edges = edges[::-1]                          # worst (highest) first
-    vt = mreg[mname][2]
-    def f(x):
-        return f"{x*100:.2f}%" if vt == "rate" else (f"{x:.1f}" if vt == "days" else f"{int(round(x))}")
-    qranges[mname] = [f"{f(a)} - {f(b)}" for a, b in edges]
-    qbounds[mname] = [[a, b] for a, b in edges]
 
 # ---- raw per-center rows, so the dashboard can compute any custom date window ----
 # One row per order with the few dates/flags the 13 metrics need. Lets the UI answer
@@ -325,15 +282,13 @@ raw = raw.where(pd.notna(raw), None)
 
 DASH = os.path.join(HERE, "..", "dashboard")
 payload = {"metrics": metrics, "time_cols": time_cols, "bench_cols": bench_cols,
-           "ct_cols": ct_cols, "qv": qv, "qranges": qranges, "qbounds": qbounds,
-           "lower_is_better": sorted(LOWER_IS_BETTER),
            "event_date": EVENT_DATE,
            "centers": sorted(tidy[tidy.scope == "Center"].center.unique().tolist()),
            "cv": cv, "bv": bv, "asof": TODAY,
            "raw": raw.to_dict(orient="records")}
-if os.path.isdir(DASH):
-    json.dump(payload, open(os.path.join(DASH, "scorecard_payload.json"), "w"))
-    print(f"dashboard payload -> dashboard/scorecard_payload.json ({len(payload['centers'])} centers)")
+os.makedirs(DASH, exist_ok=True)     # build_dashboard_html.py is a RUN_ALL step, so always write
+json.dump(payload, open(os.path.join(DASH, "scorecard_payload.json"), "w"))
+print(f"dashboard payload -> dashboard/scorecard_payload.json ({len(payload['centers'])} centers)")
 
 # ---- wide sample for one center + benchmarks, human eyeball ----
 top_center = A.groupby("atc")["order_request__til_order_name"].nunique().idxmax()

@@ -17,7 +17,8 @@ Order:
     2. build_scorecard.py       -> analysis/ppr_scorecard_tidy.csv  (the 13 metrics)
     3. build_datewindow.py      -> analysis/ppr_datewindow_long.csv (date-filter source)
     4. build_hyper.py           -> tableau/*.hyper                  (Tableau extracts)
-    5. build_center_decks.py    -> decks/*.pptx                    (per-center decks)
+    5. build_dashboard_html.py  -> dashboard/ppr_scorecard.html     (standalone browser view)
+    6. build_center_decks.py    -> decks/*.pptx                    (per-center decks)
 
 Then build/refresh the workbook in Tableau Desktop from the .hyper extracts.
 One-time build recipe: README.md section 4. After that, refresh only.
@@ -34,6 +35,7 @@ STEPS = [
     ("build_scorecard.py",      "computing the 13 scorecard metrics"),
     ("build_datewindow.py",     "building the event-level date-window source"),
     ("build_hyper.py",          "writing the Tableau .hyper extracts"),
+    ("build_dashboard_html.py", "rendering the standalone HTML scorecard"),
     ("build_center_decks.py",   "generating one P&PR PowerPoint per center"),
 ]
 
@@ -55,10 +57,16 @@ def main() -> int:
         print("7 Infinity .xlsx files (or set PPR_INPUT_DIR to their folder).")
         return 1
 
+    src = os.path.abspath(src)
     print("=" * 62)
     print("PPR pipeline")
     print("input:", src)
     print("=" * 62)
+
+    # Hand the resolved folder down rather than letting each stage resolve it again.
+    # They apply the same rules, but a stage reading a different folder than the one
+    # printed above would be silent and would poison every output after it.
+    env = {**os.environ, "PPR_INPUT_DIR": src}
 
     for i, (script, what) in enumerate(STEPS, 1):
         path = os.path.join(PIPE, script)
@@ -66,7 +74,7 @@ def main() -> int:
             print(f"\n[{i}/{len(STEPS)}] MISSING {script} - stopping.")
             return 1
         print(f"\n[{i}/{len(STEPS)}] {script}: {what}")
-        r = subprocess.run([sys.executable, path], cwd=PIPE)
+        r = subprocess.run([sys.executable, path], cwd=PIPE, env=env)
         if r.returncode != 0:
             print(f"\nFAILED at {script}. Nothing after this step ran.")
             print("Fix the error above and run again.")
@@ -80,6 +88,7 @@ def main() -> int:
     print("  tableau/ppr_scorecard.hyper")
     print("  tableau/ppr_analysis.hyper")
     print("  tableau/ppr_datewindow.hyper")
+    print("  dashboard/ppr_scorecard.html       (standalone, open in any browser)")
     print("  decks/<center> - P&PR Review.pptx  (one per center)")
     print("\nNext: Tableau Desktop. First time: README.md section 4. After: just refresh extracts.")
     print("=" * 62)
