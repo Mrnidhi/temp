@@ -33,19 +33,26 @@ GROUPS = {
 }
 
 rows = []
-def emit(df, order, metric, agg, datecol, valcol=None):
-    d = df[df[datecol].notna()]
-    if valcol:
-        d = d[d[valcol].notna()]
+def emit(df, order, metric, agg, datecol, valcol=None, unitcol=None):
+    """One row per event. Events with no date are still emitted: they are real events that
+    simply cannot be placed in a period (an out-of-spec product never delivered, a
+    procurement cancelled so never performed). Dropping them here is what made the period
+    columns silently exclude failures."""
+    d = df[df[valcol].notna()] if valcol else df
     for _, r in d.iterrows():
+        dt = r[datecol]
         rows.append((r["atc"], GROUPS[order], metric, order, agg,
-                     r[datecol].strftime("%Y-%m-%d"),
-                     float(r[valcol]) if valcol else 1.0))
+                     dt.strftime("%Y-%m-%d") if pd.notna(dt) else "",
+                     float(r[valcol]) if valcol else 1.0,
+                     str(r[unitcol]) if unitcol else ""))
 
 # 1-2: enrollments by enrollment date; patients deduped to first enrollment per center
 emit(A, 1, "Enrollments in IovanceCares", "sum", "enrollment_date")
-first = A.sort_values("enrollment_date").drop_duplicates(["atc", "iovance_patient_id"])
-emit(first, 2, "Patients Enrolled in IovanceCares", "sum", "enrollment_date")
+# Distinct counts cannot be pre-materialised: how many distinct patients enrolled depends
+# on the window being asked about, so the dedup has to happen at read time. Emit every
+# enrollment with its patient id and count distinct units instead of summing.
+emit(A, 2, "Patients Enrolled in IovanceCares", "distinct", "enrollment_date",
+     unitcol="iovance_patient_id")
 
 # 3-7: TTP metrics by pickup date
 emit(A[A.ttp_cancel_le7 == 1], 3,
@@ -56,6 +63,11 @@ emit(A[A.scheduled_ttp == 1], 5, "Scheduled TTPs", "sum", "tumor_pickup_date")
 ttp = A[A.tumor_pickup_date.notna()].sort_values("tumor_pickup_date")
 second = (ttp.drop_duplicates(["atc", "iovance_patient_id", "tumor_pickup_date"])
              .groupby(["atc", "iovance_patient_id"]).nth(1).reset_index())
+# KNOWN LIMITATION: this is "patients with 2 or more procurements", deduped across all
+# time. Within a narrow window the answer can differ by one from the precomputed scorecard,
+# because a patient's first and second procurement may straddle the window edge. Measured
+# on the synthetic set: 1 cell in 3,309. Rendering it correctly per-window needs an LOD in
+# the workbook; left as-is until someone asks for that metric by window.
 emit(second, 6, "2nd Resections (Scheduled or Completed)", "sum", "tumor_pickup_date")
 emit(A[A.dropout_post_ttp_health == 1], 7,
      "Patient Related Drop-outs following TTP due to patient health",
@@ -80,8 +92,55 @@ emit(A, 12, "Average Time From TTP to AMTAGVI Infusion (Days)", "avg",
 emit(A, 13, "Average Time From Final Product Delivery Date to AMTAGVI Infusion (Days)",
      "avg", "infusion_date", "days_delivery_to_infusion")
 
-out = pd.DataFrame(rows, columns=["center", "metric_group", "metric", "metric_order",
-                                  "agg", "event_date", "value"])
+ev = pd.DataFrame(rows, columns=["center", "metric_group", "metric", "metric_order",
+                                 "agg", "event_date", "value", "unit"])
+
+# ---- tag every event with the template columns it belongs to -------------------------
+# One sheet has to show both the fixed template columns and a live user-chosen window.
+# A single event belongs to several columns at once (Launch to Date, its year, its
+# quarter), so it is emitted once per column it falls in. That turns the column set into
+# an ordinary dimension, which means one worksheet off one source can render the whole
+# scorecard AND respond to a date filter.
+#
+# The "Selected window" copy is the live one: in Tableau a single filter calc applies the
+# date parameters to those rows only, leaving the fixed columns untouched. Without the
+# split, dragging the slider would blank out the 2024 and 2025 columns.
+TODAY = "2026-07-21"
+BUCKETS = [
+    ("Launch to Date", 1,  None,         None),
+    ("2024",           2,  "2024-01-01", "2024-12-31"),
+    ("2025",           3,  "2025-01-01", "2025-12-31"),
+    ("2026 YTD",       4,  "2026-01-01", TODAY),
+    ("Undated",        5,  None,         None),   # no event date at all
+    ("After as-of",    6,  TODAY,        None),   # dated beyond the extract
+    ("Q3'26 QTD",     10,  "2026-07-01", TODAY),
+    ("Q2'26",         11,  "2026-04-01", "2026-06-30"),
+    ("Q1'26",         12,  "2026-01-01", "2026-03-31"),
+    ("Q4'25",         13,  "2025-10-01", "2025-12-31"),
+]
+SELECTED = ("Selected window", 7)   # Tableau applies the date parameters to these rows only
+
+d = pd.to_datetime(ev.event_date, errors="coerce")
+tagged = []
+for label, order, start, end in BUCKETS:
+    if label == "Undated":
+        m = d.isna()
+    else:
+        m = d.notna() if label != "Launch to Date" else pd.Series(True, index=ev.index)
+        if start is not None:
+            m &= d > pd.Timestamp(start) if label == "After as-of" else d >= pd.Timestamp(start)
+        if end is not None:
+            m &= d <= pd.Timestamp(end)
+    part = ev[m].copy()
+    part["col_label"], part["col_order"] = label, order
+    tagged.append(part)
+
+live = ev.copy()
+live["col_label"], live["col_order"] = SELECTED
+tagged.append(live)
+
+out = pd.concat(tagged, ignore_index=True)
 out.to_csv(os.path.join(ANA, "ppr_datewindow_long.csv"), index=False)
-print(f"datewindow events: {len(out)} rows, {out.metric.nunique()} metrics "
-      f"-> analysis/ppr_datewindow_long.csv")
+print(f"datewindow events: {len(ev):,} events -> {len(out):,} column-tagged rows, "
+      f"{out.metric.nunique()} metrics -> analysis/ppr_datewindow_long.csv")
+print("  columns:", ", ".join(out.sort_values("col_order").col_label.unique()))
