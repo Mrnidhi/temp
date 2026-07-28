@@ -37,6 +37,10 @@ STEPS = [
     ("build_center_decks.py",   "generating one P&PR PowerPoint per center"),
 ]
 
+# After a run: python pipeline/baseline.py diff
+# Reports every cell that moved against the frozen reference. Freeze once with
+# `baseline.py freeze`, then diff after every change. A change with no diff is safe.
+
 
 def main() -> int:
     # Input, first match wins: PPR_INPUT_DIR env var, then data/ next to this

@@ -68,10 +68,29 @@ def _win(df, datecol, start, end):
     if end   is not None: m &= d <= pd.Timestamp(end)
     return df[m]
 
-def compute(df, start=None, end=None, avg="median"):
+def compute(df, start=None, end=None, avg="median", undated=False, future=False):
     """13 metrics. Each is filtered on ITS OWN event date, so a column means
-    'what happened in this period', matching Kolin's decks."""
-    w = {m: _win(df, col, start, end) for m, col in EVENT_DATE.items()}
+    'what happened in this period', matching Kolin's decks.
+
+    undated=True instead selects rows whose own event date is MISSING. Those rows are
+    real events that cannot be placed in any period. They belong in Launch to Date and in
+    no year column, and the difference has to be visible rather than silently dropped:
+    missingness here correlates with the outcome (an out-of-spec product is often never
+    delivered, a cancelled procurement never happened), so hiding it biases every period
+    column optimistic.
+
+    future=True selects rows dated AFTER the as-of date. Period columns stop at the as-of
+    date, so these also sit in Launch to Date and in no period column. Scheduled TTPs are
+    future by definition and belong here; future-dated infusions do not and are flagged
+    below."""
+    if undated:
+        w = {m: df[pd.to_datetime(df[col], errors="coerce").isna()]
+             for m, col in EVENT_DATE.items()}
+    elif future:
+        w = {m: df[pd.to_datetime(df[col], errors="coerce") > pd.Timestamp(TODAY)]
+             for m, col in EVENT_DATE.items()}
+    else:
+        w = {m: _win(df, col, start, end) for m, col in EVENT_DATE.items()}
     # Kolin, Meet 6: the Infinity scorecard shows "the median for all these values".
     agg = (lambda s: s.mean()) if avg == "mean" else (lambda s: s.median())
 
@@ -115,16 +134,18 @@ TIME_COLS = [
 ]
 # template shows quarters most-recent-first (Q3'26 QTD leftmost)
 QUARTER_COLS = [
-    ("Quarter", "Q3'26 QTD", 8,  "2026-07-01", TODAY),
-    ("Quarter", "Q2'26",     9,  "2026-04-01", "2026-06-30"),
-    ("Quarter", "Q1'26",     10, "2026-01-01", "2026-03-31"),
-    ("Quarter", "Q4'25",     11, "2025-10-01", "2025-12-31"),
+    ("Quarter", "Q3'26 QTD", 10, "2026-07-01", TODAY),
+    ("Quarter", "Q2'26",     11, "2026-04-01", "2026-06-30"),
+    ("Quarter", "Q1'26",     12, "2026-01-01", "2026-03-31"),
+    ("Quarter", "Q4'25",     13, "2025-10-01", "2025-12-31"),
 ]
+UNDATED_COL = ("Time", "Undated", 5, None, None)   # no event date at all
+FUTURE_COL  = ("Time", "After as-of", 6, None, None)   # dated beyond the extract date
 CENTER_COLS = TIME_COLS + QUARTER_COLS
 BENCH_COLS = [
-    ("Benchmark", "Top 10", 5, "Top 10"),
-    ("Benchmark", "Top 40", 6, "Top 40"),
-    ("Benchmark", "New",    7, "New"),
+    ("Benchmark", "Top 10", 7, "Top 10"),
+    ("Benchmark", "Top 40", 8, "Top 40"),
+    ("Benchmark", "New",    9, "New"),
 ]
 mreg = {m[2]: (m[0], m[1], m[3]) for m in METRICS}
 
@@ -141,6 +162,10 @@ for center, g in A.groupby("center_key"):
     disp = g["atc"].iloc[0]
     for cg, label, order, st, en in CENTER_COLS:
         emit("Center", disp, cg, label, order, compute(g, st, en))
+    emit("Center", disp, UNDATED_COL[0], UNDATED_COL[1], UNDATED_COL[2],
+         compute(g, undated=True))
+    emit("Center", disp, FUTURE_COL[0], FUTURE_COL[1], FUTURE_COL[2],
+         compute(g, future=True))
 
 # national tier benchmarks = per-center MEDIAN within the tier, launch-to-date.
 # Kolin (Meet 6): the existing scorecard shows "the median for all these values"; he compared
@@ -189,6 +214,47 @@ tidy = pd.DataFrame(rows)
 # display helpers so Tableau sorts by plain alpha (no fragile sort specs) and shows
 # type-aware text (counts as ints, days 1dp, rate as %).
 tidy["row_label"] = tidy["metric_order"].map(lambda i: f"{i:02d}  {[m[2] for m in METRICS if m[0]==i][0]}")
+# ---- ASSERTION: every counted event lands in exactly one bucket ----
+# Launch to Date must equal the year columns plus Undated plus After as-of. This is the
+# invariant that catches silently dropped events: a metric dated on a column that is null
+# for exactly the rows it counts (an out-of-spec product never delivered, a procurement
+# cancelled so never performed) would otherwise vanish from every period column while still
+# appearing in Launch to Date, biasing the periods optimistic.
+#
+# Applies to ADDITIVE counts only. Patients Enrolled and 2nd Resections are distinct counts
+# over patients: one patient with orders in two years is counted once launch-to-date but
+# once in each year, so they legitimately do not sum. Excluded by name rather than silently.
+NON_ADDITIVE = {M2, M6}
+_chk = tidy[(tidy.scope == "Center") & (tidy.value_type == "count")
+            & (~tidy.metric.isin(NON_ADDITIVE))]
+_ltd = _chk[_chk.col_label == "Launch to Date"].set_index(["center", "metric"]).value
+_buckets = ["2024", "2025", "2026 YTD", "Undated", "After as-of"]
+_parts = (_chk[_chk.col_label.isin(_buckets)].groupby(["center", "metric"]).value.sum())
+_cmp = _ltd.to_frame("ltd").join(_parts.to_frame("parts"), how="outer").fillna(0)
+_bad = _cmp[(_cmp.ltd - _cmp.parts).abs() > 1e-9]
+if len(_bad):
+    print("\nFAILED: year columns + Undated + After as-of != Launch to Date")
+    print(_bad.assign(gap=lambda d: d.ltd - d.parts)
+          .sort_values("gap", key=abs, ascending=False).head(20).to_string())
+    raise SystemExit(f"{len(_bad)} center/metric cells do not reconcile.")
+print(f"reconciles: {len(_cmp):,} center/metric cells "
+      "(year + undated + after-as-of == launch-to-date)")
+
+# ---- WARNING: events dated after the extract date ----
+# Scheduled TTPs are future by definition and belong here. Infusions do not: an infusion
+# recorded with a future date has not been performed, so counting it in a metric called
+# "Infusions Performed" overstates treated patients.
+_fut = (tidy[(tidy.scope == "Center") & (tidy.col_label == "After as-of")
+             & (tidy.value_type == "count")]      # summing medians would be meaningless
+        .groupby("metric").value.sum())
+_fut = _fut[_fut > 0]
+if len(_fut):
+    print("\nevents dated after the as-of date (in Launch to Date, in no period column):")
+    for m, v in _fut.items():
+        note = "  <- expected, these are future bookings" if m == M5 else \
+               "  <- REVIEW: not yet performed, but counted as performed" if m == M10 else ""
+        print(f"  {int(v):>4}  {m}{note}")
+
 tidy["col_final"] = tidy.apply(lambda r: f"{r.col_order:02d} {r.col_label}", axis=1)
 def fmt(r):
     if pd.isna(r.value):
