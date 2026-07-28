@@ -13,6 +13,8 @@ afterwards every data refresh is just rerun + Extract > Refresh.
 ```
 July 27/
   OFFICE LAPTOP - do this.md  start here on the office laptop; every step, in order
+  COPILOT 1 - verify ...      paste into office Copilot: run on real data, verify via HTML
+  COPILOT 2 - build ...       paste into office Copilot after 1 passes: finish the Tableau dashboard
   RUN_ALL.py                  run this; executes the whole pipeline in order
   README.md                   this file
   ONE DASHBOARD - Tableau ...  the only Tableau build recipe
