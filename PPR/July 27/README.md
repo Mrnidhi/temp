@@ -12,24 +12,33 @@ afterwards every data refresh is just rerun + Extract > Refresh.
 
 ```
 July 27/
+  OFFICE LAPTOP - do this.md  start here on the office laptop; every step, in order
   RUN_ALL.py                  run this; executes the whole pipeline in order
   README.md                   this file
+  ONE DASHBOARD - Tableau ...  the only Tableau build recipe
+  metric3_cancellations.py    real cancellation logic from the snapshot history
   pipeline/
     build_analysis_table.py   joins the 7 Infinity .xlsx into one order-grain table
     build_scorecard.py        computes the 13 metrics for every center and benchmark
     build_datewindow.py       one row per metric event with its own event date
     build_hyper.py            writes the three native Tableau .hyper extracts
+    build_dashboard_html.py   renders the standalone browser scorecard
     build_center_decks.py     one P&PR PowerPoint per center (Launch-to-Date + YoY)
+    baseline.py               freeze / diff, to prove a change moved only what it should
   analysis/                   pipeline outputs (CSV) - regenerated on every run
   tableau/                    ppr_scorecard.hyper (Scorecard), ppr_analysis.hyper
                               (Orders), ppr_datewindow.hyper (Events)
+  dashboard/                  ppr_scorecard.html, opens in any browser, no Tableau
   decks/                      one .pptx per center, ready to present
 ```
+
+Everything below `analysis/` is gitignored. All of it is regenerable in one command, and
+all of it holds real patient rows once the pipeline runs on real data.
 
 ## 2. One-time setup (office laptop)
 
 1. Install Python 3.9+ (check: `python --version`).
-2. `pip install pandas numpy openpyxl pantab`
+2. `pip install pandas numpy openpyxl pantab python-pptx`
 3. Have Tableau Desktop installed and licensed.
 4. Create a `data/` folder next to `RUN_ALL.py` and drop the seven Infinity
    exports in it, filenames containing: `bai_list_of_orders`, `bai_infusion`,
