@@ -35,8 +35,6 @@ Fields you will use: `center`, `metric_group`, `metric_order`, `metric`, `col_la
 - **pCenter** — String, list, Add values from field > `center`.
 - **pStart** — Date, default 2025-01-01.
 - **pEnd** — Date, default 2026-05-05.
-- **pMode** — String, list of exactly two values:
-  `Template columns` (default) and `Dates drive everything`.
 
 ### 3. Three calculated fields
 
@@ -45,29 +43,22 @@ Fields you will use: `center`, `metric_group`, `metric_order`, `metric`, `col_la
 [center] = [pCenter]
 ```
 
-**Keep Row** — the piece that makes one sheet work, and the switch between the two modes.
+**Keep Row** — the piece that makes one sheet work.
 ```
-IF [pMode] = "Dates drive everything"
-THEN [col_label] = "Selected window"
-     AND [event_date] >= [pStart] AND [event_date] <= [pEnd]
-ELSEIF [col_label] = "Selected window"
+IF [col_label] = "Selected window"
 THEN [event_date] >= [pStart] AND [event_date] <= [pEnd]
 ELSE TRUE
 END
 ```
 
-In **Template columns** mode the dates bite only on the live column and every fixed column
-passes through untouched. That is the default, and the one to show Kolin first: he keeps
-2024, 2025 and the quarters on screen as anchors while asking about a period beside them.
+The dates bite only on the live column. Every template column passes through untouched, so
+2024, 2025 and the quarters stay on screen as anchors while Kolin asks about a period beside
+them.
 
-In **Dates drive everything** mode the fixed columns disappear and the table collapses to a
-single column showing exactly the chosen window. Use it when the question is only "what did
-this centre do between these two dates", with no reference columns wanted.
-
-The reason it is a mode rather than simply filtering the fixed columns: if the dates applied
-to `2024` as well, that column would show the overlap between 2024 and the slider, which is
-empty whenever the slider sits outside 2024. A column headed 2024 reading zero because of a
-filter elsewhere on the sheet is the kind of thing that destroys trust in a number.
+They deliberately do not filter the template columns. If the dates applied to `2024` as well,
+that column would show the overlap between 2024 and the slider, which is empty whenever the
+slider sits outside 2024. A column headed 2024 reading zero because of a filter elsewhere on
+the sheet is the kind of thing that destroys trust in a number.
 
 **Result** — one expression covering all four aggregation kinds.
 ```
@@ -92,7 +83,7 @@ enrolled depends on the window you ask about, so the dedup has to happen at read
 
 ### 5. The dashboard
 - New dashboard, 1400 x 850. Drag the sheet in.
-- Show all four parameter controls: pCenter, pStart, pEnd, pMode.
+- Show all three parameter controls: pCenter, pStart, pEnd.
 - Title band navy `#17344F` with white text, footer band lime `#9DC13C` with navy text.
 
 That is the whole build. One source, one sheet, one dashboard.
@@ -103,9 +94,6 @@ That is the whole build. One source, one sheet, one dashboard.
 
 Pick a centre. Read the fixed columns exactly as before. When he wants a different period,
 drag the two dates and read the **Selected window** column. Nothing else moves.
-
-If he would rather the whole scorecard follow the dates, flip **pMode** to
-`Dates drive everything` and the table becomes one column for exactly that period.
 
 To reproduce one of his existing decks, set the dates to that deck's window and compare the
 Selected column against his slide.

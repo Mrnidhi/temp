@@ -3,3 +3,6 @@ Meet/
 PPR/July 27/data/
 *.pyc
 __pycache__/
+*.hyper
+PPR/July 27/analysis/
+PPR/July 27/decks/
