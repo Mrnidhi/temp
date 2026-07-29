@@ -23,7 +23,7 @@ A = pd.read_csv(os.path.join(ANA, "ppr_analysis.csv"), low_memory=False)
 for c in ["enrollment_date", "tumor_pickup_date", "fp_delivery_date", "infusion_date"]:
     A[c] = pd.to_datetime(A[c], errors="coerce")
 
-from metrics import NAME, GROUP as GROUPS
+from metrics import NAME, GROUP as GROUPS, LOWER_IS_BETTER, HIGHER_IS_BETTER
 
 rows = []
 undated = []   # (center, metric, order id, missing field) - Kolin asked for these 07/28
@@ -219,6 +219,70 @@ COL_GROUP = {
 _unmapped = set(out.col_label) - set(COL_GROUP)
 if _unmapped:
     raise SystemExit(f"column(s) with no block: {sorted(_unmapped)}. Add them to COL_GROUP.")
+# ---- performance heat, one colour per Launch to Date cell (Kolin, 07/28) -------------
+# The centre's launch-to-date value against the median of ITS OWN benchmark arm.
+# Direction-aware; neutral metrics and blank values keep the plain row band.
+# THRESHOLDS ARE A PROPOSAL pending Kolin: at/better than the median = green, within
+# half (or double, for lower-is-better) = amber, beyond = orange.
+def heat_band(v, m, lower_better):
+    if pd.isna(v) or pd.isna(m):
+        return None
+    if lower_better:
+        if m == 0:
+            return "green" if v == 0 else "amber"
+        return "green" if v <= m else ("amber" if v <= 2 * m else "orange")
+    return "green" if v >= m else ("amber" if v >= 0.5 * m else "orange")
+
+ctr_l2d = (sc[(sc.scope == "Center") & (sc.col_label == "Launch to Date")]
+           .set_index(["center", "metric"]).value)
+arm_med = nat.set_index(["col_label", "metric"]).value
+heat = {}
+for (center, metric), v in ctr_l2d.items():
+    if metric in LOWER_IS_BETTER:
+        lower = True
+    elif metric in HIGHER_IS_BETTER:
+        lower = False
+    else:
+        continue
+    arm = ARM_FOR_TIER[tier_of[center]]
+    band = heat_band(v, arm_med.get((arm, metric)), lower)
+    if band:
+        heat[(center, metric)] = band
+
+GROUP_BAND = {g: ("band_blue" if i % 2 == 0 else "band_gray")
+              for i, g in enumerate(dict.fromkeys(GROUPS.values()))}
+out["cell_color"] = out.metric_group.map(GROUP_BAND)
+_l2d = out.col_label == "Launch to Date"
+out.loc[_l2d, "cell_color"] = [
+    heat.get((c, m), GROUP_BAND[g])
+    for c, m, g in zip(out.loc[_l2d, "center"], out.loc[_l2d, "metric"],
+                       out.loc[_l2d, "metric_group"])]
+
+# A centre with ZERO events on a directional metric has no row to colour, yet a zero on
+# a lower-is-better metric is the best result there is. Emit one zero-value stub per such
+# cell so the cell renders "0" and takes its colour. Value 0 changes no sum anywhere.
+_have = set(map(tuple, out.loc[_l2d, ["center", "metric"]].drop_duplicates().values))
+_stub = []
+_morder = {m: o for o, m in NAME.items()}
+for (center, metric), band in heat.items():
+    if (center, metric) not in _have:
+        _stub.append(dict(center=center, metric_group=GROUPS[_morder[metric]],
+                          metric=metric, metric_order=_morder[metric], agg="sum",
+                          event_date=pd.NaT, value=0.0, unit="",
+                          col_label="Launch to Date", col_order=1,
+                          col_group="This Center", col_group_order=1,
+                          cell_color=band))
+if _stub:
+    out = pd.concat([out, pd.DataFrame(_stub)], ignore_index=True)
+    print(f"heat stubs for zero-event cells: {len(_stub)}")
+
+_allowed = {"band_blue", "band_gray", "green", "amber", "orange"}
+assert set(out.cell_color) <= _allowed, set(out.cell_color) - _allowed
+_hot = out[out.cell_color.isin({"green", "amber", "orange"})]
+assert (_hot.col_label == "Launch to Date").all(), "heat leaked off the Launch to Date column"
+print(f"heat: {_hot.groupby('cell_color').center.nunique().to_dict()} centres coloured, "
+      f"{len(heat)} centre-metric cells banded")
+
 out["col_group"] = out.col_label.map(COL_GROUP)
 # Every row must carry a centre, or the workbook's centre filter silently drops it.
 _nc = int(out["center"].isna().sum())

@@ -65,3 +65,9 @@ NON_ADDITIVE = {M2, M6, M7}
 
 # Lower is better, so an increase is a worse result. Used wherever a change is coloured.
 LOWER_IS_BETTER = {M3, M7, M8, M9, M13}
+
+# Peer-median heat (Kolin's colour-coding ask, 07/28): which direction "good" points.
+# Everything in neither set is neutral and never coloured: scheduled TTPs and 2nd
+# resections are bookings/rarities not performance, and the first two timing medians
+# have no agreed good direction. Thresholds live in build_datewindow.heat_band().
+HIGHER_IS_BETTER = {M1, M2, M4, M10}
