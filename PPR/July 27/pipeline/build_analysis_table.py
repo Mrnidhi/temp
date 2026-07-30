@@ -70,7 +70,19 @@ REASON_CATEGORY = {
     "Quality: Do Not Proceed":           "quality",
     "Clinical Trial/IST":                "physician",
     "Peer-to-Peer":                      "access",
+    # Exact strings confirmed against the source picklist (2026-07-30). These are the two
+    # values the build had been warning about: same reasons as the entries above, spelled
+    # differently in the data. Categories unchanged, so no metric value moves; this only
+    # stops them falling into no bucket.
+    "Clinical Trial /IST/ Collaboration": "physician",
+    "Peer to Peer Consult Decision":      "access",
 }
+# Seen in pick_up_cancellation_reason / fp_delivery_cancellation_reason but NOT in
+# til_order_cancellation_reason, which is the only reason column the metrics read. They
+# therefore categorise nothing today. Confirm a category for each before either of those
+# columns is used, rather than guessing here:
+#   Acute Event, Hospital Schedule Conflict, ATC Switching Patients,
+#   Tumor No Longer Amenable to Surgery, FP Hold, Patient First, Treatment on Hold
 # metric 7: drop-outs following TTP due to patient health
 HEALTH_DROPOUT = {r for r, c in REASON_CATEGORY.items() if c == "health"}
 # metric 9 numerator: patient-related drop-offs after manufacturing started.
