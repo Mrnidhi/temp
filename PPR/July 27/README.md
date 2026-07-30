@@ -12,29 +12,30 @@ afterwards every data refresh is just rerun + Extract > Refresh.
 
 ```
 July 27/
-  OFFICE LAPTOP - do this.md  start here on the office laptop; every step, in order
-  COPILOT 1 - verify ...      paste into office Copilot: run on real data, verify via HTML
-  COPILOT 2 - build ...       paste into office Copilot after 1 passes: finish the Tableau dashboard
-  RUN_ALL.py                  run this; executes the whole pipeline in order
-  README.md                   this file
-  ONE DASHBOARD - Tableau ...  the only Tableau build recipe
-  metric3_cancellations.py    real cancellation logic from the snapshot history
+  OFFICE LAPTOP - do this.md   start here on the office laptop; every step, in order
+  README.md                    this file
+  RUN_ALL.py                   run this; executes the whole pipeline in order
+  requirements.txt             pip install -r this first
+  metric3_cancellations.py     standalone metric-3 sanity check on the snapshot history
+  ONE DASHBOARD - Tableau build.md   the Tableau build recipe (one time)
+  data/                        drop the 7 Infinity exports (+ hist) here; gitignored, see data/README.md
   pipeline/
-    metrics.py                the 13 metric names, groups and event dates - one definition
-    build_analysis_table.py   joins the 7 Infinity .xlsx into one order-grain table
-    build_scorecard.py        computes the 13 metrics for every center and benchmark
-    build_datewindow.py       one row per metric event with its own event date
-    build_hyper.py            writes the three native Tableau .hyper extracts
-    build_dashboard_html.py   renders the standalone browser scorecard
-    baseline.py               freeze / diff, to prove a change moved only what it should
-  analysis/                   pipeline outputs (CSV) - regenerated on every run
-  tableau/                    ppr_scorecard.hyper (Scorecard), ppr_analysis.hyper
-                              (Orders), ppr_datewindow.hyper (Events)
-  dashboard/                  ppr_scorecard.html, opens in any browser, no Tableau
+    metrics.py                 the 13 metric names, groups and event dates - one definition
+    cancellations.py           the 7-day cancellation rule - one definition, shared
+    build_analysis_table.py    step 1: joins the 7 Infinity .xlsx into one order-grain table
+    build_cancellations.py     step 2: counts metric 3 from the snapshot history
+    build_scorecard.py         step 3: computes the 13 metrics for every center + benchmark
+    build_datewindow.py        step 4: one row per metric event with its own event date
+    build_hyper.py             step 5: writes the three native Tableau .hyper extracts
+    build_dashboard_html.py    step 6: renders the standalone browser scorecard
+    baseline.py                freeze / diff, to prove a change moved only what it should
+  tableau/                     README + the 3 .hyper extracts (regenerated each run)
+  analysis/ dashboard/ baseline/   pipeline outputs, regenerated every run
 ```
 
-Everything below `analysis/` is gitignored. All of it is regenerable in one command, and
-all of it holds real patient rows once the pipeline runs on real data.
+The `data/`, `analysis/`, `dashboard/`, `baseline/` folders and the `.hyper` extracts are
+gitignored: all regenerable in one command, and all holding real patient rows once the
+pipeline runs on real data. Only source (code + docs) is committed.
 
 ## 2. One-time setup (office laptop)
 
@@ -125,9 +126,10 @@ mandated template; the number underneath is a median.
 Because of event dating, Launch-to-Date does NOT have to equal 2024+2025+2026 for a
 metric (events missing a date sit in Launch-to-Date only). That is correct behavior.
 
-Known proxies until better feeds land: metric 3 needs Infinity snapshot history to be
-exact; the "New" benchmark tier needs each center's onboarding year. Both are flagged
-in `build_analysis_table.py`.
+Metric 3 now counts real cancellations from the Infinity snapshot history when the
+`bai_list_of_orders_hist` export is in `data/` (step 2, `build_cancellations.py`); without
+that file it falls back to a proxy and the run still completes. The "New" benchmark tier
+still needs each center's onboarding year (flagged in `build_analysis_table.py`).
 
 ## 8. Refresh cadence
 

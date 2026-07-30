@@ -1,10 +1,29 @@
-Meet/
-.DS_Store
-PPR/July 27/data/
-*.pyc
-__pycache__/
-*.hyper
+# ============================================================
+#  git/ transfer repo - what must never be committed
+#  Only source (code + docs) is tracked. Real patient data and
+#  regenerable build outputs stay out of version control.
+# ============================================================
+
+# ---- Real Infinity / patient data: NEVER commit ------------
+# The 7 Infinity exports (and bai_list_of_orders_hist) go in
+# PPR/July 27/data/. Only its README is tracked.
+PPR/July 27/data/*
+!PPR/July 27/data/README.md
+
+# ---- Regenerable pipeline outputs (rebuilt by RUN_ALL.py) ---
 PPR/July 27/analysis/
-PPR/July 27/decks/
 PPR/July 27/dashboard/
 PPR/July 27/baseline/
+PPR/July 27/decks/
+*.hyper
+*.log
+
+# Synthetic sample lives on the Mac only, never shipped
+synthetic_data/out/
+
+# ---- OS / editor / Python noise ----------------------------
+.DS_Store
+~$*
+__pycache__/
+*.pyc
+Meet/

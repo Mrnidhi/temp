@@ -50,17 +50,22 @@ Your `VS Code` folder is not a git clone, so there is nothing to pull. Copy thes
 from the repo, overwriting what is there:
 
 ```
-RUN_ALL.py
-metric3_cancellations.py
-ONE DASHBOARD - Tableau build.md
+README.md
 OFFICE LAPTOP - do this.md      (this file)
+ONE DASHBOARD - Tableau build.md
+RUN_ALL.py
+requirements.txt
+metric3_cancellations.py
+data\README.md
 pipeline\metrics.py
+pipeline\cancellations.py
 pipeline\baseline.py
 pipeline\build_analysis_table.py
-pipeline\build_dashboard_html.py
+pipeline\build_cancellations.py
+pipeline\build_scorecard.py
 pipeline\build_datewindow.py
 pipeline\build_hyper.py
-pipeline\build_scorecard.py
+pipeline\build_dashboard_html.py
 ```
 
 Delete `pipeline\build_center_decks.py` if it is there. The PowerPoint stage was removed;
@@ -105,7 +110,7 @@ The header prints the folder it is reading and how many `.xlsx` it found. It mus
 and name the missing one. If it is reading the synthetic sample it prints a row of
 exclamation marks saying so; every number after that would be made up.
 
-Five stages run in order. A minute or so.
+Six stages run in order. A minute or so.
 
 **Expect assertions to fire that never fired on synthetic data.** That is them working.
 If a stage stops with a message about cells not reconciling, or a column it did not
@@ -145,12 +150,12 @@ periods and hit Apply. The table becomes period A, period B, difference.
 
 ---
 
-## 6. Metric 3 on real history
+## 6. Metric 3 from the snapshot history
 
-This is the highest-value step on the page. One run answers three separate open questions.
+Metric 3 (TTPs cancelled or rescheduled within 7 days) is now counted from Infinity's
+snapshot history, not a proxy, as long as that export is in `data\`.
 
-In Infinity, run this and export the result into the same `data` folder, with `hist`
-somewhere in the filename:
+In Infinity, run this and export into the same `data` folder, filename containing `hist`:
 
 ```sql
 SELECT order_request__til_order_name, record_number, load_datetime,
@@ -158,25 +163,23 @@ SELECT order_request__til_order_name, record_number, load_datetime,
 FROM bai_list_of_orders_hist
 ```
 
-Then:
+With that file present, `RUN_ALL.py` counts it automatically at **step 2**
+(`build_cancellations.py`): it walks each order's snapshots and flags a booked pickup date
+that moved or was cleared within 7 days. You will see it print
+`metric 3: N short-notice cancellation events`. Without the file, metric 3 falls back to the
+proxy and the run still completes.
+
+**Before trusting the number, run the standalone sanity check:**
 
 ```
 python metric3_cancellations.py
 ```
 
-What it answers:
-
-1. **The real metric 3.** The pipeline currently stands in a proxy flag that fires on 26.8%
-   of orders while Kolin's UK deck reports zero. This walks the snapshot history properly:
-   whenever a booked pickup date moves or is cleared, it measures the days of notice.
-2. **Whether `fp_status` survives a cancellation.** Decides if the progression-rate
-   denominator quietly decays over time.
-3. **When each order was cancelled.** The event date we were going to ask Jonathan for,
-   recovered from the first snapshot carrying a cancellation reason.
-
-**Sanity check is built in.** If it comes back anywhere near 347 orders, the logic is
-wrong and the script says so. Send me the printed summary either way. Numbers only, no
-rows.
+It prints the same count (they must match, it shares one rule with the pipeline) plus a
+built-in guard: if it comes back anywhere near 347 orders, the logic is wrong on the real
+data and the script says so. It also answers two questions off the same file: whether
+`fp_status` survives a cancellation (does the progression-rate denominator decay), and when
+each order was cancelled. Send me the printed summary. Numbers only, no rows.
 
 ---
 
