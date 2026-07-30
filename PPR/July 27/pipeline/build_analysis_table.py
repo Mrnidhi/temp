@@ -244,6 +244,42 @@ def tier(ck):
 
 o["atc_tier"] = o["center_key"].map(tier)
 
+# ------------------------------------------------------------------ metric 3: real 7-day rule
+# The proxy above (resection_rescheduled_) fires on ~27% of orders on real data while Kolin's
+# Chandler deck reads 0, so it is not approximating the metric. The real rule needs Infinity's
+# snapshot history (bai_list_of_orders_hist), which _resolve() deliberately keeps OUT of the
+# order table because it has many rows per order. When that export is present, count
+# cancellations properly and hand stages 2-3 an event table; otherwise M3 stays the proxy.
+# The 7-day rule has ONE definition, in cancellations.py.
+import cancellations as _canc
+_hist_df, _hist_path = _canc.load_history(INPUT_DIR)
+if _hist_df is not None:
+    _ev = _canc.cancellation_events(_hist_df)
+    _ev["center_key"] = _ev["center"].map(norm_center)
+    # carry the canonical display name the rest of the pipeline uses, matched on the key,
+    # so stages 2-3 and the reconciliation all agree on the centre label
+    _key_to_disp = o.drop_duplicates("center_key").set_index("center_key")["atc"]
+    _ev["center_disp"] = _ev["center_key"].map(_key_to_disp)
+    _lost = _ev[_ev["center_disp"].isna()]
+    if len(_lost):
+        print(f"  WARNING: {len(_lost)} cancellation event(s) at centre(s) not in the order "
+              f"table, EXCLUDED from metric 3: {sorted(_lost['center'].unique())[:5]}")
+    _ev = _ev.dropna(subset=["center_disp"])
+    _ev.to_csv(os.path.join(OUT_DIR, "ppr_cancellations.csv"), index=False)
+    _meta["m3_source"] = "hist"
+    _meta["m3_hist_file"] = os.path.basename(_hist_path)
+    print(f"metric 3: {len(_ev)} short-notice cancellation events "
+          f"({_ev['order'].nunique()} distinct orders) from {os.path.basename(_hist_path)} "
+          f"-> analysis/ppr_cancellations.csv   [compare to metric3_cancellations.py]")
+else:
+    pd.DataFrame(columns=["center", "order", "event_date", "recorded_on", "days_notice",
+                          "kind", "center_key", "center_disp"]
+                 ).to_csv(os.path.join(OUT_DIR, "ppr_cancellations.csv"), index=False)
+    _meta["m3_source"] = "proxy"
+    print("metric 3: no snapshot history in the input dir; using resection_rescheduled_ proxy")
+with open(os.path.join(OUT_DIR, "run_meta.json"), "w") as _f:
+    json.dump(_meta, _f, indent=1)
+
 o.to_csv(os.path.join(OUT_DIR, "ppr_analysis.csv"), index=False)
 print(f"analysis table: {len(o)} rows x {o.shape[1]} cols -> analysis/ppr_analysis.csv")
 print("centers:", o['center_key'].nunique(), "| matched to veeva:", o['center_matched'].mean().round(3))

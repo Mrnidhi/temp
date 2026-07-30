@@ -14,6 +14,7 @@ Aggregation contract (column `agg`):
 In:  analysis/ppr_analysis.csv
 Out: analysis/ppr_datewindow_long.csv
 """
+import json
 import os
 import pandas as pd
 
@@ -52,9 +53,17 @@ emit(A, 2, NAME[2], "distinct", "enrollment_date",
      unitcol="iovance_patient_id")
 
 # 3-7: TTP metrics by pickup date
-emit(A[A.ttp_cancel_le7 == 1], 3,
-     NAME[3],
-     "sum", "tumor_pickup_date")
+# 3: cancellations. Real rule from the snapshot history when present (event-grained, dated
+# on the lost slot); the resection_rescheduled_ proxy on the order table otherwise. Stage 1
+# decides the source and records it in run_meta.json.
+_M3SRC = json.load(open(os.path.join(ANA, "run_meta.json"))).get("m3_source", "proxy")
+if _M3SRC == "hist":
+    _cev = pd.read_csv(os.path.join(ANA, "ppr_cancellations.csv"))
+    _cev["event_date"] = pd.to_datetime(_cev["event_date"], errors="coerce")
+    _cev = _cev.rename(columns={"center_disp": "atc"})
+    emit(_cev, 3, NAME[3], "sum", "event_date")
+else:
+    emit(A[A.ttp_cancel_le7 == 1], 3, NAME[3], "sum", "tumor_pickup_date")
 emit(A[A.completed_ttp == 1], 4, NAME[4], "sum", "tumor_pickup_date")
 emit(A[A.scheduled_ttp == 1], 5, NAME[5], "sum", "tumor_pickup_date")
 ttp = A[A.tumor_pickup_date.notna()].sort_values("tumor_pickup_date")

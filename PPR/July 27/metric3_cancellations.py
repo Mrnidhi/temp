@@ -37,6 +37,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
 THRESHOLD_DAYS = 7          # Kolin: "we want to use 7 moving forward"
 
+# The pipeline computes the same rule from pipeline/cancellations.py. Import it so this
+# script can prove the two agree on every run (one rule, two callers). Wrapped so a path
+# hiccup never breaks this diagnostic.
+try:
+    sys.path.insert(0, os.path.join(HERE, "pipeline"))
+    from cancellations import cancellation_events as _shared_events
+except Exception:
+    _shared_events = None
+
 # Column aliases. Infinity, the xlsx export and the current table all name these
 # differently, so accept any of them rather than break on a rename.
 ALIASES = {
@@ -131,6 +140,13 @@ def main():
     # already passed is administrative cleanup, not a lost slot.
     fwd = moved[moved.days_notice >= 0]
     late = fwd[fwd.days_notice <= THRESHOLD_DAYS]
+
+    # Prove this script and the pipeline's shared rule return the same count on this file.
+    if _shared_events is not None:
+        _n = len(_shared_events(df))
+        print(f"\n[shared-rule check] pipeline/cancellations.py returns {_n} events; "
+              f"this script returns {len(late)} -> "
+              + ("match" if _n == len(late) else "MISMATCH, investigate before trusting either"))
 
     print("\n" + "=" * 64)
     print("CHANGES TO A BOOKED PICKUP DATE")

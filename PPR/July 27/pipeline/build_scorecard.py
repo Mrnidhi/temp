@@ -23,6 +23,13 @@ import json as _json
 RUN_META = _json.load(open(_META_PATH))
 TODAY = RUN_META["asof"]
 
+# Metric 3 source: 'hist' means count real cancellation events (dated on the lost slot),
+# 'proxy' means the resection_rescheduled_ flag. Stage 1 decides and records it.
+M3_SOURCE = RUN_META.get("m3_source", "proxy")
+CANC = pd.read_csv(os.path.join(OUT_DIR, "ppr_cancellations.csv"))
+if len(CANC):
+    CANC["event_date"] = pd.to_datetime(CANC["event_date"], errors="coerce")
+
 from metrics import (METRICS, EVENT_DATE, NON_ADDITIVE,
                      M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13)
 
@@ -36,7 +43,7 @@ def _win(df, datecol, start, end):
     if end   is not None: m &= d <= pd.Timestamp(end)
     return df[m]
 
-def compute(df, start=None, end=None, avg="median", undated=False, future=False):
+def compute(df, start=None, end=None, avg="median", undated=False, future=False, canc=None):
     """13 metrics. Each is filtered on ITS OWN event date, so a column means
     'what happened in this period', matching Kolin's decks.
 
@@ -78,10 +85,29 @@ def compute(df, start=None, end=None, avg="median", undated=False, future=False)
         v = agg(frame[col].dropna())
         return round(float(v), 1) if pd.notna(v) else np.nan
 
+    # Metric 3 from real cancellation events (dated on the lost slot) when the snapshot
+    # history is present; the resection_rescheduled_ proxy otherwise. The window logic
+    # mirrors the buckets in build_datewindow so the two implementations reconcile.
+    if M3_SOURCE == "hist" and canc is not None:
+        ed = canc["event_date"]
+        if undated:
+            m3 = int(ed.isna().sum())
+        elif future:
+            m3 = int((ed > pd.Timestamp(TODAY)).sum())
+        elif start is None and end is None:
+            m3 = int(len(canc))                       # Launch to Date: every event
+        else:
+            cm = ed.notna()
+            if start is not None: cm &= ed >= pd.Timestamp(start)
+            if end   is not None: cm &= ed <= pd.Timestamp(end)
+            m3 = int(cm.sum())
+    else:
+        m3 = int(w[M3]["ttp_cancel_le7"].sum())
+
     return {
         M1:  w[M1]["order_request__til_order_name"].nunique(),
         M2:  w[M2]["iovance_patient_id"].nunique(),
-        M3:  int(w[M3]["ttp_cancel_le7"].sum()),
+        M3:  m3,
         M4:  int(w[M4]["completed_ttp"].sum()),
         M5:  int(w[M5]["scheduled_ttp"].sum()),
         M6:  int((mult >= 2).sum()),
@@ -132,21 +158,27 @@ def emit(scope, center, col_group, col_label, col_order, vals):
                          metric_order=order, value_type=vtype, value=v))
 
 # per-center: time + quarter columns
+def _canc_for(disp):
+    """The cancellation events for one centre, matched on the display name stage 1 carried."""
+    return CANC[CANC["center_disp"] == disp] if len(CANC) else CANC
+
 for center, g in A.groupby("center_key"):
     disp = g["atc"].iloc[0]
+    gc = _canc_for(disp)
     for cg, label, order, st, en in CENTER_COLS:
-        emit("Center", disp, cg, label, order, compute(g, st, en))
+        emit("Center", disp, cg, label, order, compute(g, st, en, canc=gc))
     emit("Center", disp, UNDATED_COL[0], UNDATED_COL[1], UNDATED_COL[2],
-         compute(g, undated=True))
+         compute(g, undated=True, canc=gc))
     emit("Center", disp, FUTURE_COL[0], FUTURE_COL[1], FUTURE_COL[2],
-         compute(g, future=True))
+         compute(g, future=True, canc=gc))
 
 # national tier benchmarks = per-center MEDIAN within the tier, launch-to-date.
 # Kolin (Meet 6): the existing scorecard shows "the median for all these values"; he compared
 # a center to "launch-to-date top 10". Median (not sum, not average) resists the big-center
 # skew he flagged in Meet 4.5 ("the average is always going to be skewed by certain patients").
 def bench_median(tiername):
-    per_center = [compute(g) for _, g in A[A.atc_tier == tiername].groupby("center_key")]
+    per_center = [compute(g, canc=_canc_for(g["atc"].iloc[0]))
+                  for _, g in A[A.atc_tier == tiername].groupby("center_key")]
     out = {}
     for mname in mreg:
         vals = [pc[mname] for pc in per_center
