@@ -26,11 +26,24 @@ GRAIN AND DATE (two choices, flagged to Kolin, both one-line to change here)
 """
 import glob
 import os
+import re
 
 import numpy as np
 import pandas as pd
 
 THRESHOLD_DAYS = 7          # Kolin: "we want to use 7 moving forward"
+
+
+def norm_center(s):
+    """Normalize free-text centre names so the same centre matches across files (the order
+    table, the veeva mapping, the snapshot history). One definition, imported by the stages
+    that need it."""
+    if pd.isna(s):
+        return s
+    s = str(s).strip().lower()
+    s = re.sub(r",?\s*(llc|inc|pllc|pc|pa|ltd)\.?$", "", s)
+    s = re.sub(r"[^a-z0-9 ]", "", s)
+    return re.sub(r"\s+", " ", s).strip()
 
 # Column aliases: the Infinity export, the xlsx and the analysis table name these
 # differently, so accept any spelling rather than break on a rename.

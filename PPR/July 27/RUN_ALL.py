@@ -23,10 +23,11 @@ MAC / DEV
 
 Order:
     1. build_analysis_table.py  -> analysis/ppr_analysis.csv        (one row per order)
-    2. build_scorecard.py       -> analysis/ppr_scorecard_tidy.csv  (the 13 metrics)
-    3. build_datewindow.py      -> analysis/ppr_datewindow_long.csv (date-filter source)
-    4. build_hyper.py           -> tableau/*.hyper                  (Tableau extracts)
-    5. build_dashboard_html.py  -> dashboard/ppr_scorecard.html     (standalone browser view)
+    2. build_cancellations.py   -> analysis/ppr_cancellations.csv   (metric 3 from history)
+    3. build_scorecard.py       -> analysis/ppr_scorecard_tidy.csv  (the 13 metrics)
+    4. build_datewindow.py      -> analysis/ppr_datewindow_long.csv (date-filter source)
+    5. build_hyper.py           -> tableau/*.hyper                  (Tableau extracts)
+    6. build_dashboard_html.py  -> dashboard/ppr_scorecard.html     (standalone browser view)
 
 Then build/refresh the workbook in Tableau Desktop from the .hyper extracts.
 One-time build recipe: README.md section 4. After that, refresh only.
@@ -40,6 +41,7 @@ PIPE = os.path.join(HERE, "pipeline")
 
 STEPS = [
     ("build_analysis_table.py", "joining the 7 Infinity files into one order-grain table"),
+    ("build_cancellations.py",  "counting metric 3 cancellations from the snapshot history"),
     ("build_scorecard.py",      "computing the 13 scorecard metrics"),
     ("build_datewindow.py",     "building the event-level date-window source"),
     ("build_hyper.py",          "writing the Tableau .hyper extracts"),
