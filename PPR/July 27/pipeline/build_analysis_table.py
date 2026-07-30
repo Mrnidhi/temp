@@ -87,17 +87,33 @@ MFG_STARTED = {"MFG Start", "MFG End", "REP Initiation", "REP Scale Out",
 SM_PRE_MFG = {"SM Pick-up Scheduled", "Courier Picked-Up SM", "Warehouse Received SM",
               "MFG QA Released SM", "MFG Received SM"}   # pre-manufacturing, never counted
 
+def _norm(s):
+    return re.sub(r"[^a-z0-9]", "", str(s).lower())
+
 def _resolve(stem):
     """Find the Excel file for a stem, tolerant of real-world naming (case, separators,
     export-date suffixes). e.g. stem 'list_of_orders' matches 'BAI - List of Orders 07.21.xlsx'."""
-    key = re.sub(r"[^a-z0-9]", "", stem.lower())
+    key = _norm(stem)
     matches = [f for f in os.listdir(INPUT_DIR)
                if f.lower().endswith((".xlsx", ".xls")) and not f.startswith("~$")
-               and key in re.sub(r"[^a-z0-9]", "", f.lower())]
+               and key in _norm(f)]
+    # 'bai_list_of_orders_hist' CONTAINS 'list_of_orders'. That file is the snapshot history:
+    # several rows per order, read by build_cancellations.py. Reading it as the orders table
+    # would multiply every count with no error, so it is never a match for a non-hist stem.
+    if "hist" not in key:
+        matches = [f for f in matches if "hist" not in _norm(f)]
     if not matches:
         raise FileNotFoundError(f"No Excel file matching '{stem}' in {INPUT_DIR}. Files present: "
                                 f"{[f for f in os.listdir(INPUT_DIR) if f.lower().endswith(('.xlsx','.xls'))]}")
-    return os.path.join(INPUT_DIR, sorted(matches, key=len)[0])   # shortest = least-suffixed
+    # Shortest name = least-suffixed. Refuse instead of guessing when two genuinely different
+    # files still match: a silently wrong input file poisons every number downstream.
+    chosen = sorted(matches, key=len)[0]
+    ambiguous = [f for f in matches if abs(len(f) - len(chosen)) > 6]
+    if ambiguous:
+        raise FileNotFoundError(
+            f"'{stem}' matches more than one file in {INPUT_DIR}: {sorted(matches)}. "
+            "Remove or rename the ones that are not the current export.")
+    return os.path.join(INPUT_DIR, chosen)
 
 def rd(stem):
     return pd.read_excel(_resolve(stem), header=HEADER_ROW)
