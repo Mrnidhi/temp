@@ -142,10 +142,12 @@ QUARTER_COLS = [
 UNDATED_COL = ("Time", "Undated", 5, None, None)   # no event date at all
 FUTURE_COL  = ("Time", "After as-of", 6, None, None)   # dated beyond the extract date
 CENTER_COLS = TIME_COLS + QUARTER_COLS
+# Iovance's own commercial segmentation, not a ranking of ours. See the tier block in
+# build_analysis_table.py for why this replaced Top 10 / Top 40 / New.
 BENCH_COLS = [
-    ("Benchmark", "Top 10", 7, "Top 10"),
-    ("Benchmark", "Top 40", 8, "Top 40"),
-    ("Benchmark", "New",    9, "New"),
+    ("Benchmark", "Top Account",    7, "Top Account"),
+    ("Benchmark", "High Potential", 8, "High Potential"),
+    ("Benchmark", "Other",          9, "Other"),
 ]
 mreg = {m[2]: (m[0], m[1], m[3]) for m in METRICS}
 

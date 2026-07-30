@@ -167,9 +167,12 @@ tagged.append(live)
 # there is one definition. agg="preagg" tells the workbook to print the stored display
 # string (in `unit`) instead of aggregating.
 #
-# ASSUMED, flag to Kolin: centres in the "Other" tier (rank 41+, not new) see Top 40,
-# the nearest peer group. He named the rule for Top 10 and New only.
-ARM_FOR_TIER = {"Top 10": "Top 10", "Top 40": "Top 40", "New": "New", "Other": "Top 40"}
+# Each centre compares against its own segment. No mapping decision left to make: the arm is
+# the segment, which is why switching to Iovance's segmentation removed the old "Other sees
+# Top 40" assumption that was ours to justify.
+ARM_FOR_TIER = {"Top Account": "Top Account",
+                "High Potential": "High Potential",
+                "Other": "Other"}
 BENCH_COL_ORDER = 8
 
 sc = pd.read_csv(os.path.join(ANA, "ppr_scorecard_tidy.csv"))
@@ -220,8 +223,8 @@ COL_GROUP = {
     "Launch to Date": "This Center", "2024": "This Center", "2025": "This Center",
     "2026 YTD": "This Center", "Selected window": "This Center",
     "Undated": "This Center", "After as-of": "This Center",
-    "Top 10": "YTD National Metrics", "Top 40": "YTD National Metrics",
-    "New": "YTD National Metrics",
+    "Top Account": "YTD National Metrics", "High Potential": "YTD National Metrics",
+    "Other": "YTD National Metrics",
     "Q3'26 QTD": "Quarterly ATC Metrics", "Q2'26": "Quarterly ATC Metrics",
     "Q1'26": "Quarterly ATC Metrics", "Q4'25": "Quarterly ATC Metrics",
 }

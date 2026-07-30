@@ -243,27 +243,44 @@ for c in ["days_enroll_to_ttp", "days_ttp_to_infusion", "days_delivery_to_infusi
 o["enroll_year"] = o["enrollment_date"].dt.year
 o["enroll_q"] = o["enrollment_date"].dt.to_period("Q").astype(str)   # e.g. 2025Q4
 
-# ------------------------------------------------------------------ ATC tier (national ranking + New)
-enroll_by_center = o.groupby("center_key")["order_request__til_order_name"].nunique().sort_values(ascending=False)
-rank = {c: i + 1 for i, c in enumerate(enroll_by_center.index)}
-first_enroll_year = o.groupby("center_key")["enroll_year"].min()
-# New = onboarded in/after 2025. On real data, key off the mapping's onboarding year;
-# here on synthetic data (orders spread evenly, so no genuine 2025-onboard exists) we
-# stand in the 12 lowest-volume centers as "New" so the benchmark column demonstrates.
-_real_new = set(first_enroll_year[first_enroll_year >= 2025].index)
-new_centers = _real_new if _real_new else set(enroll_by_center.tail(12).index)
+# ------------------------------------------------------------------ ATC tier = Iovance's own segment
+# WAS: centres ranked by enrolment into Top 10 / Top 40, plus a "New" tier inferred from the
+# first enrolment year. Two problems. The ranking was ours, so a centre asking why it sat in
+# one group rather than another could only be told "because I sorted it there", and the 10/40
+# cut-offs carried no business meaning. The inferred New tier also mislabelled any centre that
+# happened to enrol once before the cut-off.
+#
+# NOW: the mapping file already carries the commercial team's own segmentation, so the
+# benchmark arm uses that. Kolin can defend "Top Account" to a centre; he could not defend
+# "Srinidhi's top ten".
+#
+# TRADE-OFF, raise with Kolin (07/28 he liked that the tier recalculated each run): segment
+# MEMBERSHIP is now owned by the commercial team and changes when they change it. The MEDIANS
+# inside each segment still recompute on every run from live data.
+SEGMENTS = {"Top Account", "High Potential", "Other"}
+o["atc_tier"] = o["atc_segment"]
 
-def tier(ck):
-    if ck in new_centers:
-        return "New"
-    r = rank.get(ck, 9999)
-    if r <= 10:
-        return "Top 10"
-    if r <= 40:
-        return "Top 40"
-    return "Other"
+_unknown = sorted(set(o["atc_tier"].dropna().unique()) - SEGMENTS)
+if _unknown:
+    raise SystemExit(f"atc_segment holds value(s) the tier rule does not know: {_unknown}. "
+                     f"Add them to SEGMENTS and decide their benchmark arm with Kolin.")
 
-o["atc_tier"] = o["center_key"].map(tier)
+# A centre with no segment cannot be compared to a peer group. Falling back to "Other" keeps
+# the run alive, but a HIGH-VOLUME centre landing in "Other" would be compared against the
+# small-centre median, which is badly wrong in front of that centre. So name them, loudly,
+# with their order counts, rather than let it pass as a footnote.
+_missing = o[o["atc_tier"].isna()]
+if len(_missing):
+    _by_centre = (_missing.groupby("atc")["order_request__til_order_name"]
+                  .nunique().sort_values(ascending=False))
+    print("\n" + "!" * 62)
+    print(f"  {len(_by_centre)} centre(s) have no atc_segment and default to 'Other'.")
+    print("  They are being compared against the small-centre median. Check the join before")
+    print("  showing any of these to anyone:")
+    for _c, _n in _by_centre.items():
+        print(f"     {_n:>4} orders   {_c}")
+    print("!" * 62 + "\n")
+    o["atc_tier"] = o["atc_tier"].fillna("Other")
 
 o.to_csv(os.path.join(OUT_DIR, "ppr_analysis.csv"), index=False)
 print(f"analysis table: {len(o)} rows x {o.shape[1]} cols -> analysis/ppr_analysis.csv")
