@@ -191,11 +191,11 @@ o = o.merge(mp2[["center_key", "veeva_name", "region", "territory", "atc_segment
 o["center_matched"] = o["veeva_name"].notna()
 
 # ------------------------------------------------------------------ derived metric fields
-# Completed and Scheduled TTPs are disjoint by definition (pickup date past vs future), so
-# they can be added for a total procurement count. Not the same as the retired "Patients
-# Scheduled for TTP", which was cumulative.
+# A booked pickup date is the schedule: cancelling a TTP clears the date, so any order still
+# carrying one has a slot reserved whether or not it has happened yet. Scheduled therefore
+# contains Completed, and the two must not be added together.
 o["completed_ttp"] = o["tumor_pickup_date"].notna() & (o["tumor_pickup_date"] <= TODAY)
-o["scheduled_ttp"] = o["tumor_pickup_date"].notna() & (o["tumor_pickup_date"] > TODAY)
+o["scheduled_ttp"] = o["tumor_pickup_date"].notna()
 o["oos_product"] = o["oos_status"] == "Confirmed OOS"
 o["mfg_started"] = o["fp_status"].isin(MFG_STARTED)
 # metric 7: patient-health drop-outs following a TTP
@@ -206,6 +206,11 @@ o["drop_after_mfg"] = o["mfg_started"] & o["patient_related_dropout"]
 # Fallback only. The real rule needs the snapshot history; resection_rescheduled_ is the
 # closest flag available from the file exports and fires far too often to be trusted.
 o["ttp_cancel_le7"] = o["resection_rescheduled_"] == True
+
+_not_scheduled = int((o["completed_ttp"] & ~o["scheduled_ttp"]).sum())
+assert _not_scheduled == 0, (
+    f"{_not_scheduled} completed TTP(s) are not counted as scheduled; "
+    "Scheduled must contain Completed")
 
 # Guard rails: a new reason or status from Infinity must fail the build, not fall
 # silently into no bucket and quietly change a metric.
