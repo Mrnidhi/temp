@@ -1,8 +1,8 @@
 """
 The 13 P&PR metrics. Single definition, imported by every stage.
 
-Wording is the (Proposed) P&PR Metrics.xlsx template verbatim; Kolin presents these
-strings to centres, so they are not ours to reword.
+Wording is the (Proposed) P&PR Metrics.xlsx template verbatim. These strings are shown to
+centres, so they are not ours to reword.
 
 This file exists because the names were previously declared in two stages and drifted:
 the scorecard said "Median Time From ..." while the event table still said "Average
@@ -49,8 +49,8 @@ NAME = {order: name for order, _, name, _ in METRICS}
 GROUP = {order: group for order, group, _, _ in METRICS}
 
 # A metric belongs to the period its own event happened in, not the period the patient
-# enrolled in. Kolin's per-centre decks footnote this: "Timing metrics based upon the TTP
-# or Infusion Date". So the 2025 column of Infusions Performed means infusions in 2025.
+# enrolled in, matching the deck footnote "Timing metrics based upon the TTP or Infusion
+# Date". So the 2025 column of Infusions Performed means infusions that happened in 2025.
 EVENT_DATE = {
     M1:  "enrollment_date",   M2:  "enrollment_date",   M3:  "tumor_pickup_date",
     M4:  "tumor_pickup_date", M5:  "tumor_pickup_date", M6:  "tumor_pickup_date",
@@ -66,7 +66,7 @@ NON_ADDITIVE = {M2, M6, M7}
 # Lower is better, so an increase is a worse result. Used wherever a change is coloured.
 LOWER_IS_BETTER = {M3, M7, M8, M9, M13}
 
-# Peer-median heat (Kolin's colour-coding ask, 07/28): which direction "good" points.
+# Direction for the peer-median shading.
 # Everything in neither set is neutral and never coloured: scheduled TTPs and 2nd
 # resections are bookings/rarities not performance, and the first two timing medians
 # have no agreed good direction. Thresholds live in build_datewindow.heat_band().

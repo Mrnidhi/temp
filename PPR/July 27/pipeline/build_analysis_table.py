@@ -79,8 +79,7 @@ REASON_CATEGORY = {
 }
 # Seen in pick_up_cancellation_reason / fp_delivery_cancellation_reason but NOT in
 # til_order_cancellation_reason, which is the only reason column the metrics read. They
-# therefore categorise nothing today. Confirm a category for each before either of those
-# columns is used, rather than guessing here:
+# categorise nothing today. Each needs a category before either column is used:
 #   Acute Event, Hospital Schedule Conflict, ATC Switching Patients,
 #   Tumor No Longer Amenable to Surgery, FP Hold, Patient First, Treatment on Hold
 # metric 7: drop-outs following TTP due to patient health
@@ -192,13 +191,9 @@ o = o.merge(mp2[["center_key", "veeva_name", "region", "territory", "atc_segment
 o["center_matched"] = o["veeva_name"].notna()
 
 # ------------------------------------------------------------------ derived metric fields
-# Straight from the Notes column of the Proposed Template:
-#   Completed TTPs -> "Tumor Tissue Pickup Date in past?"
-#   Scheduled TTPs -> "Tumor Tissue Pickup Date in future?"
-# So the two are deliberately DISJOINT, which is why the year-over-year slide can add
-# them as "Tumor Tissue Procurements (scheduled + completed)" without double counting.
-# NOTE: the OLD Current Template metric "Patients Scheduled for TTP" is a different,
-# cumulative measure (MSK shows 77 scheduled vs 71 completed). Do not conflate them.
+# Completed and Scheduled TTPs are disjoint by definition (pickup date past vs future), so
+# they can be added for a total procurement count. Not the same as the retired "Patients
+# Scheduled for TTP", which was cumulative.
 o["completed_ttp"] = o["tumor_pickup_date"].notna() & (o["tumor_pickup_date"] <= TODAY)
 o["scheduled_ttp"] = o["tumor_pickup_date"].notna() & (o["tumor_pickup_date"] > TODAY)
 o["oos_product"] = o["oos_status"] == "Confirmed OOS"
@@ -208,9 +203,8 @@ o["dropout_post_ttp_health"] = o["has_tumor"] & o["til_order_cancellation_reason
 # Patient Progression Rate = (patient-related drop-offs AFTER mfg start) / (mfg starts)
 o["patient_related_dropout"] = o["til_order_cancellation_reason"].isin(PATIENT_RELATED)
 o["drop_after_mfg"] = o["mfg_started"] & o["patient_related_dropout"]
-# metric 3 PROXY: true rule is a cancel/reschedule within 7 days of the scheduled TTP, measured
-# from Infinity's snapshot history (Jonathan's table, not in the file exports). resection_rescheduled_
-# is the closest available flag until that snapshot feed is wired in.
+# Fallback only. The real rule needs the snapshot history; resection_rescheduled_ is the
+# closest flag available from the file exports and fires far too often to be trusted.
 o["ttp_cancel_le7"] = o["resection_rescheduled_"] == True
 
 # Guard rails: a new reason or status from Infinity must fail the build, not fall
@@ -231,7 +225,7 @@ if _new:
             print(f"     '{_r}'  looks like a spacing variant of '{_hit}' "
                   f"({REASON_CATEGORY[_hit]}) - add the exact string above")
         else:
-            print(f"     '{_r}'  is genuinely new - decide its category with Kolin")
+            print(f"     '{_r}'  is genuinely new - needs a category")
 
 o["days_enroll_to_ttp"] = (o["tumor_pickup_date"] - o["enrollment_date"]).dt.days
 o["days_ttp_to_infusion"] = (o["infusion_date"] - o["tumor_pickup_date"]).dt.days
@@ -243,44 +237,31 @@ for c in ["days_enroll_to_ttp", "days_ttp_to_infusion", "days_delivery_to_infusi
 o["enroll_year"] = o["enrollment_date"].dt.year
 o["enroll_q"] = o["enrollment_date"].dt.to_period("Q").astype(str)   # e.g. 2025Q4
 
-# ------------------------------------------------------------------ ATC tier = Iovance's own segment
-# WAS: centres ranked by enrolment into Top 10 / Top 40, plus a "New" tier inferred from the
-# first enrolment year. Two problems. The ranking was ours, so a centre asking why it sat in
-# one group rather than another could only be told "because I sorted it there", and the 10/40
-# cut-offs carried no business meaning. The inferred New tier also mislabelled any centre that
-# happened to enrol once before the cut-off.
-#
-# NOW: the mapping file already carries the commercial team's own segmentation, so the
-# benchmark arm uses that. Kolin can defend "Top Account" to a centre; he could not defend
-# "Srinidhi's top ten".
-#
-# TRADE-OFF, raise with Kolin (07/28 he liked that the tier recalculated each run): segment
-# MEMBERSHIP is now owned by the commercial team and changes when they change it. The MEDIANS
-# inside each segment still recompute on every run from live data.
-SEGMENTS = {"Top Account", "High Potential", "Other"}
-o["atc_tier"] = o["atc_segment"]
+# ------------------------------------------------------------------ ATC tier
+# Top 10 / Top 40 / New, ranked from enrolment counts on every run, so a centre that climbs
+# into the top ten displaces another on the next run. The commercial segmentation
+# (atc_segment) is joined on and available, but it uses internal labels a centre would not
+# recognise, so it does not drive the comparison arm.
+enroll_by_center = o.groupby("center_key")["order_request__til_order_name"].nunique().sort_values(ascending=False)
+rank = {c: i + 1 for i, c in enumerate(enroll_by_center.index)}
+first_enroll_year = o.groupby("center_key")["enroll_year"].min()
+# New = first enrolment in or after 2025. This is a proxy: the mapping carries no onboarding
+# date, and start_segment is an incentive-programme field rather than a lifecycle stage, so a
+# centre that enrolled once before 2025 is mislabelled. Needs an authoritative list.
+_real_new = set(first_enroll_year[first_enroll_year >= 2025].index)
+new_centers = _real_new if _real_new else set(enroll_by_center.tail(12).index)
 
-_unknown = sorted(set(o["atc_tier"].dropna().unique()) - SEGMENTS)
-if _unknown:
-    raise SystemExit(f"atc_segment holds value(s) the tier rule does not know: {_unknown}. "
-                     f"Add them to SEGMENTS and decide their benchmark arm with Kolin.")
+def tier(ck):
+    if ck in new_centers:
+        return "New"
+    r = rank.get(ck, 9999)
+    if r <= 10:
+        return "Top 10"
+    if r <= 40:
+        return "Top 40"
+    return "Other"
 
-# A centre with no segment cannot be compared to a peer group. Falling back to "Other" keeps
-# the run alive, but a HIGH-VOLUME centre landing in "Other" would be compared against the
-# small-centre median, which is badly wrong in front of that centre. So name them, loudly,
-# with their order counts, rather than let it pass as a footnote.
-_missing = o[o["atc_tier"].isna()]
-if len(_missing):
-    _by_centre = (_missing.groupby("atc")["order_request__til_order_name"]
-                  .nunique().sort_values(ascending=False))
-    print("\n" + "!" * 62)
-    print(f"  {len(_by_centre)} centre(s) have no atc_segment and default to 'Other'.")
-    print("  They are being compared against the small-centre median. Check the join before")
-    print("  showing any of these to anyone:")
-    for _c, _n in _by_centre.items():
-        print(f"     {_n:>4} orders   {_c}")
-    print("!" * 62 + "\n")
-    o["atc_tier"] = o["atc_tier"].fillna("Other")
+o["atc_tier"] = o["center_key"].map(tier)
 
 o.to_csv(os.path.join(OUT_DIR, "ppr_analysis.csv"), index=False)
 print(f"analysis table: {len(o)} rows x {o.shape[1]} cols -> analysis/ppr_analysis.csv")

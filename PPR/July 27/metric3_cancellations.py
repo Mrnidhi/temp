@@ -1,30 +1,19 @@
 """
-Metric 3, computed properly: TTPs Cancelled or Rescheduled within 7 Days.
+Metric 3 diagnostic: TTPs Cancelled or Rescheduled within 7 Days.
 
-WHY
-The pipeline currently stands in resection_rescheduled_, which on real data is True on
-347 of 1,295 orders (26.8%) while Kolin's UK Chandler deck reports 0. A flag firing on a
-quarter of all orders is not approximating something that reads zero.
+Standalone check on the snapshot history, run before the pipeline figure is trusted. Shares
+the rule with pipeline/cancellations.py so the two cannot drift.
 
-THE RULE (Kolin, Meet 6)
-"They had a TTP date of August 14th 2024, and they cancelled it on August 9th. So it's
-checking the days between the snapshot, August 9th, and when it was cancelled, August 14th,
-and it's 5. So this would flag as a last-minute cancellation."
-Also: "I think it might use 3 today, but I think we want to use 7 moving forward."
+Walk each order's snapshots in record_number order. Whenever the booked pickup date moves or
+is cleared, measure from that snapshot's load date back to the date that had been booked. A
+gap of 0 to 7 days counts: the slot could not realistically be refilled.
 
-So: walk each order's snapshots in record_number order. Whenever the planned pickup date
-moves or is cleared, measure from that snapshot's load date back to the date that HAD been
-booked. A gap of 0-7 days means the slot could not realistically be refilled, so it counts.
-
-INPUT
-Export from Infinity and save into ../data/ (csv or xlsx, any filename containing "hist"):
+Input, saved into ../data/ as csv or xlsx with "hist" in the filename:
     SELECT order_request__til_order_name, record_number, load_datetime,
-           tumor_tissue_pick_up_date, atc
+           tumor_tissue_pick_up_date, atc, fp_status, til_order_cancellation_reason
     FROM bai_list_of_orders_hist
 
-USAGE
     python metric3_cancellations.py
-Real data never leaves the office laptop. Only the printed summary needs to travel.
 """
 import glob
 import os
@@ -35,19 +24,16 @@ import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
-THRESHOLD_DAYS = 7          # Kolin: "we want to use 7 moving forward"
+THRESHOLD_DAYS = 7
 
-# The pipeline computes the same rule from pipeline/cancellations.py. Import it so this
-# script can prove the two agree on every run (one rule, two callers). Wrapped so a path
-# hiccup never breaks this diagnostic.
+# Shared rule, imported so this script can prove it agrees with the pipeline.
 try:
     sys.path.insert(0, os.path.join(HERE, "pipeline"))
     from cancellations import cancellation_events as _shared_events
 except Exception:
     _shared_events = None
 
-# Column aliases. Infinity, the xlsx export and the current table all name these
-# differently, so accept any of them rather than break on a rename.
+# Accept any of the spellings these columns appear under.
 ALIASES = {
     "order": ["order_request__til_order_name", "til_order_name", "til_order_number"],
     "record": ["record_number"],
@@ -141,7 +127,7 @@ def main():
     fwd = moved[moved.days_notice >= 0]
     late = fwd[fwd.days_notice <= THRESHOLD_DAYS]
 
-    # Prove this script and the pipeline's shared rule return the same count on this file.
+    # The pipeline and this script must return the same count.
     if _shared_events is not None:
         _n = len(_shared_events(df))
         print(f"\n[shared-rule check] pipeline/cancellations.py returns {_n} events; "
@@ -176,8 +162,7 @@ def main():
     cols = ["atc", "ord", "prev_ttp", "ttp", "snap", "days_notice", "kind"]
     print(late[cols].head(15).to_string(index=False))
 
-    # ---- two questions the history table answers on its own ----
-    # Both were nearly sent to the source-system owner. Neither needed to be.
+    # ---- two further checks off the same file ----
     c_fp, c_rsn = optional(df, "fp"), optional(df, "reason")
 
     if c_fp is not None and c_rsn is not None:

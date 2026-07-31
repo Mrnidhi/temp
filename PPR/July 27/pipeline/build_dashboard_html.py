@@ -5,10 +5,10 @@ Pick one ATC and its 13 metrics fill across the year columns, the blinded tier b
 table becomes a like-for-like comparison of the two periods.
 
 The old Excel view (launch-to-date against all-ATC quartiles) used to be a second tab here.
-Removed 2026-07-27: Kolin, Meet 6, said quartiles "confuse the hell out of our sales folks"
+Removed 2026-07-27: quartiles were hard to explain in the field
 and that the team is actively moving away from them.
 
-Definitions follow memory/ppr-scorecard-spec.md (Meet 6 + template footnotes)."""
+Definitions follow the P&PR metric spec and the template footnotes."""
 import json, os
 HERE = os.path.dirname(__file__)
 DASH = os.path.join(HERE, "..", "dashboard")
@@ -234,7 +234,7 @@ const bval=(m,col)=>(SC.bv[m]||{})[col] ?? "";
 /* ---- custom date-window engine -------------------------------------------
    Mirrors compute() in build_scorecard.py: every metric is filtered on ITS OWN
    event date, so a window means "what happened between these dates". Lets you
-   reproduce Kolin's year-over-year slides (e.g. Jan'25-Sep'25 vs Oct'25-May'26)
+   reproduce the year-over-year slides (e.g. Jan'25-Sep'25 vs Oct'25-May'26)
    without rerunning the pipeline. */
 /* Metric names are looked up from the payload by the template's metric_order, never
    retyped here. They were retyped once, and when metrics 11-13 were renamed from
@@ -351,7 +351,7 @@ const NOTES_PROPOSED=[
   ["**","'New' refers to ATCs authorized &amp; onboarded in the 2025 calendar year"],
 ];
 const NOTES_WINDOW=[
-  ["*","Each metric is counted on its own event date (enrollment, TTP pickup, delivery, or infusion), matching Kolin's decks."],
+  ["*","Each metric is counted on its own event date (enrollment, TTP pickup, delivery, or infusion), matching the deck footnote."],
   ["*","Launch to Date is shown beside the window as an anchor. A window can never exceed it."],
 ];
 

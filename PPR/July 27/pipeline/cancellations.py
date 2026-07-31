@@ -5,18 +5,18 @@ ONE definition of the 7-day rule. Imported by the pipeline (build_analysis_table
 stage 1) and by the standalone metric3_cancellations.py diagnostic, so the dashboard
 number and the audit script can never drift.
 
-THE RULE (Kolin, Meet 6)
+THE RULE
     "They had a TTP date of August 14th 2024, and they cancelled it on August 9th. So
      it's checking the days between the snapshot, August 9th, and when it was cancelled,
      August 14th, and it's 5. This would flag as a last-minute cancellation."
-    "I think it might use 3 today, but I think we want to use 7 moving forward."
+    The threshold moved from 3 days to 7.
 
 Walk each order's snapshots in record_number order. Whenever the planned pickup date
 moves or is cleared, measure from that snapshot's load date back to the date that HAD
 been booked. A gap of 0-7 days means the slot could not realistically be refilled, so
 it counts.
 
-GRAIN AND DATE (two choices, flagged to Kolin, both one-line to change here)
+GRAIN AND DATE (two open choices, both one line to change here)
   * grain: one row per CHANGE (an order rescheduled twice at short notice = 2 events).
            To count distinct orders instead, dedupe on `order` downstream.
   * event_date: the LOST SLOT date (the pickup date that had been booked and was then
@@ -31,7 +31,7 @@ import re
 import numpy as np
 import pandas as pd
 
-THRESHOLD_DAYS = 7          # Kolin: "we want to use 7 moving forward"
+THRESHOLD_DAYS = 7
 
 
 def norm_center(s):

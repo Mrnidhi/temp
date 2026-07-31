@@ -45,7 +45,7 @@ def _win(df, datecol, start, end):
 
 def compute(df, start=None, end=None, avg="median", undated=False, future=False, canc=None):
     """13 metrics. Each is filtered on ITS OWN event date, so a column means
-    'what happened in this period', matching Kolin's decks.
+    'what happened in this period'.
 
     undated=True instead selects rows whose own event date is MISSING. Those rows are
     real events that cannot be placed in any period. They belong in Launch to Date and in
@@ -66,7 +66,7 @@ def compute(df, start=None, end=None, avg="median", undated=False, future=False,
              for m, col in EVENT_DATE.items()}
     else:
         w = {m: _win(df, col, start, end) for m, col in EVENT_DATE.items()}
-    # Kolin, Meet 6: the Infinity scorecard shows "the median for all these values".
+    # The source scorecard reports medians for these, not averages.
     agg = (lambda s: s.mean()) if avg == "mean" else (lambda s: s.median())
 
     # Metrics 7 and 9 describe patients, and a patient can hold several orders, so
@@ -77,7 +77,7 @@ def compute(df, start=None, end=None, avg="median", undated=False, future=False,
 
     mfg = patients(w[M9], "mfg_started")
     drop_after_mfg = patients(w[M9], "drop_after_mfg")
-    # 2nd Resections = distinct PATIENTS with 2+ real TTP dates (Kolin, Meet 6)
+    # 2nd Resections = distinct PATIENTS with 2+ real TTP dates
     ttp = w[M6].dropna(subset=["tumor_pickup_date"])
     mult = ttp.groupby("iovance_patient_id")["tumor_pickup_date"].nunique()
 
@@ -142,12 +142,11 @@ QUARTER_COLS = [
 UNDATED_COL = ("Time", "Undated", 5, None, None)   # no event date at all
 FUTURE_COL  = ("Time", "After as-of", 6, None, None)   # dated beyond the extract date
 CENTER_COLS = TIME_COLS + QUARTER_COLS
-# Iovance's own commercial segmentation, not a ranking of ours. See the tier block in
-# build_analysis_table.py for why this replaced Top 10 / Top 40 / New.
+# Tier medians. See the tier block in build_analysis_table.py for how membership is set.
 BENCH_COLS = [
-    ("Benchmark", "Top Account",    7, "Top Account"),
-    ("Benchmark", "High Potential", 8, "High Potential"),
-    ("Benchmark", "Other",          9, "Other"),
+    ("Benchmark", "Top 10", 7, "Top 10"),
+    ("Benchmark", "Top 40", 8, "Top 40"),
+    ("Benchmark", "New",    9, "New"),
 ]
 mreg = {m[2]: (m[0], m[1], m[3]) for m in METRICS}
 
@@ -174,10 +173,8 @@ for center, g in A.groupby("center_key"):
     emit("Center", disp, FUTURE_COL[0], FUTURE_COL[1], FUTURE_COL[2],
          compute(g, future=True, canc=gc))
 
-# national tier benchmarks = per-center MEDIAN within the tier, launch-to-date.
-# Kolin (Meet 6): the existing scorecard shows "the median for all these values"; he compared
-# a center to "launch-to-date top 10". Median (not sum, not average) resists the big-center
-# skew he flagged in Meet 4.5 ("the average is always going to be skewed by certain patients").
+# Tier benchmark = per-center MEDIAN within the tier, launch-to-date. Median rather than sum
+# or average, so a handful of very large centers do not carry the comparison.
 def bench_median(tiername):
     per_center = [compute(g, canc=_canc_for(g["atc"].iloc[0]))
                   for _, g in A[A.atc_tier == tiername].groupby("center_key")]
@@ -193,23 +190,18 @@ for cg, label, order, tiername in BENCH_COLS:
 
 # The old Excel view (25th/50th/75th percentile and national average across all ATCs)
 # used to be emitted here as a "CurrentTemplate" scope, so the new and old could be shown
-# side by side. Removed 2026-07-27. Kolin, Meet 6: quartiles "confuse the hell out of our
-# sales folks" and "we are actively trying to move away from them". The mandated benchmark
-# is the Top 10 / Top 40 / New tier median above, so nothing here is unreplaced.
-# It also freed col_order 12-15, which the quartile block shared with Q1'26 and Q4'25.
+# side by side. Removed 2026-07-27: quartiles were hard to explain in the field. The tier
+# medians above replace them, and col_order 12-15 came free.
 
 tidy = pd.DataFrame(rows)
 
 # display helpers so Tableau sorts by plain alpha (no fragile sort specs) and shows
 # type-aware text (counts as ints, days 1dp, rate as %).
 tidy["row_label"] = tidy["metric_order"].map(lambda i: f"{i:02d}  {[m[2] for m in METRICS if m[0]==i][0]}")
-# ---- ASSERTION: every counted event lands in exactly one bucket ----
-# Launch to Date must equal the year columns plus Undated plus After as-of. This is the
-# invariant that catches silently dropped events: a metric dated on a column that is null
-# for exactly the rows it counts (an out-of-spec product never delivered, a procurement
-# cancelled so never performed) would otherwise vanish from every period column while still
-# appearing in Launch to Date, biasing the periods optimistic.
-#
+# ---- every counted event lands in exactly one bucket ----
+# Launch to Date must equal the year columns plus Undated plus After as-of. Without this a
+# metric dated on a column that is null for exactly the rows it counts would vanish from
+# every period column while still showing in Launch to Date.
 _chk = tidy[(tidy.scope == "Center") & (tidy.value_type == "count")
             & (~tidy.metric.isin(NON_ADDITIVE))]
 _ltd = _chk[_chk.col_label == "Launch to Date"].set_index(["center", "metric"]).value

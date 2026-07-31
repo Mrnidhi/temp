@@ -2,14 +2,13 @@
 PPR pipeline - Stage 2: count metric 3 (TTPs Cancelled/Rescheduled within 7 Days).
 
 Metric 3 cannot be a per-order flag: one order can lose more than one slot, and each loss
-belongs to the slot's own date, not the order's current pickup date. So it gets its own
-stage and its own event table.
+belongs to the slot's own date rather than the order's current pickup date. So it carries its
+own event table.
 
-Reads the Infinity snapshot history (bai_list_of_orders_hist) if it is in the input folder,
-applies the 7-day rule (cancellations.py, shared with metric3_cancellations.py), maps each
-event to the centre display name stage 1 used, and writes analysis/ppr_cancellations.csv.
-Records m3_source in run_meta.json so stages 3-4 know which source to trust. With no history
-file it writes an empty table and records the proxy, so the run still completes.
+Applies the 7-day rule from cancellations.py to the snapshot history and maps each event to
+the centre name stage 1 used. Records m3_source in run_meta.json so the later stages know
+which source produced the figure. With no history file it writes an empty table and records
+the proxy, so the run still completes.
 
 In:  the input folder (optionally a *hist* export), analysis/ppr_analysis.csv
 Out: analysis/ppr_cancellations.csv, run_meta.json m3_source
@@ -51,8 +50,7 @@ if hist_df is None:
           "using the resection_rescheduled_ proxy from stage 1")
 else:
     ev = cancellation_events(hist_df)
-    # map each event to the canonical centre display name stage 1 used, on the normalized
-    # key, so stages 3-4 and the reconciliation all agree on the centre label
+    # Match on the normalized key so every stage agrees on the centre label.
     ana = pd.read_csv(os.path.join(OUT_DIR, "ppr_analysis.csv"),
                       low_memory=False, usecols=["center_key", "atc"])
     key_to_disp = ana.drop_duplicates("center_key").set_index("center_key")["atc"]

@@ -6,8 +6,8 @@ Tableau range-of-dates filter recomputes every metric for any window.
 
 Aggregation contract (column `agg`):
     sum  - counts; SUM(value) over the window
-    avg  - timelines; MEDIAN(value) over the window, 1 decimal. Kolin (Meet 6):
-           the Infinity scorecard reports "the median for all these values"
+    avg  - timelines; MEDIAN(value) over the window, 1 decimal. The source scorecard
+           reports the median for these, not the average.
     rate - Patient Progression Rate; one row per mfg start, value 1 if the
            patient dropped after mfg start else 0, so AVG(value) = the rate
 
@@ -27,7 +27,7 @@ for c in ["enrollment_date", "tumor_pickup_date", "fp_delivery_date", "infusion_
 from metrics import NAME, GROUP as GROUPS, LOWER_IS_BETTER, HIGHER_IS_BETTER
 
 rows = []
-undated = []   # (center, metric, order id, missing field) - Kolin asked for these 07/28
+undated = []   # (center, metric, order id, missing field)
 def emit(df, order, metric, agg, datecol, valcol=None, unitcol=None):
     """One row per event. Events with no date are still emitted: they are real events that
     simply cannot be placed in a period (an out-of-spec product never delivered, a
@@ -69,11 +69,9 @@ emit(A[A.scheduled_ttp == 1], 5, NAME[5], "sum", "tumor_pickup_date")
 ttp = A[A.tumor_pickup_date.notna()].sort_values("tumor_pickup_date")
 second = (ttp.drop_duplicates(["atc", "iovance_patient_id", "tumor_pickup_date"])
              .groupby(["atc", "iovance_patient_id"]).nth(1).reset_index())
-# KNOWN LIMITATION: this is "patients with 2 or more procurements", deduped across all
-# time. Within a narrow window the answer can differ by one from the precomputed scorecard,
-# because a patient's first and second procurement may straddle the window edge. Measured
-# on the synthetic set: 1 cell in 3,309. Rendering it correctly per-window needs an LOD in
-# the workbook; left as-is until someone asks for that metric by window.
+# Deduped across all time, so within a narrow window this can differ by one from the
+# precomputed scorecard when a patient's two procurements straddle the window edge.
+# Correcting it per-window needs an LOD in the workbook.
 emit(second, 6, NAME[6], "sum", "tumor_pickup_date")
 # Patient grain, matching build_scorecard.
 emit(A[A.dropout_post_ttp_health == 1], 7,
@@ -107,17 +105,13 @@ emit(A, 13, NAME[13],
 ev = pd.DataFrame(rows, columns=["center", "metric_group", "metric", "metric_order",
                                  "agg", "event_date", "value", "unit"])
 
-# ---- tag every event with the template columns it belongs to -------------------------
-# One sheet has to show both the fixed template columns and a live user-chosen window.
-# A single event belongs to several columns at once (Launch to Date, its year, its
-# quarter), so it is emitted once per column it falls in. That turns the column set into
-# an ordinary dimension, which means one worksheet off one source can render the whole
-# scorecard AND respond to a date filter.
+# ---- tag every event with the columns it belongs to -----------------------------------
+# An event falls in several columns at once (Launch to Date, its year, its quarter), so it
+# is emitted once per column. That makes the column set an ordinary dimension, which is what
+# lets one worksheet render the whole scorecard and still answer a date filter.
 #
-# The "Selected window" copy is the live one: in Tableau a single filter calc applies the
-# date parameters to those rows only, leaving the fixed columns untouched. Without the
-# split, dragging the slider would blank out the 2024 and 2025 columns.
-# As-of from stage 1, one definition for every stage (see build_analysis_table.py).
+# The "Selected window" copy is the live one: the date parameters filter those rows only, so
+# dragging the slider does not blank out the fixed year columns.
 import json as _json
 TODAY = _json.load(open(os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "analysis", "run_meta.json")))["asof"]
@@ -156,45 +150,38 @@ live = ev.copy()
 live["col_label"], live["col_order"] = SELECTED
 tagged.append(live)
 
-# ---- the one benchmark arm per centre (Kolin, 07/28 Daily Connect) -------------------
-# His template's red note says "Pick one comparative arm depending on ATC". The rule from
-# the meeting: the arm is the centre's own tier. Froedtert (a New centre) compares to New;
-# MSK compares to the Top 10. So instead of three shared "National" columns, every centre
-# gets 13 rows carrying ITS tier's medians, under its own centre name. Keep Center in the
-# workbook then needs no special case.
-#
-# Stage 2 owns the median definition (bench_median); this carries its output across so
-# there is one definition. agg="preagg" tells the workbook to print the stored display
-# string (in `unit`) instead of aggregating.
-#
-# Each centre compares against its own segment. No mapping decision left to make: the arm is
-# the segment, which is why switching to Iovance's segmentation removed the old "Other sees
-# Top 40" assumption that was ours to justify.
-ARM_FOR_TIER = {"Top Account": "Top Account",
-                "High Potential": "High Potential",
-                "Other": "Other"}
-BENCH_COL_ORDER = 8
+# ---- benchmark columns ----------------------------------------------------------------
+# Top 10 and Top 40 both appear against every centre, so the presenter can point at either
+# without changing a control. Stage 2 owns the median definition; this carries its output
+# across rather than recomputing. agg="preagg" prints the stored display string held in
+# `unit` instead of aggregating the value.
+BENCH_ARMS = ["Top 10", "Top 40"]
+# Which arm the Launch to Date shading compares against. Centres outside the top 40 are
+# held to Top 40: the small-centre median is a soft comparison that tells them little.
+HEAT_ARM = {"Top 10": "Top 10", "Top 40": "Top 40", "New": "New", "Other": "Top 40"}
 
 sc = pd.read_csv(os.path.join(ANA, "ppr_scorecard_tidy.csv"))
 nat = sc[sc.scope == "National"]
-missing = set(ARM_FOR_TIER.values()) - set(nat.col_label)
+missing = (set(BENCH_ARMS) | set(HEAT_ARM.values())) - set(nat.col_label)
 if missing:
     raise SystemExit(f"benchmark tiers missing from the scorecard: {sorted(missing)}")
 
 tier_of = A.drop_duplicates("atc").set_index("atc")["atc_tier"]
-_untiered = tier_of[~tier_of.isin(ARM_FOR_TIER)].index.tolist()
-if _untiered:
-    raise SystemExit(f"centre(s) with an unknown tier: {_untiered[:5]}")
+untiered = tier_of[~tier_of.isin(HEAT_ARM)].index.tolist()
+if untiered:
+    raise SystemExit(f"centre(s) with an unknown tier: {untiered[:5]}")
+
+arm_order = dict(nat[["col_label", "col_order"]].drop_duplicates().values)
 
 bench_parts = []
-for arm, g in nat.groupby("col_label"):
-    centres = tier_of[tier_of.map(ARM_FOR_TIER) == arm].index
-    if len(centres) == 0:
-        continue
-    block = g[["metric_group", "metric", "metric_order", "value", "value_display"]]
-    for c in centres:
+for arm in BENCH_ARMS:
+    block = nat[nat.col_label == arm][["metric_group", "metric", "metric_order",
+                                       "value", "value_display"]]
+    for c in tier_of.index:
         b = block.copy()
         b["center"] = c
+        b["col_label"] = arm
+        b["col_order"] = arm_order[arm]
         bench_parts.append(b)
 bench_all = pd.concat(bench_parts, ignore_index=True)
 bench = pd.DataFrame({
@@ -206,36 +193,33 @@ bench = pd.DataFrame({
     "event_date": pd.NaT,
     "value": bench_all.value,
     "unit": bench_all.value_display.fillna(""),
-    # the column label names the arm, so the header says which tier this centre sees
-    "col_label": tier_of.loc[bench_all.center].map(ARM_FOR_TIER).values,
-    "col_order": BENCH_COL_ORDER,
+    "col_label": bench_all.col_label,
+    "col_order": bench_all.col_order,
 })
 tagged.append(bench)
 
 out = pd.concat(tagged, ignore_index=True)
 
-# ---- block header, so the table reads as three groups rather than 13 equal columns ----
-# Kolin's template puts a second header row over the columns: the centre's own figures,
-# the national comparison, the quarterly trend. Those are three different questions and
-# labelling them is what stops the table reading as a data dump.
-# The centre block is left generic here; Tableau swaps in the selected centre's name.
+# ---- block header ---------------------------------------------------------------------
+# A second header row over the columns: the centre's own figures, the national comparison,
+# the quarterly trend. Tableau swaps the selected centre's name into the first block.
 COL_GROUP = {
     "Launch to Date": "This Center", "2024": "This Center", "2025": "This Center",
     "2026 YTD": "This Center", "Selected window": "This Center",
     "Undated": "This Center", "After as-of": "This Center",
-    "Top Account": "YTD National Metrics", "High Potential": "YTD National Metrics",
-    "Other": "YTD National Metrics",
+    "Top 10": "YTD National Metrics", "Top 40": "YTD National Metrics",
+    "New": "YTD National Metrics",
     "Q3'26 QTD": "Quarterly ATC Metrics", "Q2'26": "Quarterly ATC Metrics",
     "Q1'26": "Quarterly ATC Metrics", "Q4'25": "Quarterly ATC Metrics",
 }
 _unmapped = set(out.col_label) - set(COL_GROUP)
 if _unmapped:
     raise SystemExit(f"column(s) with no block: {sorted(_unmapped)}. Add them to COL_GROUP.")
-# ---- performance heat, one colour per Launch to Date cell (Kolin, 07/28) -------------
-# The centre's launch-to-date value against the median of ITS OWN benchmark arm.
-# Direction-aware; neutral metrics and blank values keep the plain row band.
-# THRESHOLDS ARE A PROPOSAL pending Kolin: at/better than the median = green, within
-# half (or double, for lower-is-better) = amber, beyond = orange.
+# ---- performance shading, one colour per Launch to Date cell --------------------------
+# The centre's launch-to-date value against the median of its own tier. Direction-aware;
+# neutral metrics and blank values keep the plain row band.
+# Thresholds are provisional: at or better than the median is green, within half (or double,
+# for lower-is-better) is amber, beyond that is orange.
 def heat_band(v, m, lower_better):
     if pd.isna(v) or pd.isna(m):
         return None
@@ -256,7 +240,7 @@ for (center, metric), v in ctr_l2d.items():
         lower = False
     else:
         continue
-    arm = ARM_FOR_TIER[tier_of[center]]
+    arm = HEAT_ARM[tier_of[center]]
     band = heat_band(v, arm_med.get((arm, metric)), lower)
     if band:
         heat[(center, metric)] = band
@@ -305,14 +289,17 @@ out["col_group_order"] = out.groupby("col_group").col_order.transform("min")
 
 _b = out[out["agg"] == "preagg"]
 _nc = out[out["agg"] != "preagg"].center.nunique()
-assert len(_b) == 13 * _nc, (
-    f"expected 13 benchmark rows for each of {_nc} centres = {13*_nc}, got {len(_b)}")
-assert _b.groupby("center").col_label.nunique().max() == 1, (
-    "a centre carries more than one benchmark arm")
+_expect = 13 * _nc * len(BENCH_ARMS)
+assert len(_b) == _expect, (
+    f"expected 13 metrics x {_nc} centres x {len(BENCH_ARMS)} arms = {_expect}, got {len(_b)}")
+assert set(_b.col_label) == set(BENCH_ARMS), (
+    f"benchmark columns {sorted(set(_b.col_label))} do not match {BENCH_ARMS}")
+assert _b.groupby("center").col_label.nunique().eq(len(BENCH_ARMS)).all(), (
+    "a centre is missing one of the benchmark arms")
 und = pd.DataFrame(undated, columns=["center", "metric", "order_id", "missing_date_field"])
 und.to_csv(os.path.join(ANA, "undated_events.csv"), index=False)
 print(f"undated events for review: {len(und):,} -> analysis/undated_events.csv "
-      "(Kolin asked to see these, 07/28)")
+      "- orders with no usable event date")
 
 out.to_csv(os.path.join(ANA, "ppr_datewindow_long.csv"), index=False)
 print(f"datewindow events: {len(ev):,} events -> {len(out):,} column-tagged rows, "
@@ -328,7 +315,7 @@ if _empty:
 
 # ---- ASSERTION: this table must reproduce the precomputed scorecard ----
 # Two independent implementations of the same 13 metrics. If they drift, the dashboard and
-# the deck disagree and Kolin finds it first. Compare every cell on every run.
+# the deck disagree and someone else finds it first. Compare every cell on every run.
 sc = pd.read_csv(os.path.join(ANA, "ppr_scorecard_tidy.csv"))
 sc = sc[(sc.scope == "Center") & sc.col_label.isin([b[0] for b in BUCKETS])]
 

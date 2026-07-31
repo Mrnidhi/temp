@@ -1,27 +1,15 @@
 r"""
-PPR pipeline - run everything, in order.
+PPR pipeline - runs every stage in order.
 
-OFFICE LAPTOP
-    The project lives at:
-        C:\Users\SGowda\OneDrive - Iovance Biotherapeutics\Desktop\PPR Automation\VS Code
+Put the seven Infinity .xlsx exports in data\ next to this file, then:
+    python RUN_ALL.py
 
-    Put the seven Infinity .xlsx exports in the data\ folder already sitting there,
-    then from that folder:
-        python RUN_ALL.py
+Input resolution, first match wins: PPR_INPUT_DIR, then data\, then the synthetic
+sample. To read from elsewhere:
+    PowerShell:  $env:PPR_INPUT_DIR="C:\path\to\exports"
+    CMD:         set PPR_INPUT_DIR=C:\path\to\exports
 
-    Nothing else to configure. data\ is found automatically because it is next to
-    this file. Real data never leaves the laptop; only code and printed numbers travel.
-
-    To read from somewhere else instead, set PPR_INPUT_DIR first:
-        PowerShell:  $env:PPR_INPUT_DIR="C:\path\to\real_files"
-        CMD:         set PPR_INPUT_DIR=C:\path\to\real_files
-
-MAC / DEV
-    With no data\ folder it falls back to the synthetic sample. That is fine for a dry
-    run, and the header says so in a block of exclamation marks you cannot miss. Every
-    number from a synthetic run is a property of the generator, not of the world.
-
-Order:
+Stages:
     1. build_analysis_table.py  -> analysis/ppr_analysis.csv        (one row per order)
     2. build_cancellations.py   -> analysis/ppr_cancellations.csv   (metric 3 from history)
     3. build_scorecard.py       -> analysis/ppr_scorecard_tidy.csv  (the 13 metrics)
@@ -29,8 +17,7 @@ Order:
     5. build_hyper.py           -> tableau/*.hyper                  (Tableau extracts)
     6. build_dashboard_html.py  -> dashboard/ppr_scorecard.html     (standalone browser view)
 
-Then build/refresh the workbook in Tableau Desktop from the .hyper extracts.
-One-time build recipe: README.md section 4. After that, refresh only.
+Refresh the Tableau extracts after a run. First-time workbook build: README.md section 4.
 """
 import os
 import subprocess
@@ -48,14 +35,11 @@ STEPS = [
     ("build_dashboard_html.py", "rendering the standalone HTML scorecard"),
 ]
 
-# After a run: python pipeline/baseline.py diff
-# Reports every cell that moved against the frozen reference. Freeze once with
-# `baseline.py freeze`, then diff after every change. A change with no diff is safe.
+# Regression check after a change: python pipeline/baseline.py diff
 
 
 def main() -> int:
-    # Input, first match wins: PPR_INPUT_DIR env var, then data/ next to this
-    # file, then the synthetic sample. Stage 1 applies the same order.
+    # First match wins; stage 1 resolves the same way.
     candidates = [os.environ.get("PPR_INPUT_DIR"),
                   os.path.join(HERE, "data"),
                   os.path.join(HERE, "..", "..", "..", "PPR Automation", "synthetic_data", "out")]
@@ -75,8 +59,7 @@ def main() -> int:
     print(f"found: {len(xlsx)} .xlsx files", flush=True)
     print("=" * 62, flush=True)
 
-    # A synthetic run that looks like a real one is the dangerous case, and the path
-    # above is easy to skim past. Say it outright instead.
+    # A synthetic run that reads like a real one is the dangerous case.
     if "synthetic" in src.lower():
         print("!" * 62, flush=True)
         print("  SYNTHETIC DATA. Every number this run produces is made up.", flush=True)
@@ -89,9 +72,7 @@ def main() -> int:
             print("   " + f, flush=True)
         print("Stage 1 will stop and name whichever one it cannot find.\n", flush=True)
 
-    # Hand the resolved folder down rather than letting each stage resolve it again.
-    # They apply the same rules, but a stage reading a different folder than the one
-    # printed above would be silent and would poison every output after it.
+    # Pass the resolved folder down so no stage can pick a different one.
     env = {**os.environ, "PPR_INPUT_DIR": src}
 
     for i, (script, what) in enumerate(STEPS, 1):
