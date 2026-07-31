@@ -1,183 +1,132 @@
 -- Verify the dashboard against Infinity, one centre at a time.
 --
--- Computes all 13 metrics directly from the source tables using the same rules the
--- pipeline uses, so the output can be read straight against the Launch to Date column.
+-- Seven standalone queries. Run them one at a time and read the result against the
+-- Launch to Date column. No CTEs, no unions, no window functions.
 --
--- Set the two values in `params` and run. `centre` must match `atc` exactly:
---
+-- Replace the centre name in every query. It must match `atc` exactly:
 --     select distinct atc from bai_list_of_orders where atc like '%Anderson%';
 --
--- `asof` is the pipeline's as-of date, which is max(order_request__created_date) across
--- ALL centres, not just this one. Read it off analysis/run_meta.json or the dashboard,
--- do not guess it from this centre's rows.
+-- The as-of date below is the pipeline's as-of, which is max(order_request__created_date)
+-- across ALL centres, not just this one. Read it off analysis/run_meta.json. Getting it
+-- wrong moves Completed and Scheduled TTPs and nothing else.
 --
--- These figures are Launch to Date. To check a period column instead, add a date filter
--- on that metric's OWN event date, listed in the `dated on` column of the output.
+-- All figures are Launch to Date. For a period column, add a date filter on that metric's
+-- own event date, noted against each query.
+
+
+-- =======================================================================================
+-- Q1. Five metrics in one pass: 1, 2, 4, 5, 8
+-- Dated on: enrollment date (1, 2), pickup date (4, 5), FP delivery date (8)
+-- =======================================================================================
+select
+    count(distinct order_request__til_order_name)                       as m1_enrollments,
+    count(distinct iovance_patient_id)                                  as m2_patients,
+    sum(case when tumor_tissue_pick_up_date is not null
+              and tumor_tissue_pick_up_date <= date '2026-07-31'
+             then 1 else 0 end)                                         as m4_completed_ttps,
+    sum(case when tumor_tissue_pick_up_date >  date '2026-07-31'
+             then 1 else 0 end)                                         as m5_scheduled_ttps,
+    sum(case when oos_status = 'Confirmed OOS' then 1 else 0 end)       as m8_oos_products
+from bai_list_of_orders
+where atc = 'University Of Texas MD Anderson Cancer Center';
+
+
+-- =======================================================================================
+-- Q2. Metric 6, 2nd Resections. Count the ROWS this returns.
+-- Distinct patients with two or more different pickup dates.
+-- =======================================================================================
+select iovance_patient_id,
+       count(distinct tumor_tissue_pick_up_date) as distinct_pickups
+from bai_list_of_orders
+where atc = 'University Of Texas MD Anderson Cancer Center'
+  and tumor_tissue_pick_up_date is not null
+group by iovance_patient_id
+having count(distinct tumor_tissue_pick_up_date) >= 2;
+
+
+-- =======================================================================================
+-- Q3. Metric 7, patient related drop-outs following TTP due to patient health.
+-- Distinct patients, and only orders that actually had a tumour procurement.
+-- =======================================================================================
+select count(distinct iovance_patient_id) as m7_dropouts
+from bai_list_of_orders
+where atc = 'University Of Texas MD Anderson Cancer Center'
+  and til_order_cancellation_reason in (
+        'Patient health progressed', 'Decline in Performance Status',
+        'Disease Progression', 'Brain Mets', 'Patient death', 'Transition to Hospice')
+  and order_request__til_order_name in (select til_order_name from bai_tumor_documentation);
+
+
+-- =======================================================================================
+-- Q4. Metric 9, Patient Progression Rate. Divide drops by starts yourself.
+-- Patient grain, not order grain. The five SM states are the courier leg BEFORE
+-- manufacturing and are deliberately excluded from the denominator.
+-- Patient Choice is in the numerator; NED/MRD is not, because the patient responded.
+-- =======================================================================================
+select
+    count(distinct case when fp_status in (
+            'MFG Start', 'MFG End', 'REP Initiation', 'REP Scale Out',
+            'Released for Shipment by QA', 'Shipment Ready',
+            'Courier Picked-Up FP', 'Courier Delivered FP', 'FP CAH')
+        then iovance_patient_id end)                                    as mfg_starts,
+    count(distinct case when fp_status in (
+            'MFG Start', 'MFG End', 'REP Initiation', 'REP Scale Out',
+            'Released for Shipment by QA', 'Shipment Ready',
+            'Courier Picked-Up FP', 'Courier Delivered FP', 'FP CAH')
+          and til_order_cancellation_reason in (
+            'Patient health progressed', 'Decline in Performance Status',
+            'Disease Progression', 'Brain Mets', 'Patient death',
+            'Transition to Hospice', 'Patient Choice')
+        then iovance_patient_id end)                                    as drops_after_mfg
+from bai_list_of_orders
+where atc = 'University Of Texas MD Anderson Cancer Center';
+
+
+-- =======================================================================================
+-- Q5. Metric 10, AMTAGVI Infusions Performed. Dated on infusion date.
+-- =======================================================================================
+select count(*) as m10_infusions
+from bai_infusion
+where lifileucel_infused_ = 'Yes'
+  and infusion_date is not null
+  and til_order_name in (
+        select order_request__til_order_name from bai_list_of_orders
+        where atc = 'University Of Texas MD Anderson Cancer Center');
+
+
+-- =======================================================================================
+-- Q6. Metrics 11, 12, 13. The medians.
+-- Download this and take the median of each day column in Excel, since the explorer has
+-- no percentile function. Excel's MEDIAN matches the pipeline exactly; both average the
+-- two middle values on an even count.
 --
--- Written for Trino. On Redshift: date_diff('day', a, b) becomes datediff(day, a, b),
--- and approx_percentile(x, 0.5) becomes percentile_cont(0.5) within group (order by x).
--- Note that approx_percentile does not interpolate, so on an even number of rows it can
--- differ from the pipeline's median by up to half a day. percentile_cont matches exactly.
+--   m11 = median of days_enroll_to_ttp      ignore blanks
+--   m12 = median of days_ttp_to_infusion    ignore blanks
+--   m13 = median of days_delivery_to_infusion
 --
--- Metric 3 is not here. It needs the snapshot history and a window function; it is the
--- second query in this file.
-
-WITH params AS (
-    SELECT 'University Of Texas MD Anderson Cancer Center' AS centre,
-           DATE '2026-07-31'                              AS asof
-),
-
--- tumour procurement rows per order; tpf_count > 0 is `has_tumor`
-tpf AS (
-    SELECT til_order_name, count(*) AS tpf_count
-    FROM bai_tumor_documentation
-    GROUP BY til_order_name
-),
-
-o AS (
-    SELECT l.order_request__til_order_name       AS order_name,
-           l.iovance_patient_id                  AS patient_id,
-           l.order_request__created_date         AS enrolled,
-           l.tumor_tissue_pick_up_date           AS pickup,
-           l.final_product_delivery_date         AS fp_delivered,
-           l.oos_status,
-           l.fp_status,
-           l.til_order_cancellation_reason       AS reason,
-           coalesce(t.tpf_count, 0)              AS tpf_count,
-           i.infusion_date                       AS infused_on,
-           i.lifileucel_infused_                 AS infused_flag,
-           p.asof
-    FROM bai_list_of_orders l
-    CROSS JOIN params p
-    LEFT JOIN tpf t ON t.til_order_name = l.order_request__til_order_name
-    LEFT JOIN bai_infusion i ON i.til_order_name = l.order_request__til_order_name
-    WHERE l.atc = p.centre
-),
-
--- manufacturing actually started. The five SM states are the courier leg BEFORE
--- manufacturing and are deliberately excluded; including them inflates the metric 9
--- denominator and understates the rate.
-flags AS (
-    SELECT o.*,
-           fp_status IN ('MFG Start', 'MFG End', 'REP Initiation', 'REP Scale Out',
-                         'Released for Shipment by QA', 'Shipment Ready',
-                         'Courier Picked-Up FP', 'Courier Delivered FP', 'FP CAH')
-               AS mfg_started,
-           reason IN ('Patient health progressed', 'Decline in Performance Status',
-                      'Disease Progression', 'Brain Mets', 'Patient death',
-                      'Transition to Hospice')
-               AS health_reason,
-           -- metric 9 adds Patient Choice. NED/MRD stays out: the patient responded,
-           -- so counting it would report a good outcome as a failure.
-           reason IN ('Patient health progressed', 'Decline in Performance Status',
-                      'Disease Progression', 'Brain Mets', 'Patient death',
-                      'Transition to Hospice', 'Patient Choice')
-               AS patient_related
-    FROM o
-),
-
--- distinct patients with two or more different pickup dates
-resect AS (
-    SELECT count(*) AS n FROM (
-        SELECT patient_id
-        FROM flags
-        WHERE pickup IS NOT NULL
-        GROUP BY patient_id
-        HAVING count(DISTINCT pickup) >= 2
-    ) x
-),
-
-prog AS (
-    SELECT count(DISTINCT CASE WHEN mfg_started THEN patient_id END)          AS denom,
-           count(DISTINCT CASE WHEN mfg_started AND patient_related
-                               THEN patient_id END)                          AS numer
-    FROM flags
-)
-
-SELECT  1 AS m, 'Enrollments in IovanceCares'   AS metric, 'enrollment date' AS dated_on,
-        cast(count(DISTINCT order_name) AS varchar) AS value FROM flags
-UNION ALL
-SELECT  2, 'Patients Enrolled in IovanceCares', 'enrollment date',
-        cast(count(DISTINCT patient_id) AS varchar) FROM flags
-UNION ALL
-SELECT  4, 'Completed TTPs', 'TTP pickup date',
-        cast(count(*) AS varchar) FROM flags
-        WHERE pickup IS NOT NULL AND pickup <= asof
-UNION ALL
-SELECT  5, 'Scheduled TTPs', 'TTP pickup date',
-        cast(count(*) AS varchar) FROM flags
-        WHERE pickup IS NOT NULL AND pickup > asof
-UNION ALL
-SELECT  6, '2nd Resections (Scheduled or Completed)', 'TTP pickup date',
-        cast(n AS varchar) FROM resect
-UNION ALL
-SELECT  7, 'Patient Related Drop-outs following TTP', 'TTP pickup date',
-        cast(count(DISTINCT patient_id) AS varchar) FROM flags
-        WHERE tpf_count > 0 AND health_reason
-UNION ALL
-SELECT  8, 'OOS Products', 'final product delivery date',
-        cast(count(*) AS varchar) FROM flags
-        WHERE oos_status = 'Confirmed OOS'
-UNION ALL
-SELECT  9, 'Patient Progression Rate', 'TTP pickup date',
-        CASE WHEN denom = 0 THEN ''
-             ELSE cast(round(100.0 * numer / denom, 1) AS varchar) || '%' END
-        FROM prog
-UNION ALL
-SELECT 10, 'AMTAGVI Infusions Performed', 'infusion date',
-        cast(count(*) AS varchar) FROM flags
-        WHERE infused_on IS NOT NULL AND infused_flag = 'Yes'
-UNION ALL
-SELECT 11, 'Median Time From Enrollment Date to TTP', 'TTP pickup date',
-        cast(round(approx_percentile(date_diff('day', enrolled, pickup), 0.5), 1) AS varchar)
-        FROM flags WHERE pickup IS NOT NULL AND enrolled IS NOT NULL
-UNION ALL
-SELECT 12, 'Median Time From TTP to AMTAGVI Infusion', 'infusion date',
-        cast(round(approx_percentile(date_diff('day', pickup, infused_on), 0.5), 1) AS varchar)
-        FROM flags WHERE infused_on IS NOT NULL AND pickup IS NOT NULL
-UNION ALL
-SELECT 13, 'Median Time From Final Product Delivery to Infusion', 'infusion date',
-        cast(round(approx_percentile(date_diff('day', fp_delivered, infused_on), 0.5), 1) AS varchar)
-        FROM flags WHERE infused_on IS NOT NULL AND fp_delivered IS NOT NULL
-ORDER BY m;
+-- Infusion dates are in bai_infusion, so download Q7 as well and match on order name.
+-- =======================================================================================
+select order_request__til_order_name,
+       order_request__created_date,
+       tumor_tissue_pick_up_date,
+       final_product_delivery_date
+from bai_list_of_orders
+where atc = 'University Of Texas MD Anderson Cancer Center';
 
 
--- ---------------------------------------------------------------------------------------
--- Metric 3, separately, because it walks the snapshot history rather than the order table.
---
--- Sort each order's snapshots by record_number. When the booked pickup date moves or is
--- cleared, measure from that snapshot's load date back to the date that HAD been booked.
--- Zero to seven days of notice counts: the slot could not realistically be refilled.
--- The event is dated on the LOST slot, not on the day the change was entered.
---
--- Returns one row per event. The dashboard counts events, not distinct orders, so the row
--- count is the figure to compare. Change to count(distinct order_name) to see the other.
+-- =======================================================================================
+-- Q7. Infusion dates for the same centre, to pair with Q6 for metrics 12 and 13.
+-- =======================================================================================
+select til_order_name, infusion_date, lifileucel_infused_
+from bai_infusion
+where til_order_name in (
+        select order_request__til_order_name from bai_list_of_orders
+        where atc = 'University Of Texas MD Anderson Cancer Center');
 
-WITH params AS (
-    SELECT 'University Of Texas MD Anderson Cancer Center' AS centre
-),
-snaps AS (
-    SELECT h.atc,
-           h.order_request__til_order_name AS order_name,
-           h.record_number,
-           -- load_datetime is a string like 20241007T024217; the date is the first 8 chars
-           date_parse(substr(replace(cast(h.load_datetime AS varchar), '-', ''), 1, 8),
-                      '%Y%m%d')                             AS snapshot_on,
-           h.tumor_tissue_pick_up_date                       AS pickup,
-           lag(h.tumor_tissue_pick_up_date) OVER (
-               PARTITION BY h.order_request__til_order_name
-               ORDER BY h.record_number)                     AS prev_pickup
-    FROM bai_list_of_orders_hist h
-    CROSS JOIN params p
-    WHERE h.atc = p.centre
-)
-SELECT order_name,
-       prev_pickup                                     AS lost_slot_date,
-       snapshot_on                                     AS change_seen_on,
-       date_diff('day', snapshot_on, prev_pickup)      AS days_notice,
-       CASE WHEN pickup IS NULL THEN 'cancelled' ELSE 'rescheduled' END AS kind
-FROM snaps
-WHERE prev_pickup IS NOT NULL
-  AND (pickup IS NULL OR pickup <> prev_pickup)
-  AND date_diff('day', snapshot_on, prev_pickup) BETWEEN 0 AND 7
-ORDER BY lost_slot_date;
+
+-- =======================================================================================
+-- Metric 3 is not verifiable here. The 7-day rule needs consecutive snapshots compared
+-- against each other, which the explorer cannot express without a window function.
+-- Compare it instead against the cancellation and reschedule view already in Infinity,
+-- once edit access lands and its calculated-field logic can be read.
+-- =======================================================================================
