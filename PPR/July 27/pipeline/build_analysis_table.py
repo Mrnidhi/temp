@@ -191,11 +191,11 @@ o = o.merge(mp2[["center_key", "veeva_name", "region", "territory", "atc_segment
 o["center_matched"] = o["veeva_name"].notna()
 
 # ------------------------------------------------------------------ derived metric fields
-# A booked pickup date is the schedule: cancelling a TTP clears the date, so any order still
-# carrying one has a slot reserved whether or not it has happened yet. Scheduled therefore
-# contains Completed, and the two must not be added together.
+# Scheduled means still to come. A pickup dated on or before the as-of date has happened and
+# is Completed; anything after it is Scheduled. The two are disjoint, so they add to a total
+# procurement count, and every closed period shows Scheduled as zero by construction.
 o["completed_ttp"] = o["tumor_pickup_date"].notna() & (o["tumor_pickup_date"] <= TODAY)
-o["scheduled_ttp"] = o["tumor_pickup_date"].notna()
+o["scheduled_ttp"] = o["tumor_pickup_date"].notna() & (o["tumor_pickup_date"] > TODAY)
 o["oos_product"] = o["oos_status"] == "Confirmed OOS"
 o["mfg_started"] = o["fp_status"].isin(MFG_STARTED)
 # metric 7: patient-health drop-outs following a TTP
@@ -207,10 +207,9 @@ o["drop_after_mfg"] = o["mfg_started"] & o["patient_related_dropout"]
 # closest flag available from the file exports and fires far too often to be trusted.
 o["ttp_cancel_le7"] = o["resection_rescheduled_"] == True
 
-_not_scheduled = int((o["completed_ttp"] & ~o["scheduled_ttp"]).sum())
-assert _not_scheduled == 0, (
-    f"{_not_scheduled} completed TTP(s) are not counted as scheduled; "
-    "Scheduled must contain Completed")
+_both = int((o["completed_ttp"] & o["scheduled_ttp"]).sum())
+assert _both == 0, (
+    f"{_both} order(s) counted as both completed and scheduled; the two must stay disjoint")
 
 # Guard rails: a new reason or status from Infinity must fail the build, not fall
 # silently into no bucket and quietly change a metric.
