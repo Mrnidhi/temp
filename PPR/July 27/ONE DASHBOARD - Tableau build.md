@@ -52,7 +52,7 @@ END
 ```
 
 The dates bite only on the live column. Every template column passes through untouched, so
-2024, 2025 and the quarters stay on screen as anchors while Kolin asks about a period beside
+2024, 2025 and the quarters stay on screen as anchors while the reviewer asks about a period beside
 them.
 
 They deliberately do not filter the template columns. If the dates applied to `2024` as well,
@@ -90,7 +90,7 @@ That is the whole build. One source, one sheet, one dashboard.
 
 ---
 
-## What Kolin does
+## How it is used
 
 Pick a centre. Read the fixed columns exactly as before. When he wants a different period,
 drag the two dates and read the **Selected window** column. Nothing else moves.

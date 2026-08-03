@@ -145,7 +145,7 @@ start dashboard\ppr_scorecard.html
 Opens in your browser. Pick a centre from the dropdown. This is the fastest way to see
 whether the real numbers look sane, and it is shareable as a single file.
 
-To reproduce one of Kolin's existing slides: set the four date boxes to that slide's two
+To reproduce an existing hand-built slide: set the four date boxes to that slide's two
 periods and hit Apply. The table becomes period A, period B, difference.
 
 ---
@@ -196,13 +196,13 @@ down and I will fix the doc.
 
 ---
 
-## 8. Before Kolin sees it
+## 8. Before anyone reviews it
 
-Pick two or three centres he knows and already has decks for. UK Chandler is the one
-already checked, 6 of 8 metrics exact. Compare cell by cell.
+Pick two or three centres that already have hand-built decks and compare cell by cell.
+Results go in the local validation log, not in this repo.
 
-Understand every difference before he sees it, not during. The first disputed cell decides
-whether he believes the other twelve.
+Understand every difference before the review, not during. The first disputed cell decides
+whether the other twelve are believed.
 
 ---
 

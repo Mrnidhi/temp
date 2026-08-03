@@ -78,10 +78,10 @@ so there is no second sheet and no second data source to keep in step.
 dashboard reads. It is the reference the event table gets checked against.
 
 A per-center PowerPoint stage (build_center_decks.py) used to run here. Removed
-2026-07-28: the dashboard already shows any center for any window, so Kolin filters
+2026-07-28: the dashboard already shows any center for any window, so the reviewer filters
 and screenshots what he needs directly. Recoverable from this repo's history.
 
-## 5. How to use it (what Kolin does)
+## 5. How to use it
 
 - Pick a center in the dropdown: both tables switch to that center. Benchmarks stay fixed.
 - Drag the two ends of the Event Date slider: every metric in the Custom Date Window
@@ -97,7 +97,7 @@ browser; nothing else to configure.
 
 ## 7. Metric definitions (fixed, do not drift)
 
-The 13 metrics follow the (Proposed) P&PR Metrics template plus Kolin's Meet 6
+The 13 metrics follow the (Proposed) P&PR Metrics template plus the manager walkthrough
 definitions. Every metric is counted on its own event date, matching the real
 per-center decks ("timing metrics based upon the TTP or Infusion Date"):
 
@@ -117,7 +117,7 @@ per-center decks ("timing metrics based upon the TTP or Infusion Date"):
 | 12 | Avg Time TTP to Infusion (days) | infusion | median, 1 dp |
 | 13 | Avg Time Final Product Delivery to Infusion (days) | infusion | median, 1 dp |
 
-Timing rows are medians, not averages. Kolin, Meet 6, on the existing Infinity
+Timing rows are medians, not averages. Confirmed verbally against the existing Infinity
 scorecard: "what it shows you is essentially, like, the median for all these
 values." Medians also resist the big-center skew he flagged in Meet 4.5. The
 column headers still read "Average Time ..." because that is the wording in the
