@@ -22,6 +22,33 @@
 
 
 -- =======================================================================================
+-- Q0. Tables never opened. Run these first, they are one line each and two of them could
+-- close questions currently marked unanswerable.
+--
+-- The catalog holds roughly 35 tables nobody on this project has looked at. These four are
+-- the ones whose names suggest they bear on an open problem.
+-- =======================================================================================
+
+-- QBR is the old name for the P&PR. If this is Kolin's own metric output it is a better
+-- validation source than anything used so far. If it is a headcount table, ignore it.
+select * from file_QBR_Metrics_FTE limit 5;
+
+-- The New ATCs benchmark needs a date a centre was authorised or onboarded. No table checked
+-- so far carries one. These two are ATC-level mappings and are the most likely place.
+select * from file_ATC_Ops_and_CM_ATC_Mapping_Jul26 limit 5;
+select * from file_CM_ATC_Ops_ATC_Mapping limit 5;
+
+-- Patient-level attributes that are not on the order table.
+select * from file_Patient_Characteristics limit 5;
+
+-- Lost-capacity was parked because hist_Manufacturing_Slots stops 20 May 2025. The current
+-- slot tables may still cover recent periods, which would make the slot-fate view possible
+-- for the window that matters. Check the max slot date on both.
+select * from file_Manufacturing_Slots limit 5;
+select * from file_Pre_Reserved_Slots limit 5;
+
+
+-- =======================================================================================
 -- Q1. The 7-day population, reschedules. Re-run of the query that failed on the type cast.
 --
 -- days_notice is the old TTP minus the snapshot the change was seen on, which is how the
