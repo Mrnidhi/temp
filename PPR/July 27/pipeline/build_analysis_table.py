@@ -129,6 +129,14 @@ def _resolve(stem):
 def rd(stem):
     return pd.read_excel(_resolve(stem), header=HEADER_ROW)
 
+
+def rd_optional(stem):
+    """For inputs the metrics do not depend on, so a missing file is a note rather than a stop."""
+    try:
+        return rd(stem)
+    except FileNotFoundError:
+        return None
+
 def to_dt(s):
     return pd.to_datetime(s, errors="coerce")
 
@@ -136,7 +144,7 @@ def to_dt(s):
 orders = rd("list_of_orders")
 tumor  = rd("tumor_documentation")
 inf    = rd("infusion")
-slot   = rd("slot_data")
+slot   = rd_optional("slot_data")
 mp     = rd("komodo_atc_mapping")
 
 # ------------------------------------------------------------------ as-of + run metadata
@@ -171,8 +179,11 @@ o["tpf_count"] = o["order_request__til_order_name"].map(tumor_by_order).fillna(0
 o["has_tumor"] = o["tpf_count"] > 0
 o["second_resection"] = (o["tpf_count"] >= 2) | (o["til_order_cancellation_reason"] == "2nd Resection")
 
-slot_orders = set(slot["til_order_name"].dropna())
-o["has_slot"] = o["order_request__til_order_name"].isin(slot_orders)
+if slot is None:
+    print("  bai_slot_data absent: has_slot is False for every order. It drives no metric.")
+    o["has_slot"] = False
+else:
+    o["has_slot"] = o["order_request__til_order_name"].isin(set(slot["til_order_name"].dropna()))
 
 inf_i = inf.copy()
 inf_i["infusion_date"] = to_dt(inf_i["infusion_date"])

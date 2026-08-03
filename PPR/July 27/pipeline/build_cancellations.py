@@ -45,6 +45,16 @@ OUT = os.path.join(OUT_DIR, "ppr_cancellations.csv")
 
 ev, source, files = cancellation_events(INPUT_DIR, THRESHOLD_DAYS, COUNT_DIRECTIONS)
 
+if ev is not None:
+    drops = ev.attrs.get("drops", {})
+    print(f"metric 3 funnel ({source}):")
+    for reason, n in drops.items():
+        print(f"  {n:>6,}  {reason}")
+    accounted = sum(v for k, v in drops.items() if k != "rows in")
+    assert accounted == drops["rows in"], (
+        f"funnel does not reconcile: {accounted} accounted for against "
+        f"{drops['rows in']} rows in")
+
 if ev is None:
     pd.DataFrame(columns=COLS).to_csv(OUT, index=False)
     meta["m3_source"] = "proxy"

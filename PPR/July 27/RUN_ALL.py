@@ -1,8 +1,13 @@
 r"""
 PPR pipeline - runs every stage in order.
 
-Put the seven Infinity .xlsx exports in data\ next to this file, then:
+Put the Infinity exports in data\ next to this file, then:
     python RUN_ALL.py
+
+Six files. Four build the order table, two carry metric 3:
+    bai_list_of_orders, bai_tumor_documentation, bai_infusion, veeva_komodo_atc_mapping
+    LTD_Reschedules, LTD_Cancellations
+data\README.md lists what each one feeds and what is optional.
 
 Input resolution, first match wins: PPR_INPUT_DIR, then data\, then the synthetic
 sample. To read from elsewhere:
@@ -28,7 +33,7 @@ PIPE = os.path.join(HERE, "pipeline")
 
 STEPS = [
     ("build_analysis_table.py", "joining the 7 Infinity files into one order-grain table"),
-    ("build_cancellations.py",  "counting metric 3 cancellations from the snapshot history"),
+    ("build_cancellations.py",  "counting metric 3 short-notice lost slots"),
     ("build_scorecard.py",      "computing the 13 scorecard metrics"),
     ("build_datewindow.py",     "building the event-level date-window source"),
     ("build_hyper.py",          "writing the Tableau .hyper extracts"),
@@ -66,11 +71,21 @@ def main() -> int:
         print("  For real numbers put the seven Infinity exports in:", flush=True)
         print("     " + os.path.abspath(os.path.join(HERE, "data")), flush=True)
         print("!" * 62, flush=True)
-    if len(xlsx) < 7:
-        print(f"\nOnly {len(xlsx)} of the 7 expected exports are here:", flush=True)
-        for f in xlsx:
-            print("   " + f, flush=True)
-        print("Stage 1 will stop and name whichever one it cannot find.\n", flush=True)
+    # Name what is missing up front. Stage 1 would stop on a missing required file anyway,
+    # but only on the first one, so a single run would not show the whole gap.
+    present = [f.lower().replace(" ", "").replace("-", "").replace("_", "")
+               for f in os.listdir(src)]
+    REQUIRED = ["listoforders", "tumordocumentation", "infusion", "komodoatcmapping"]
+    METRIC3 = ["ltdreschedules", "ltdcancellations"]
+    missing = [s for s in REQUIRED if not any(s in f for f in present)]
+    if missing:
+        print(f"\nMissing required export(s): {missing}", flush=True)
+        print("Stage 1 will stop. See data\\README.md.\n", flush=True)
+    if not any(any(s in f for f in present) for s in METRIC3):
+        print("\nNeither LTD export is here, so metric 3 falls back to the snapshot history "
+              "or the proxy.", flush=True)
+        print("The source used is printed at stage 2 and recorded in run_meta.json.\n",
+              flush=True)
 
     # Pass the resolved folder down so no stage can pick a different one.
     env = {**os.environ, "PPR_INPUT_DIR": src}

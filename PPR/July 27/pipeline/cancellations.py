@@ -121,17 +121,27 @@ def apply_rule(df, threshold_days=THRESHOLD_DAYS, directions=None):
 
     Only changes made BEFORE the booked date count. A change recorded after the date had
     already passed is administrative cleanup, not a lost slot.
+
+    Every dropped row is counted by reason and attached to the result as .attrs["drops"], so
+    the caller can show that the funnel adds back up to the rows that went in.
     """
     d = df.copy()
     d["days_notice"] = (d["lost_slot"] - d["recorded_on"]).dt.days
-    keep = d["days_notice"].between(0, threshold_days)
+
+    no_slot = d["lost_slot"].isna()          # cancelled before any slot was booked
+    after = ~no_slot & (d["days_notice"] < 0)             # tidied up after the date passed
+    beyond = ~no_slot & (d["days_notice"] > threshold_days)   # enough notice to refill
+    keep = ~(no_slot | after | beyond)
+
+    wrong_direction = pd.Series(False, index=d.index)
     if directions is not None and "direction" in d.columns:
         # A blank direction is a cancellation, which has no direction and always counts.
-        keep &= d["direction"].isna() | d["direction"].isin(directions)
-    d = d[keep]
+        wrong_direction = keep & ~(d["direction"].isna() | d["direction"].isin(directions))
+        keep &= ~wrong_direction
 
+    d = d[keep]
     blank = pd.Series(np.nan, index=d.index, dtype=object)
-    return pd.DataFrame({
+    out = pd.DataFrame({
         "center":      (d["center"] if "center" in d.columns else blank).values,
         "order":       d["order"].values,
         "event_date":  d["lost_slot"].values,
@@ -141,6 +151,15 @@ def apply_rule(df, threshold_days=THRESHOLD_DAYS, directions=None):
         "direction":   (d["direction"] if "direction" in d.columns else blank).values,
         "reason":      (d["reason"] if "reason" in d.columns else blank).values,
     })
+    out.attrs["drops"] = {
+        "rows in":                     int(len(df)),
+        "no slot was ever booked":     int(no_slot.sum()),
+        "recorded after the date":     int(after.sum()),
+        f"more than {threshold_days} days notice": int(beyond.sum()),
+        "direction not counted":       int(wrong_direction.sum()),
+        "counted":                     int(len(out)),
+    }
+    return out
 
 
 # ------------------------------------------------------- source 1: LTD exports (preferred)
