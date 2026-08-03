@@ -26,12 +26,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
 THRESHOLD_DAYS = 7
 
-# Shared rule, imported so this script can prove it agrees with the pipeline.
+# Shared rule, imported so this script can prove it agrees with the pipeline. Compared
+# against the history walk specifically, since that is what this script does; the pipeline
+# itself prefers the LTD exports when they are present.
 try:
     sys.path.insert(0, os.path.join(HERE, "pipeline"))
-    from cancellations import cancellation_events as _shared_events
+    from cancellations import apply_rule as _shared_rule
+    from cancellations import hist_events as _shared_hist
 except Exception:
-    _shared_events = None
+    _shared_rule = _shared_hist = None
 
 # Accept any of the spellings these columns appear under.
 ALIASES = {
@@ -127,9 +130,11 @@ def main():
     fwd = moved[moved.days_notice >= 0]
     late = fwd[fwd.days_notice <= THRESHOLD_DAYS]
 
-    # The pipeline and this script must return the same count.
-    if _shared_events is not None:
-        _n = len(_shared_events(df))
+    # The pipeline and this script must return the same count. directions=None compares the
+    # threshold alone, so narrowing COUNT_DIRECTIONS does not read as a rule mismatch.
+    if _shared_hist is not None:
+        _frame, _ = _shared_hist(DATA)
+        _n = len(_shared_rule(_frame, THRESHOLD_DAYS, directions=None))
         print(f"\n[shared-rule check] pipeline/cancellations.py returns {_n} events; "
               f"this script returns {len(late)} -> "
               + ("match" if _n == len(late) else "MISMATCH, investigate before trusting either"))
