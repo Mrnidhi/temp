@@ -1,9 +1,8 @@
 """
 Golden baseline and regression diff.
 
-Nothing else in this plan is safe without it. Today one centre has been validated by hand
-and there is no way to tell whether a change moved a number somewhere else. This freezes
-every output, then reports exactly what a later change did.
+Freezes every output, then reports exactly which cells a later change moved. Without it,
+verifying one centre by hand says nothing about the other eighty.
 
     python baseline.py freeze     capture current outputs as the reference
     python baseline.py diff       compare current outputs against the reference
@@ -12,8 +11,8 @@ every output, then reports exactly what a later change did.
 Freeze BEFORE changing any calculation. Diff after every change. A diff of zero rows is the
 only evidence that a refactor was safe.
 
-Patient-level data stays out of the repository, so the reference is machine-local and
-stores aggregates and hashes only, never order-level rows.
+The reference stores aggregates and hashes only, never order-level rows, so patient-level
+data stays out of version control.
 """
 import hashlib
 import json
@@ -60,9 +59,9 @@ def freeze(asof):
     with open(os.path.join(REF, "baseline.json"), "w") as f:
         json.dump(meta, f, indent=2)
     print(f"\nreference written to {os.path.relpath(REF, HERE)}")
-    print("Diff against it after every change. Machine-local, never committed: a reference")
-    print("frozen on the test sample says nothing about the data, and a reference frozen")
-    print("on the data would put patient rows in the repo.")
+    print("Diff against it after every change. Keep it local, not in version control: a")
+    print("reference frozen on the test sample says nothing about the real data, and one")
+    print("frozen on the real data would put patient rows under version control.")
 
 
 def diff():

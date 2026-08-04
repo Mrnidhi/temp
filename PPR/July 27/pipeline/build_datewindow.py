@@ -318,8 +318,8 @@ if _empty:
           " workbook. Check the as-of date before showing anyone.")
 
 # ---- ASSERTION: this table must reproduce the precomputed scorecard ----
-# Two independent implementations of the same 13 metrics. If they drift, the dashboard and
-# the deck disagree and someone else finds it first. Compare every cell on every run.
+# Two independent implementations of the same 13 metrics. If they drift, the dashboard
+# reports a different number from the scorecard. Compare every cell on every run.
 sc = pd.read_csv(os.path.join(ANA, "ppr_scorecard_tidy.csv"))
 sc = sc[(sc.scope == "Center") & sc.col_label.isin([b[0] for b in BUCKETS])]
 

@@ -1,28 +1,27 @@
-r"""
+"""
 PPR pipeline - runs every stage in order.
 
-Put the Infinity exports in data\ next to this file, then:
+Put the source exports in data/ next to this file, then:
     python RUN_ALL.py
 
 Six files. Four build the order table, two carry metric 3:
     bai_list_of_orders, bai_tumor_documentation, bai_infusion, veeva_komodo_atc_mapping
     LTD_Reschedules, LTD_Cancellations
-data\README.md lists what each one feeds and what is optional.
+data/README.md lists what each one feeds and what is optional.
 
-Input resolution, first match wins: PPR_INPUT_DIR, then data\, then the local
-test sample. To read from elsewhere:
-    PowerShell:  $env:PPR_INPUT_DIR="C:\path\to\exports"
-    CMD:         set PPR_INPUT_DIR=C:\path\to\exports
+Input resolution, first match wins: the PPR_INPUT_DIR environment variable, then
+data/, then the local test sample.
 
 Stages:
     1. build_analysis_table.py  -> analysis/ppr_analysis.csv        (one row per order)
-    2. build_cancellations.py   -> analysis/ppr_cancellations.csv   (metric 3 from history)
+    2. build_cancellations.py   -> analysis/ppr_cancellations.csv   (metric 3 events)
     3. build_scorecard.py       -> analysis/ppr_scorecard_tidy.csv  (the 13 metrics)
-    4. build_datewindow.py      -> analysis/ppr_datewindow_long.csv (date-filter source)
-    5. build_hyper.py           -> tableau/*.hyper                  (Tableau extracts)
-    6. build_dashboard_html.py  -> dashboard/ppr_scorecard.html     (standalone browser view)
+    4. build_datewindow.py      -> analysis/ppr_datewindow_long.csv (event-level table)
+    5. build_final_table.py     -> output/ppr_events.csv            (the final table)
+    6. build_dashboard_html.py  -> dashboard/ppr_scorecard.html     (optional preview)
 
-Refresh the Tableau extracts after a run. First-time workbook build: README.md section 4.
+output/ppr_events.csv is the final table. Its column order matches the reporting
+table definition exactly.
 """
 import os
 import subprocess
@@ -31,13 +30,15 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 PIPE = os.path.join(HERE, "pipeline")
 
+# (script, what it does, required). An optional stage that is absent is skipped; a
+# required stage that is absent stops the run.
 STEPS = [
-    ("build_analysis_table.py", "joining the 7 Infinity files into one order-grain table"),
-    ("build_cancellations.py",  "counting metric 3 short-notice lost slots"),
-    ("build_scorecard.py",      "computing the 13 scorecard metrics"),
-    ("build_datewindow.py",     "building the event-level date-window source"),
-    ("build_hyper.py",          "writing the Tableau .hyper extracts"),
-    ("build_dashboard_html.py", "rendering the standalone HTML scorecard"),
+    ("build_analysis_table.py", "building one order-grain table from the source files", True),
+    ("build_cancellations.py",  "counting metric 3 short-notice lost slots", True),
+    ("build_scorecard.py",      "computing the 13 scorecard metrics", True),
+    ("build_datewindow.py",     "building the event-level table", True),
+    ("build_final_table.py",    "writing the final table as csv", True),
+    ("build_dashboard_html.py", "rendering the standalone HTML preview", False),
 ]
 
 # Regression check after a change: python pipeline/baseline.py diff
@@ -90,9 +91,12 @@ def main() -> int:
     # Pass the resolved folder down so no stage can pick a different one.
     env = {**os.environ, "PPR_INPUT_DIR": src}
 
-    for i, (script, what) in enumerate(STEPS, 1):
+    for i, (script, what, required) in enumerate(STEPS, 1):
         path = os.path.join(PIPE, script)
         if not os.path.exists(path):
+            if not required:
+                print(f"\n[{i}/{len(STEPS)}] {script} not present, skipping.", flush=True)
+                continue
             print(f"\n[{i}/{len(STEPS)}] MISSING {script} - stopping.", flush=True)
             return 1
         print(f"\n[{i}/{len(STEPS)}] {script}: {what}", flush=True)
@@ -107,11 +111,13 @@ def main() -> int:
     print("  analysis/ppr_analysis.csv", flush=True)
     print("  analysis/ppr_scorecard_tidy.csv", flush=True)
     print("  analysis/ppr_datewindow_long.csv", flush=True)
-    print("  tableau/ppr_scorecard.hyper", flush=True)
-    print("  tableau/ppr_analysis.hyper", flush=True)
-    print("  tableau/ppr_datewindow.hyper", flush=True)
-    print("  dashboard/ppr_scorecard.html       (standalone, open in any browser)", flush=True)
-    print("\nNext: Tableau Desktop. First time: README.md section 4. After: just refresh extracts.", flush=True)
+    print("  output/ppr_events.csv              <- the final table", flush=True)
+    print("  output/ppr_scorecard.csv           (reference, not read by the dashboard)", flush=True)
+    print("  output/ppr_analysis.csv            (reference, not read by the dashboard)", flush=True)
+    if os.path.exists(os.path.join(HERE, "dashboard", "ppr_scorecard.html")):
+        print("  dashboard/ppr_scorecard.html       (optional preview, open in a browser)",
+              flush=True)
+    print("\nNext: load output/ppr_events.csv into the reporting table. Tableau reads that.", flush=True)
     print("=" * 62, flush=True)
     return 0
 

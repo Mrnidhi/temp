@@ -1,13 +1,13 @@
 """
 PPR pipeline - Stage 1: build the analysis table.
 
-Reads the 7 Infinity files, joins them to ONE order-grain analysis table, cleans
-the known DQ issues, and derives every field the scorecard needs (stage flags,
+Reads the source exports, combines them into ONE order-grain analysis table, cleans the
+known data quality issues, and derives every field the scorecard needs (stage flags,
 timeline day-diffs, ATC tier, time buckets).
 
-Point INPUT_DIR at the current Infinity exports and rerun.
+Point INPUT_DIR at the current exports and rerun.
 
-Out: analysis/ppr_analysis.csv  (one row per order, 2,250 rows on the test sample)
+Out: analysis/ppr_analysis.csv  (one row per order)
 """
 import json
 import os

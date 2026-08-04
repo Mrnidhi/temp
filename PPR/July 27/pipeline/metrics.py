@@ -1,12 +1,11 @@
 """
 The 13 P&PR metrics. Single definition, imported by every stage.
 
-Wording is the (Proposed) P&PR Metrics.xlsx template verbatim. These strings are shown to
-centres, so they are not ours to reword.
+Wording follows the P&PR metrics template verbatim. These strings are shown to treatment
+centres, so they are not reworded here.
 
-This file exists because the names were previously declared in two stages and drifted:
-the scorecard said "Median Time From ..." while the event table still said "Average
-Time From ...", which in Tableau is two different rows for the same metric.
+Declared once and imported everywhere. Declaring them per stage let the wording drift,
+which in a reporting tool renders as two different rows for the same metric.
 """
 
 M1 = "Enrollments in IovanceCares"
@@ -49,8 +48,9 @@ NAME = {order: name for order, _, name, _ in METRICS}
 GROUP = {order: group for order, group, _, _ in METRICS}
 
 # A metric belongs to the period its own event happened in, not the period the patient
-# enrolled in, matching the deck footnote "Timing metrics based upon the TTP or Infusion
-# Date". So the 2025 column of Infusions Performed means infusions that happened in 2025.
+# enrolled in, matching the template footnote "Timing metrics based upon the TTP or
+# Infusion Date". So the 2025 column of Infusions Performed means infusions that
+# happened in 2025.
 EVENT_DATE = {
     M1:  "enrollment_date",   M2:  "enrollment_date",   M3:  "tumor_pickup_date",
     M4:  "tumor_pickup_date", M5:  "tumor_pickup_date", M6:  "tumor_pickup_date",
