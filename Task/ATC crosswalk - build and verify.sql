@@ -299,8 +299,8 @@ FROM cleaned;
    restating the rule, so the worklist can never disagree with the choice.
 
    Tiers, strongest first:
-       1  NPI and zip both agree          the NPI backed up by a location
-       2  zip and the whole address agree the clean case
+       1  zip and the whole address agree the clean case
+       2  NPI, zip and street number      the NPI backed up by the building
        3  zip, house number and street    survives a missing suffix
        4  city, house number and street   survives a wrong zip
        5  house number and a close address survives a typo, needs an eye
@@ -321,12 +321,15 @@ paired AS (
         f.ADDR_NORM     AS FAC_ADDR_NORM,
         f.CITY          AS FAC_CITY,
         f.ZIP5          AS FAC_ZIP5,
+        a.HOUSE_NUM     AS ATC_HOUSE_NUM,
+        f.HOUSE_NUM     AS FAC_HOUSE_NUM,
         JAROWINKLER_SIMILARITY(a.ADDR_NORM,   f.ADDR_NORM)   AS ADDR_SIM,
         JAROWINKLER_SIMILARITY(a.ENTITY_NAME, f.ENTITY_NAME) AS NAME_SIM,
         CASE
+            WHEN a.ZIP5 = f.ZIP5 AND a.ADDR_NORM = f.ADDR_NORM    THEN 1
             WHEN a.NPI IS NOT NULL AND a.NPI = f.NPI
-                 AND a.ZIP5 = f.ZIP5                              THEN 1
-            WHEN a.ZIP5 = f.ZIP5 AND a.ADDR_NORM = f.ADDR_NORM    THEN 2
+                 AND a.ZIP5      = f.ZIP5
+                 AND a.HOUSE_NUM = f.HOUSE_NUM                    THEN 2
             WHEN a.ZIP5 = f.ZIP5
                  AND a.HOUSE_NUM    = f.HOUSE_NUM
                  AND a.STREET_NODIR = f.STREET_NODIR              THEN 3
@@ -417,6 +420,8 @@ SELECT
     c.FAC_ADDR_NORM,
     c.FAC_CITY,
     c.FAC_ZIP5,
+    c.ATC_HOUSE_NUM,
+    c.FAC_HOUSE_NUM,
     c.ADDR_SIM,
     c.NAME_SIM,
     c.MATCH_TIER,
@@ -424,6 +429,8 @@ SELECT
     CASE
         WHEN c.FACILITY_ID IS NULL          THEN 'NO MATCH'
         WHEN c.MATCH_TIER = 6               THEN 'ADDRESS MISMATCH - do not paste'
+        WHEN c.ATC_HOUSE_NUM IS DISTINCT FROM c.FAC_HOUSE_NUM
+                                            THEN 'REVIEW - different street number'
         WHEN c.MATCH_TIER = 5               THEN 'REVIEW - address is close, not exact'
         WHEN h.HCO_ID IS NULL               THEN 'REVIEW - facility found, no HCO'
         WHEN c.FACILITY_TYPE <> 'HOSPITALS' THEN 'REVIEW - not a hospital type'
