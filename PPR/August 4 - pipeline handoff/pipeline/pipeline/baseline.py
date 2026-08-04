@@ -22,7 +22,7 @@ import sys
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ANA = os.path.join(HERE, "..", "analysis")
+ANA = os.path.join(HERE, "..", "work")
 REF = os.path.join(HERE, "..", "baseline")
 
 # Files worth guarding, and the columns that identify one cell of the output.

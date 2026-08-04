@@ -1,0 +1,7 @@
+{
+ "asof": "2026-06-16",
+ "asof_source": "max order_request__created_date",
+ "input_dir": "/Users/srinidhigowda/Desktop/Iova/PPR Automation/synthetic_data/out",
+ "synthetic": true,
+ "m3_source": "proxy"
+}

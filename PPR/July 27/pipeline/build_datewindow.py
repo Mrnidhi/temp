@@ -1,5 +1,5 @@
 """
-PPR pipeline - Stage 3: event-level long table for the dashboard date filter.
+PPR pipeline - Stage 4: event-level long table for the dashboard date filter.
 
 One row per metric event, stamped with the date the event happened on, so a
 Tableau range-of-dates filter recomputes every metric for any window.
@@ -11,15 +11,15 @@ Aggregation contract (column `agg`):
     rate - Patient Progression Rate; one row per mfg start, value 1 if the
            patient dropped after mfg start else 0, so AVG(value) = the rate
 
-In:  analysis/ppr_analysis.csv
-Out: analysis/ppr_datewindow_long.csv
+In:  work/ppr_analysis.csv
+Out: work/ppr_datewindow_long.csv
 """
 import json
 import os
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ANA = os.path.join(HERE, "..", "analysis")
+ANA = os.path.join(HERE, "..", "work")
 A = pd.read_csv(os.path.join(ANA, "ppr_analysis.csv"), low_memory=False)
 for c in ["enrollment_date", "tumor_pickup_date", "fp_delivery_date", "infusion_date"]:
     A[c] = pd.to_datetime(A[c], errors="coerce")
@@ -118,7 +118,7 @@ ev = pd.DataFrame(rows, columns=["center", "metric_group", "metric", "metric_ord
 # dragging the slider does not blank out the fixed year columns.
 import json as _json
 TODAY = _json.load(open(os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "analysis", "run_meta.json")))["asof"]
+    os.path.dirname(os.path.abspath(__file__)), "..", "work", "run_meta.json")))["asof"]
 BUCKETS = [
     ("Launch to Date", 1,  None,         None),
     ("2024",           2,  "2024-01-01", "2024-12-31"),
@@ -302,12 +302,12 @@ assert _b.groupby("center").col_label.nunique().eq(len(BENCH_ARMS)).all(), (
     "a centre is missing one of the benchmark arms")
 und = pd.DataFrame(undated, columns=["center", "metric", "order_id", "missing_date_field"])
 und.to_csv(os.path.join(ANA, "undated_events.csv"), index=False)
-print(f"undated events for review: {len(und):,} -> analysis/undated_events.csv "
+print(f"undated events for review: {len(und):,} -> work/undated_events.csv "
       "- orders with no usable event date")
 
 out.to_csv(os.path.join(ANA, "ppr_datewindow_long.csv"), index=False)
 print(f"datewindow events: {len(ev):,} events -> {len(out):,} column-tagged rows, "
-      f"{out.metric.nunique()} metrics -> analysis/ppr_datewindow_long.csv")
+      f"{out.metric.nunique()} metrics -> work/ppr_datewindow_long.csv")
 print("  columns:", ", ".join(out.sort_values("col_order").col_label.unique()))
 
 # A bucket with no events produces no rows, and a column with no rows does not render in

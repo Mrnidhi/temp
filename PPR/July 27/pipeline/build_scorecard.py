@@ -1,24 +1,27 @@
 """
-PPR pipeline - Stage 2: compute the P&PR scorecard (tidy long table).
+PPR pipeline - Stage 3: compute the P&PR scorecard.
 
-From analysis/ppr_analysis.csv, compute the 13 scorecard metrics for every center
-across the time cuts and quarters, plus the national ATC-tier benchmarks. Output is
-tidy (one row per center x column x metric) so Tableau just renders it.
+From work/ppr_analysis.csv, compute the 13 scorecard metrics for every center across the
+time cuts and quarters, plus the national ATC-tier benchmarks. One row per center x
+column x metric.
 
-Out: analysis/ppr_scorecard_tidy.csv   (the Tableau data source)
+Stage 4 rebuilds the same 13 metrics a different way and reconciles against this file
+cell by cell, so this is the reference half of that check.
+
+Out: work/ppr_scorecard_tidy.csv
 """
 import os
 import numpy as np
 import pandas as pd
 
 HERE = os.path.dirname(__file__)
-OUT_DIR = os.path.join(HERE, "..", "analysis")
+OUT_DIR = os.path.join(HERE, "..", "work")
 A = pd.read_csv(os.path.join(OUT_DIR, "ppr_analysis.csv"), low_memory=False)
 # As-of date comes from stage 1, one definition for every stage. run_meta.json also
 # says whether this run is on the test sample, so the dashboard can label itself.
-_META_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "analysis", "run_meta.json")
+_META_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "work", "run_meta.json")
 if not os.path.exists(_META_PATH):
-    raise SystemExit("analysis/run_meta.json missing. Run build_analysis_table.py (stage 1) first.")
+    raise SystemExit("work/run_meta.json missing. Run build_analysis_table.py (stage 1) first.")
 import json as _json
 RUN_META = _json.load(open(_META_PATH))
 TODAY = RUN_META["asof"]
@@ -33,7 +36,7 @@ if len(CANC):
     CANC["event_date"] = pd.to_datetime(CANC["event_date"], errors="coerce")
 elif M3_EVENTS:
     print(f"WARNING: run_meta.json says m3_source={M3_SOURCE!r} but "
-          "analysis/ppr_cancellations.csv has no rows. Metric 3 will read 0 everywhere; "
+          "work/ppr_cancellations.csv has no rows. Metric 3 will read 0 everywhere; "
           "check the stage 2 output before trusting it.")
 
 from metrics import (METRICS, EVENT_DATE, NON_ADDITIVE,
@@ -251,11 +254,13 @@ def fmt(r):
 tidy["value_display"] = tidy.apply(fmt, axis=1)
 
 tidy.to_csv(os.path.join(OUT_DIR, "ppr_scorecard_tidy.csv"), index=False)
-print(f"tidy scorecard: {len(tidy)} rows -> analysis/ppr_scorecard_tidy.csv")
+print(f"tidy scorecard: {len(tidy)} rows -> work/ppr_scorecard_tidy.csv")
 
-# ---- dashboard payload (single source, no ad-hoc inline step) ----
+# ---- optional preview payload ----
+# Only written when the HTML preview stage is present. The pipeline's output is the final
+# table; the preview is a convenience, and without it this block writes nothing.
 import json
-DASH = os.path.join(HERE, "..", "dashboard")   # payload written only if this exists
+PREVIEW = os.path.exists(os.path.join(HERE, "build_dashboard_html.py"))
 metrics = [{"metric_order": m[0], "metric_group": m[1], "metric": m[2], "value_type": m[3]} for m in METRICS]
 time_cols = [c for _, c, o, _, _ in sorted(TIME_COLS + QUARTER_COLS, key=lambda x: x[2])]
 bench_cols = [c for _, c, o, _ in sorted(BENCH_COLS, key=lambda x: x[2])]
@@ -283,15 +288,17 @@ for c in ["completed_ttp", "scheduled_ttp", "ttp_cancel_le7", "oos_product", "mf
     raw[c] = raw[c].astype(bool).astype(int)
 raw = raw.where(pd.notna(raw), None)
 
-DASH = os.path.join(HERE, "..", "dashboard")
-payload = {"metrics": metrics, "time_cols": time_cols, "bench_cols": bench_cols,
-           "event_date": EVENT_DATE,
-           "centers": sorted(tidy[tidy.scope == "Center"].center.unique().tolist()),
-           "cv": cv, "bv": bv, "asof": TODAY, "synthetic": RUN_META["synthetic"],
-           "raw": raw.to_dict(orient="records")}
-os.makedirs(DASH, exist_ok=True)     # build_dashboard_html.py is a RUN_ALL step, so always write
-json.dump(payload, open(os.path.join(DASH, "scorecard_payload.json"), "w"))
-print(f"dashboard payload -> dashboard/scorecard_payload.json ({len(payload['centers'])} centers)")
+if PREVIEW:
+    DASH = os.path.join(HERE, "..", "dashboard")
+    payload = {"metrics": metrics, "time_cols": time_cols, "bench_cols": bench_cols,
+               "event_date": EVENT_DATE,
+               "centers": sorted(tidy[tidy.scope == "Center"].center.unique().tolist()),
+               "cv": cv, "bv": bv, "asof": TODAY, "synthetic": RUN_META["synthetic"],
+               "raw": raw.to_dict(orient="records")}
+    os.makedirs(DASH, exist_ok=True)
+    json.dump(payload, open(os.path.join(DASH, "scorecard_payload.json"), "w"))
+    print(f"preview payload -> dashboard/scorecard_payload.json "
+          f"({len(payload['centers'])} centers)")
 
 # ---- wide sample for one center + benchmarks, human eyeball ----
 top_center = A.groupby("atc")["order_request__til_order_name"].nunique().idxmax()

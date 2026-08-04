@@ -10,8 +10,8 @@ used. Neither LTD export carries a centre, so there the order id is the join key
 m3_source in run_meta.json so later stages know which source produced the figure. With no
 source at all it writes an empty table and records the proxy, so the run still completes.
 
-In:  the input folder (LTD exports, or a *hist* export), analysis/ppr_analysis.csv
-Out: analysis/ppr_cancellations.csv, run_meta.json m3_source
+In:  the input folder (LTD exports, or a *hist* export), work/ppr_analysis.csv
+Out: work/ppr_cancellations.csv, run_meta.json m3_source
 """
 import json
 import os
@@ -22,7 +22,7 @@ from cancellations import (COUNT_DIRECTIONS, COUNT_GRAIN, THRESHOLD_DAYS,
                            cancellation_events, norm_center)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT_DIR = os.path.join(HERE, "..", "analysis")
+OUT_DIR = os.path.join(HERE, "..", "work")
 
 # Same input resolution as stage 1; RUN_ALL passes the resolved folder in PPR_INPUT_DIR.
 _CANDIDATES = [os.environ.get("PPR_INPUT_DIR"),
@@ -96,7 +96,7 @@ else:
     counted = len(ev) if COUNT_GRAIN == "events" else ev["order"].nunique()
     print(f"metric 3: {counted} short-notice lost slot(s) counted as {COUNT_GRAIN} "
           f"({len(ev)} events across {ev['order'].nunique()} orders) "
-          f"from {', '.join(files)} -> analysis/ppr_cancellations.csv")
+          f"from {', '.join(files)} -> work/ppr_cancellations.csv")
     print(f"  kind: {ev['kind'].value_counts().to_dict()}   "
           f"directions counted: {sorted(COUNT_DIRECTIONS)}")
     if ev["direction"].notna().any():

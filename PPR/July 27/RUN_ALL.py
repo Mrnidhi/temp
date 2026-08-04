@@ -13,15 +13,15 @@ Input resolution, first match wins: the PPR_INPUT_DIR environment variable, then
 data/, then the local test sample.
 
 Stages:
-    1. build_analysis_table.py  -> analysis/ppr_analysis.csv        (one row per order)
-    2. build_cancellations.py   -> analysis/ppr_cancellations.csv   (metric 3 events)
-    3. build_scorecard.py       -> analysis/ppr_scorecard_tidy.csv  (the 13 metrics)
-    4. build_datewindow.py      -> analysis/ppr_datewindow_long.csv (event-level table)
-    5. build_final_table.py     -> output/ppr_events.csv            (the final table)
-    6. build_dashboard_html.py  -> dashboard/ppr_scorecard.html     (optional preview)
+    1. build_analysis_table.py  -> work/ppr_analysis.csv        (one row per order)
+    2. build_cancellations.py   -> work/ppr_cancellations.csv   (metric 3 events)
+    3. build_scorecard.py       -> work/ppr_scorecard_tidy.csv  (the 13 metrics)
+    4. build_datewindow.py      -> work/ppr_datewindow_long.csv (event-level table)
+    5. build_final_table.py     -> ppr_events.csv               (the output)
+    6. build_dashboard_html.py  -> dashboard/ppr_scorecard.html (optional preview)
 
-output/ppr_events.csv is the final table. Its column order matches the reporting
-table definition exactly.
+ppr_events.csv is the only output. Its column order matches the reporting table
+definition exactly. Everything in work/ is intermediate and can be deleted after a run.
 """
 import os
 import subprocess
@@ -107,17 +107,12 @@ def main() -> int:
             return r.returncode
 
     print("\n" + "=" * 62, flush=True)
-    print("Done. Outputs:", flush=True)
-    print("  analysis/ppr_analysis.csv", flush=True)
-    print("  analysis/ppr_scorecard_tidy.csv", flush=True)
-    print("  analysis/ppr_datewindow_long.csv", flush=True)
-    print("  output/ppr_events.csv              <- the final table", flush=True)
-    print("  output/ppr_scorecard.csv           (reference, not read by the dashboard)", flush=True)
-    print("  output/ppr_analysis.csv            (reference, not read by the dashboard)", flush=True)
+    print("Done.", flush=True)
+    print("  ppr_events.csv     <- the output. Tableau reads this and nothing else.",
+          flush=True)
+    print("  work/              intermediates, safe to delete", flush=True)
     if os.path.exists(os.path.join(HERE, "dashboard", "ppr_scorecard.html")):
-        print("  dashboard/ppr_scorecard.html       (optional preview, open in a browser)",
-              flush=True)
-    print("\nNext: load output/ppr_events.csv into the reporting table. Tableau reads that.", flush=True)
+        print("  dashboard/         optional preview, open in a browser", flush=True)
     print("=" * 62, flush=True)
     return 0
 

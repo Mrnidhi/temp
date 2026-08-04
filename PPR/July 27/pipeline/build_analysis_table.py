@@ -7,7 +7,7 @@ timeline day-diffs, ATC tier, time buckets).
 
 Point INPUT_DIR at the current exports and rerun.
 
-Out: analysis/ppr_analysis.csv  (one row per order)
+Out: work/ppr_analysis.csv  (one row per order)
 """
 import json
 import os
@@ -28,7 +28,7 @@ _CANDIDATES = [os.environ.get("PPR_INPUT_DIR"),
 INPUT_DIR = next(p for p in _CANDIDATES
                  if p and os.path.isdir(p) and any(f.endswith(".xlsx") for f in os.listdir(p)))
 print("input:", os.path.abspath(INPUT_DIR))
-OUT_DIR = os.path.join(HERE, "..", "analysis")
+OUT_DIR = os.path.join(HERE, "..", "work")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 HEADER_ROW = 2  # the Infinity exports carry a title banner; true header is row index 2
@@ -36,7 +36,7 @@ HEADER_ROW = 2  # the Infinity exports carry a title banner; true header is row 
 # As-of date. Never read the clock: same inputs must give the same outputs on any day.
 # PPR_ASOF (YYYY-MM-DD) wins when set; otherwise the newest order-creation date in the
 # extract stands in for the export date, since orders are created daily across 85
-# centers. Recorded in analysis/run_meta.json and shown on every output.
+# centers. Recorded in work/run_meta.json and shown on every output.
 _ASOF_ENV = os.environ.get("PPR_ASOF")
 
 # Cancellation reasons, categorised once. Metrics reference the categories, never raw
@@ -279,7 +279,7 @@ def tier(ck):
 o["atc_tier"] = o["center_key"].map(tier)
 
 o.to_csv(os.path.join(OUT_DIR, "ppr_analysis.csv"), index=False)
-print(f"analysis table: {len(o)} rows x {o.shape[1]} cols -> analysis/ppr_analysis.csv")
+print(f"analysis table: {len(o)} rows x {o.shape[1]} cols -> work/ppr_analysis.csv")
 print("centers:", o['center_key'].nunique(), "| matched to veeva:", o['center_matched'].mean().round(3))
 print("tiers:", o['atc_tier'].value_counts().to_dict())
 print("funnel: slot", int(o['has_slot'].sum()), "tumor", int(o['has_tumor'].sum()),
