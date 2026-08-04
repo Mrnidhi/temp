@@ -441,12 +441,13 @@ FROM n7;
    runner-up list in B3 can never drift from the pick in Step 4.
 
    Tiers, strongest first. A lower number is a better match:
-       1  NPI equal                     only where the ATC has a real NPI
+       1  NPI + zip agree               the NPI corroborated by a location
        2  zip + full normalised address the clean case
        3  zip + number + street         survives a suffix or directional gap
        4  city + number + street        survives a wrong zip
        5  state + number + close address survives a typo, needs an eye on it
-       6  state + close name only       suggestion, never trusted
+       6  NPI agrees, ADDRESS DOES NOT  review only, never pasted
+       7  close name only               suggestion, never trusted
 
    State is the only hard gate. Everything softer is a tier, not a filter, so a
    weak match is visible rather than absent.
@@ -517,9 +518,9 @@ WHERE MATCH_TIER IS NOT NULL;
    final tiebreak. Two runs on the same inputs return the same IDs, which is the
    only reason the sheet can be trusted after a rerun.
 
-   Tier 6 is never treated as found. It is carried through so B2 can show a
-   likely answer beside an ATC that would otherwise come back empty, and B1
-   blanks the ID so it cannot be pasted by accident.
+   Tiers 6 and 7 are never treated as found. They are carried through so B2 can
+   show a likely answer beside an ATC that would otherwise come back empty, and
+   B1 blanks the ID so neither can be pasted by accident.
    --------------------------------------------------------------------------- */
 
 CREATE OR REPLACE TRANSIENT TABLE COMPILE_DEV.PUBLIC.ATC_XWALK_MATCHED AS
