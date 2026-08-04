@@ -30,6 +30,7 @@
        T6  why UF Health found nothing
        T7  the non-hospital matches, in full
        T8  rows where the NPI and the address disagree with each other
+       T9  our answers against the ones the owner already filled in
    ============================================================================ */
 
 
@@ -71,76 +72,85 @@ SET min_addr_similarity = 92;
    --------------------------------------------------------------------------- */
 
 CREATE OR REPLACE TRANSIENT TABLE COMPILE_DEV.PUBLIC.ATC_XWALK_INPUT AS
-WITH raw AS (
+WITH src AS (
+    /* ####################################################################
+       COLUMN MAP for COMPILE_DEV.PUBLIC.ATC_CHECK_EXCERSISE, the Active ATC
+       List tab uploaded 2026-08-04. Snowflake could not infer names because
+       the sheet has TWO header rows, the merged section banners and then the
+       real names, so every field came in as c1 to c18. Read off the load
+       preview. The uploader created them as QUOTED LOWERCASE, so every
+       reference below needs double quotes: "c1", not c1.
 
-    /* ---- OPTION A: sheet uploaded to Snowflake. Preferred. -----------------
-       Upload the Active ATC List tab as COMPILE_DEV.PUBLIC.ATC_ADDRESS_INPUT_2026
-       with the header row intact, then swap the comment markers so this block is
-       live and OPTION B is commented out. Column contract:
-           "Sheet Row", "Name", "NPI", "Status", "Address", "City", "State", "Zip"
-       where Address to Zip are the ORANGE columns J to M. Add "Sheet Row" as a
-       helper column in Excel first (=ROW()); deriving it from a sort order here
-       would silently reorder the paste-back.
+       preview:
 
+         c1  Name            c6  Address navy    c10 Address ORANGE
+         c2  NPI             c7  City    navy    c11 City    ORANGE
+         c3  Parent name     c8  State   navy    c12 State   ORANGE
+         c4  Status          c9  Zip     navy    c13 Zip     ORANGE
+         c5  Auth date
+         c14 D_FACILITY_COMPILE_ID   c15 FACILITY_NAME   c16 FACILITY_TYPE
+         c17 D_HCO_COMPILE_ID        c18 HCO_NAME
+
+       c10 to c13 is the ORANGE block, the addresses the business owner
+       verified against IovanceCares, and it is what we match on. c14 to c18
+       are the answers he has already filled in by hand; they are carried
+       through untouched and used by T9 to check our work against his.
+       #################################################################### */
     SELECT
-        "Sheet Row"::INT AS SHEET_ROW,
-        "Name"           AS ATC_NAME,
-        "NPI"            AS ATC_NPI,
-        "Status"         AS ATC_STATUS,
-        "Address"        AS RAW_ADDRESS,
-        "City"           AS RAW_CITY,
-        "State"          AS RAW_STATE,
-        "Zip"            AS RAW_ZIP
-    FROM COMPILE_DEV.PUBLIC.ATC_ADDRESS_INPUT_2026
-    ------------------------------------------------------------------------ */
-
-    /* ---- OPTION B: inline seed. Rows 3 to 24, read off the screenshots. Add
-       rows 25 onward straight from the sheet, same column order, one line each.
-       SHEET_ROW must stay equal to the real Excel row number. --------------- */
-    SELECT * FROM VALUES
-        ( 3, 'O Neal Comprehensive Cancer Center At UAB',   '0',          'Authorized', '1802 6th St.',         'Birmingham',    'AL', '35205'),
-        ( 4, 'Banner Gateway Medical Center',               '1699884858', 'Authorized', '1900 N Higley Rd',     'Gilbert',       'AZ', '85234'),
-        ( 5, 'Mayo Clinic Hospital-Phoenix Arizona',        '1154392231', 'Authorized', '5777 E Mayo Blvd',     'Phoenix',       'AZ', '85054'),
-        ( 6, 'Honorhealth Scottsdale Shea Medical Center',  '1386608859', 'Authorized', '9003 E Shea Blvd',     'Scottsdale',    'AZ', '85260'),
-        ( 7, 'HOAG Memorial Hospital Presbyterian',         '1518951300', 'Authorized', '1 Hoag Dr',            'Newport Beach', 'CA', '92663'),
-        ( 8, 'Kaiser Permanente Vallejo Medical Center',    '1336222397', 'Authorized', '975 Sereno Dr',        'Vallejo',       'CA', '94589'),
-        ( 9, 'UCSF Medical Center',                         '1447396684', 'Authorized', '505 Parnassus Ave',    'San Francisco', 'CA', '94143'),
-        (10, 'Cedars-Sinai Medical Center',                 '1083785489', 'Authorized', '8700 Beverly Blvd',    'Los Angeles',   'CA', '90048'),
-        (11, 'USC Norris Comprehensive Cancer Center',      '1013514199', 'Authorized', '1500 San Pablo St',    'Los Angeles',   'CA', '90033'),
-        (12, 'UC San Diego Medical Center',                 '1659864247', 'Authorized', '200 W Arbor Dr',       'San Diego',     'CA', '92103'),
-        (13, 'City Of Hope Duarte Cancer Center',           '1851416374', 'Authorized', '1500 E Duarte Rd',     'Duarte',        'CA', '91010'),
-        (14, 'UCLA - Santa Monica',                         '1427055839', 'ON HOLD',    '1250 16th St',         'Santa Monica',  'CA', '90404'),
-        (15, 'Ronald Reagan UCLA Medical Center',           '1902803315', 'Authorized', '757 Westwood Plz',     'Los Angeles',   'CA', '90095'),
-        (16, 'Stanford Hospital',                           '1871543215', 'Authorized', '300 Pasteur Dr',       'Palo Alto',     'CA', '94304'),
-        (17, 'The Colorado Blood Cancer Institute',         '0',          'Authorized', '1721 E 19th Ave',      'Denver',        'CO', '80218'),
-        (18, 'UC Health University Of Colorado Hospital',   '1982944054', 'Authorized', '12605 E 16th Ave',     'Aurora',        'CO', '80045'),
-        (19, 'Yale-New Haven Hospital',                     '1477178127', 'Authorized', '20 York St',           'New Haven',     'CT', '6510'),
-        (20, 'Medstar Georgetown University Hospital',      '1427145176', 'Authorized', '3800 Reservoir Rd NW', 'Washington',    'DC', '20007'),
-        (21, 'Adventhealth Cancer Institute',               '0',          'Authorized', '2501 N Orange Ave',    'Orlando',       'FL', '32804'),
-        (22, 'University Of Miami-Sylvester Comprehensive', '1679660617', 'Authorized', '1475 NW 12th Ave',     'Miami',         'FL', '33136'),
-        (23, 'Mayo Clinic Jacksonville FL',                 '1174143986', 'Authorized', '4500 San Pablo Rd S',  'Jacksonville',  'FL', '32224'),
-        (24, 'UF Health Cancer Center',                     '0',          'ON HOLD',    '2033 Mowry Rd',        'Gainesville',   'FL', '32610')
-        -- <<< PASTE ROWS 25 ONWARD HERE >>>
-    AS t(SHEET_ROW, ATC_NAME, ATC_NPI, ATC_STATUS, RAW_ADDRESS, RAW_CITY, RAW_STATE, RAW_ZIP)
+        "c1"  AS NAME_RAW,
+        "c2"  AS NPI_RAW,
+        "c4"  AS STATUS_RAW,
+        "c10" AS ADDRESS_RAW,
+        "c11" AS CITY_RAW,
+        "c12" AS STATE_RAW,
+        "c13" AS ZIP_RAW,
+        "c6"  AS NAVY_ADDRESS,
+        "c7"  AS NAVY_CITY,
+        "c9"  AS NAVY_ZIP,
+        "c14" AS OWNER_FACILITY_ID,
+        "c15" AS OWNER_FACILITY_NAME,
+        "c17" AS OWNER_HCO_ID,
+        "c18" AS OWNER_HCO_NAME
+    FROM COMPILE_DEV.PUBLIC.ATC_CHECK_EXCERSISE
+),
+kept AS (
+    -- Drops the two header rows that loaded as data. A real ATC always has a
+    -- name and a two-letter state; the banner row has neither and the header
+    -- row carries the literal word State. T0B lists everything dropped by
+    -- name, so a genuine ATC missing its state cannot vanish quietly.
+    SELECT *
+    FROM src
+    WHERE NAME_RAW IS NOT NULL
+      AND UPPER(TRIM(NAME_RAW)) NOT IN ('NAME', 'CURRENT ATC SITE INFORMATION')
+      AND LENGTH(TRIM(COALESCE(STATE_RAW, ''))) = 2
 )
 SELECT
-    SHEET_ROW::INT                AS SHEET_ROW,
-    TRIM(ATC_NAME)                AS ATC_NAME,
-    UPPER(TRIM(ATC_NAME))         AS ATC_NAME_U,
-    -- NPI 0 and blank both mean "no NPI". Kept as a match key only where real,
-    -- because 0 appears on four of the first 22 rows and would join them to
-    -- each other. Same rule as the site of care pipeline.
-    CASE WHEN TRIM(COALESCE(ATC_NPI, '')) IN ('', '0', 'NPI') THEN NULL
-         ELSE TRIM(ATC_NPI) END   AS ATC_NPI,
-    UPPER(TRIM(ATC_STATUS))       AS ATC_STATUS,
-    TRIM(RAW_ADDRESS)             AS RAW_ADDRESS,
-    UPPER(TRIM(RAW_CITY))         AS ATC_CITY,
-    UPPER(TRIM(RAW_STATE))        AS ATC_STATE,
-    -- Strips ZIP+4 and restores any leading zero Excel dropped. Row 19 is the
-    -- live case: 6510 becomes 06510.
-    LPAD(LEFT(REGEXP_REPLACE(COALESCE(RAW_ZIP, ''), '[^0-9]', ''), 5), 5, '0') AS ATC_ZIP5,
+    -- NOT the Excel row number. The upload carried no row column and a
+    -- Snowflake table has no inherent order, so this is a stable key derived
+    -- from the name instead. Paste back with XLOOKUP on ATC_NAME, never by
+    -- position. T0C proves the names are unique, which is what makes that safe.
+    ROW_NUMBER() OVER (ORDER BY UPPER(TRIM(NAME_RAW))) AS SHEET_ROW,
+    TRIM(NAME_RAW)                AS ATC_NAME,
+    UPPER(TRIM(NAME_RAW))         AS ATC_NAME_U,
+    -- NPI 0 and blank both mean "no NPI". Kept as a match key only where real.
+    CASE WHEN TRIM(COALESCE(NPI_RAW, '')) IN ('', '0', 'NPI') THEN NULL
+         ELSE TRIM(NPI_RAW) END   AS ATC_NPI,
+    UPPER(TRIM(STATUS_RAW))       AS ATC_STATUS,
+    TRIM(ADDRESS_RAW)             AS RAW_ADDRESS,
+    UPPER(TRIM(CITY_RAW))         AS ATC_CITY,
+    UPPER(TRIM(STATE_RAW))        AS ATC_STATE,
+    -- Strips ZIP+4 and restores any leading zero Excel dropped, e.g. Yale 6510.
+    LPAD(LEFT(REGEXP_REPLACE(COALESCE(ZIP_RAW, ''), '[^0-9]', ''), 5), 5, '0') AS ATC_ZIP5,
+    -- The navy block, carried only so T2 can report where the two disagree.
+    TRIM(NAVY_ADDRESS)            AS NAVY_ADDRESS,
+    UPPER(TRIM(NAVY_CITY))        AS NAVY_CITY,
+    -- The owner's own answers, untouched, for T9.
+    TRIM(OWNER_FACILITY_ID)       AS OWNER_FACILITY_ID,
+    TRIM(OWNER_FACILITY_NAME)     AS OWNER_FACILITY_NAME,
+    TRIM(OWNER_HCO_ID)            AS OWNER_HCO_ID,
+    TRIM(OWNER_HCO_NAME)          AS OWNER_HCO_NAME,
     $as_of_date::DATE             AS AS_OF_DATE
-FROM raw;
+FROM kept;
 
 
 /* ---------------------------------------------------------------------------
@@ -510,6 +520,45 @@ ORDER BY TABLE_NAME;
 
 
 /* ---------------------------------------------------------------------------
+   T0B. Rows in, rows kept, rows dropped, and the name of everything dropped.
+        Expect exactly two drops, the merged banner row and the header row. A
+        third name appearing here is a real ATC that lost its state and it must
+        be fixed in the sheet, not ignored.
+   --------------------------------------------------------------------------- */
+SELECT
+    (SELECT COUNT(*) FROM COMPILE_DEV.PUBLIC.ATC_CHECK_EXCERSISE) AS ROWS_IN_FILE,
+    (SELECT COUNT(*) FROM COMPILE_DEV.PUBLIC.ATC_XWALK_INPUT)     AS ROWS_KEPT,
+    (SELECT COUNT(*) FROM COMPILE_DEV.PUBLIC.ATC_CHECK_EXCERSISE)
+      - (SELECT COUNT(*) FROM COMPILE_DEV.PUBLIC.ATC_XWALK_INPUT) AS ROWS_DROPPED;
+
+SELECT
+    "c1" AS DROPPED_NAME,
+    "c12" AS DROPPED_STATE,
+    CASE WHEN "c1" IS NULL                                        THEN 'no name'
+         WHEN UPPER(TRIM("c1")) IN ('NAME','CURRENT ATC SITE INFORMATION')
+                                                                THEN 'header row'
+         ELSE 'state not two characters'
+    END AS WHY_DROPPED
+FROM COMPILE_DEV.PUBLIC.ATC_CHECK_EXCERSISE
+WHERE "c1" IS NULL
+   OR UPPER(TRIM("c1")) IN ('NAME','CURRENT ATC SITE INFORMATION')
+   OR LENGTH(TRIM(COALESCE("c12",''))) <> 2;
+
+
+/* ---------------------------------------------------------------------------
+   T0C. ATC names must be unique. The upload carried no row number, so the
+        paste back into the workbook is an XLOOKUP on the name. If two ATCs
+        share a name the lookup silently takes the first and one centre gets
+        the other one's IDs. Must return zero rows.
+   --------------------------------------------------------------------------- */
+SELECT ATC_NAME, COUNT(*) AS TIMES
+FROM COMPILE_DEV.PUBLIC.ATC_XWALK_INPUT
+GROUP BY 1
+HAVING COUNT(*) > 1
+ORDER BY 2 DESC;
+
+
+/* ---------------------------------------------------------------------------
    T1. THE IMPORTANT ONE. Every ATC, the address the business owner supplied
        against the address on the facility that was picked.
 
@@ -701,3 +750,34 @@ SELECT
 FROM COMPILE_DEV.PUBLIC.ATC_XWALK_MATCHED m
 INNER JOIN by_npi n ON m.SHEET_ROW = n.SHEET_ROW
 ORDER BY n.NPI_ADDR_SIM, m.SHEET_ROW;
+
+
+/* ---------------------------------------------------------------------------
+   T9. Our answer against the owner's own answer, on every row he has already
+       filled in. This replaces the old hand-typed four-row check: the sheet
+       carried his Komodo columns up with it, so every answered row is now a
+       test case.
+
+       AGREE on all of them is the finish line. A DISAGREE means the rules are
+       wrong, not that the row is a hard case, so fix the rule.
+   --------------------------------------------------------------------------- */
+SELECT
+    i.SHEET_ROW,
+    LEFT(i.ATC_NAME, 30)          AS ATC_NAME,
+    i.OWNER_FACILITY_ID           AS OWNER_SAYS_FACILITY,
+    m.D_FACILITY_COMPILE_ID       AS WE_SAY_FACILITY,
+    i.OWNER_HCO_ID                AS OWNER_SAYS_HCO,
+    m.D_HCO_COMPILE_ID            AS WE_SAY_HCO,
+    m.ADDR_SIM,
+    m.MATCH_TIER,
+    CASE WHEN i.OWNER_FACILITY_ID = m.D_FACILITY_COMPILE_ID
+          AND i.OWNER_HCO_ID      = m.D_HCO_COMPILE_ID           THEN 'AGREE'
+         WHEN i.OWNER_HCO_ID      = m.D_HCO_COMPILE_ID           THEN 'HCO agrees, facility differs'
+         WHEN m.D_FACILITY_COMPILE_ID IS NULL                    THEN 'we found nothing'
+         ELSE 'DISAGREE - fix the rule, not the row'
+    END AS VERDICT
+FROM COMPILE_DEV.PUBLIC.ATC_XWALK_INPUT i
+LEFT JOIN COMPILE_DEV.PUBLIC.ATC_XWALK_MATCHED m ON i.SHEET_ROW = m.SHEET_ROW
+WHERE i.OWNER_FACILITY_ID IS NOT NULL
+   OR i.OWNER_HCO_ID IS NOT NULL
+ORDER BY VERDICT, i.SHEET_ROW;
