@@ -10,7 +10,11 @@
   "MaxCapacity": 1.0,
   "Timeout": 60,
   "MaxRetries": 0,
-  "Connections": { "Connections": ["REPLACE_WITH_REDSHIFT_GLUE_CONNECTION"] },
+  "Connections": {
+    "Connections": [
+      "REPLACE_WITH_REDSHIFT_GLUE_CONNECTION"
+    ]
+  },
   "DefaultArguments": {
     "--additional-python-modules": "pandas>=1.5,numpy>=1.23,redshift-connector",
     "--extra-py-files": "s3://REPLACE_BUCKET/ppr/code/ppr_glue_lib.zip",
@@ -18,6 +22,7 @@
     "--source_schema": "infinity",
     "--reporting_schema": "ppr",
     "--copy_role_arn": "REPLACE_WITH_REDSHIFT_COPY_ROLE_ARN",
-    "--output_prefix": "s3://REPLACE_BUCKET/ppr/output"
+    "--output_prefix": "s3://REPLACE_BUCKET/ppr/output",
+    "--with_order_master": "true"
   }
 }

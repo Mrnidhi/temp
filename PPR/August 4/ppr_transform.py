@@ -338,11 +338,23 @@ def build_scorecard(A, canc, meta):
     from metrics import (METRICS, EVENT_DATE, NON_ADDITIVE,
                          M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13)
 
+    # Parse each event date and cast each flag once, here, rather than inside every
+    # window of every metric of every centre. Both operations are elementwise, so
+    # doing them up front selects exactly the same rows later.
+    DATE_COLS = sorted(set(EVENT_DATE.values()))
+    for _c in DATE_COLS:
+        A[_c] = pd.to_datetime(A[_c], errors="coerce")
+    for _f in ("mfg_started", "drop_after_mfg", "dropout_post_ttp_health",
+               "completed_ttp", "scheduled_ttp", "oos_product", "amtagvi_infused"):
+        if _f in A.columns:
+            A[_f] = A[_f].fillna(False).astype(bool)
+    TODAY_TS = pd.Timestamp(TODAY)
+
     def _win(df, datecol, start, end):
         """Rows whose event date for this metric falls inside the window (None = no bound)."""
         if start is None and end is None:
             return df
-        d = pd.to_datetime(df[datecol], errors="coerce")
+        d = df[datecol]
         m = d.notna()
         if start is not None: m &= d >= pd.Timestamp(start)
         if end   is not None: m &= d <= pd.Timestamp(end)
@@ -363,14 +375,15 @@ def build_scorecard(A, canc, meta):
         date, so these also sit in Launch to Date and in no period column. Scheduled TTPs are
         future by definition and belong here; future-dated infusions do not and are flagged
         below."""
+        # The 13 metrics share 4 event date columns, so slice once per column and hand
+        # the same frame to every metric that dates on it.
         if undated:
-            w = {m: df[pd.to_datetime(df[col], errors="coerce").isna()]
-                 for m, col in EVENT_DATE.items()}
+            sel = {col: df[df[col].isna()] for col in DATE_COLS}
         elif future:
-            w = {m: df[pd.to_datetime(df[col], errors="coerce") > pd.Timestamp(TODAY)]
-                 for m, col in EVENT_DATE.items()}
+            sel = {col: df[df[col] > TODAY_TS] for col in DATE_COLS}
         else:
-            w = {m: _win(df, col, start, end) for m, col in EVENT_DATE.items()}
+            sel = {col: _win(df, col, start, end) for col in DATE_COLS}
+        w = {m: sel[col] for m, col in EVENT_DATE.items()}
         # The source scorecard reports medians for these, not averages.
         agg = (lambda s: s.mean()) if avg == "mean" else (lambda s: s.median())
 
@@ -465,15 +478,24 @@ def build_scorecard(A, canc, meta):
                              metric_order=order, value_type=vtype, value=v))
 
     # per-center: time + quarter columns
+    _canc_by_center = ({d: f for d, f in CANC.groupby("center_disp")} if len(CANC) else {})
+
     def _canc_for(disp):
         """The cancellation events for one centre, matched on the display name stage 1 carried."""
-        return CANC[CANC["center_disp"] == disp] if len(CANC) else CANC
+        return _canc_by_center.get(disp, CANC.iloc[0:0]) if len(CANC) else CANC
+
+    # Launch to Date per centre is also what the tier benchmarks are the median of, so
+    # keep each one as it is computed instead of computing every centre a second time.
+    ltd_by_center = {}
 
     for center, g in A.groupby("center_key"):
         disp = g["atc"].iloc[0]
         gc = _canc_for(disp)
         for cg, label, order, st, en in CENTER_COLS:
-            emit("Center", disp, cg, label, order, compute(g, st, en, canc=gc))
+            vals = compute(g, st, en, canc=gc)
+            if st is None and en is None:
+                ltd_by_center[center] = vals
+            emit("Center", disp, cg, label, order, vals)
         emit("Center", disp, UNDATED_COL[0], UNDATED_COL[1], UNDATED_COL[2],
              compute(g, undated=True, canc=gc))
         emit("Center", disp, FUTURE_COL[0], FUTURE_COL[1], FUTURE_COL[2],
@@ -482,8 +504,9 @@ def build_scorecard(A, canc, meta):
     # Tier benchmark = per-center MEDIAN within the tier, launch-to-date. Median rather than sum
     # or average, so a handful of very large centers do not carry the comparison.
     def bench_median(tiername):
-        per_center = [compute(g, canc=_canc_for(g["atc"].iloc[0]))
-                      for _, g in A[A.atc_tier == tiername].groupby("center_key")]
+        per_center = [ltd_by_center[k]
+                      for k in sorted(A.loc[A.atc_tier == tiername, "center_key"].unique())
+                      if k in ltd_by_center]
         out = {}
         for mname in mreg:
             vals = [pc[mname] for pc in per_center
@@ -889,23 +912,27 @@ def build_events(A, canc, tidy, meta):
              if len(bad) else ""))
     return out, und
 
-def _csv_round_trip(df):
-    # The reference stages hand these frames to each other as csv files, which
-    # quantizes floats to their printed form. Reproducing that boundary keeps
-    # the ported output byte for byte identical to the reference pipeline.
-    return pd.read_csv(io.StringIO(df.to_csv(index=False)), low_memory=False)
+def _quantize_values(df):
+    # The scorecard reaches the event stage as a csv in the reference, which rounds
+    # each float to its printed form. The benchmark medians carried into the event
+    # table are sensitive to that in the last digit, so reproduce it on the one
+    # column it affects rather than serialising the whole frame.
+    out = df.copy()
+    out["value"] = pd.to_numeric(
+        out["value"].map(lambda v: "" if pd.isna(v) else str(v)), errors="coerce")
+    return out
 
 
 def run(frames, asof_override=None):
     """frames: dict of lowercase-named DataFrames straight from Redshift.
-    Returns (events, tidy, order_master, canc, undated, meta). The returned
-    frames are the stage outputs as written; the round trip below only feeds
-    the NEXT stage, exactly like the csv files did in the reference."""
+    Returns (events, tidy, order_master, canc, undated, meta).
+
+    Deterministic: the as-of date comes from the data, nothing reads the clock,
+    and no stage mutates its inputs, so the same source rows always give the
+    same tables and a rerun is safe."""
     A, meta = build_order_master(frames, asof_override)
-    A_rt = _csv_round_trip(A)
-    canc, m3_meta = build_m3_events(frames, A_rt)
-    canc_rt = _csv_round_trip(canc)
+    canc, m3_meta = build_m3_events(frames, A)
     meta.update(m3_meta)
-    tidy = build_scorecard(A_rt, canc_rt, meta)
-    events, undated = build_events(A_rt, canc_rt, _csv_round_trip(tidy), meta)
+    tidy = build_scorecard(A, canc, meta)
+    events, undated = build_events(A, canc, _quantize_values(tidy), meta)
     return events, tidy, A, canc, undated, meta
