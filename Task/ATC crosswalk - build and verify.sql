@@ -91,6 +91,10 @@ SET as_of_date = '2026-08-04';
 -- on the same street.
 SET min_addr_similarity = 92;
 
+-- Below this the two addresses are not on the same street at all, even if the
+-- street numbers happen to agree. Only used to flag for review, never to drop.
+SET min_street_similarity = 80;
+
 
 /* ---------------------------------------------------------------------------
    Step 1: the ATC list, one row per centre, addresses cleaned.
@@ -431,6 +435,13 @@ SELECT
         WHEN c.MATCH_TIER = 6               THEN 'ADDRESS MISMATCH - do not paste'
         WHEN c.ATC_HOUSE_NUM IS DISTINCT FROM c.FAC_HOUSE_NUM
                                             THEN 'REVIEW - different street number'
+        -- Two buildings on one campus can share a street number, so the number
+        -- check alone is not enough. Barnes-Jewish is the case: the sheet says
+        -- 1 Barnes Jewish Hospital, Compile says 1 CHILDRENS PL, both number 1,
+        -- and they are neighbouring buildings. A similarity this low means the
+        -- streets are not the same street.
+        WHEN c.ADDR_SIM < $min_street_similarity
+                                            THEN 'REVIEW - streets do not match'
         WHEN c.MATCH_TIER = 5               THEN 'REVIEW - address is close, not exact'
         WHEN h.HCO_ID IS NULL               THEN 'REVIEW - facility found, no HCO'
         WHEN c.FACILITY_TYPE <> 'HOSPITALS' THEN 'REVIEW - not a hospital type'
