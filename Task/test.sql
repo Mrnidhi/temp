@@ -1,39 +1,32 @@
 /* ============================================================================
-   TEST - what to paste and what still needs a decision
+   ATC to Compile crosswalk - the final record
 
-   Run after "ATC crosswalk - build and verify.sql", which is what creates
-   ATC_XWALK_MATCHED. Read only, safe to repeat.
+   Run after "ATC crosswalk - build and verify.sql", which is what builds
+   ATC_XWALK_MATCHED. Read only, one statement, safe to repeat.
 
-   T1 is the one to work from. T2 is kept as reference for how the five
-   unmatched centres were resolved.
+   WHAT THIS IS
+       One row per ATC, the four columns the sheet asks for, and a plain
+       instruction beside each. Download it with the arrow above the result
+       grid and keep the CSV: it is the record of what went into the workbook
+       on 2026-08-04 and why, including the rows that were decided by hand.
+
+   HOW TO READ FINAL_ACTION
+       PASTE              put the four columns in the sheet as they are
+       PASTE WITH NOTE    the ID is right, but the address in the sheet is
+                          wrong and the business owner should be told
+       RESOLVE BY HAND    the crosswalk found nothing; NOTE says which facility
+                          to use and where it came from
+       ASK KOLIN          genuinely ambiguous, leave the cells blank
+
+   WHERE THE HAND DECISIONS CAME FROM
+       Every override below was read out of the facility table directly, by
+       listing every hospital Compile holds in that ATC's own city and reading
+       the addresses. None of them were guessed from the names.
+
+   COUNT ON 2026-08-04
+       97 ATCs. 95 fill in, 2 go back to the business owner.
    ============================================================================ */
 
-
-/* ---------------------------------------------------------------------------
-   T1. Every ATC with a plain instruction beside it.
-
-       ACTION says one of three things:
-
-         PASTE          the address matched, put the five columns in the sheet.
-                        This includes rows flagged "not a hospital type" and
-                        "address is close": in both cases the building is right
-                        and only Compile's account type or its spelling of the
-                        street is unusual. Mayo Jacksonville sits at exactly
-                        4500 San Pablo Rd S and is filed as PHYSICIAN GROUP;
-                        that is Compile's filing habit, not a bad match.
-
-         DECIDE         two facilities scored the same, or the address is too
-                        far off to accept on its own. Open the worklist, read
-                        the candidate addresses, choose one.
-
-         DO NOT PASTE   no candidate at all, or the only candidate is a
-                        different building. Leave the cells blank and take the
-                        question back rather than guessing.
-
-       The 90 threshold is not arbitrary. Everything at 90 or above in the run
-       of 2026-08-04 was the same building with a formatting difference, and
-       everything below it was a different building on the same campus.
-   --------------------------------------------------------------------------- */
 SELECT
     ATC_NAME,
     D_FACILITY_COMPILE_ID,
@@ -43,68 +36,65 @@ SELECT
     HCO_NAME,
     ADDR_SIM,
     MATCH_STATUS,
+
     CASE
-        WHEN MATCH_STATUS IN ('NO MATCH', 'ADDRESS MISMATCH - do not paste')
-            THEN 'DO NOT PASTE'
-        WHEN MATCH_STATUS = 'REVIEW - two facilities scored the same'
-            THEN 'DECIDE - see worklist'
-        WHEN ADDR_SIM >= 90
-            THEN 'PASTE'
-        ELSE 'DECIDE - see worklist'
-    END AS ACTION
+        /* Found nothing. The right facility was identified by hand from the
+           facility table and is named in NOTE. */
+        WHEN UPPER(ATC_NAME) LIKE 'UF HEALTH CANCER CENTER%'      THEN 'RESOLVE BY HAND'
+        WHEN UPPER(ATC_NAME) LIKE 'UK ALBERT B CHANDLER%'         THEN 'RESOLVE BY HAND'
+        WHEN UPPER(ATC_NAME) LIKE 'UNIVERSITY OF LOUISVILLE%'     THEN 'RESOLVE BY HAND'
+
+        /* Genuinely ambiguous. Not ours to decide. */
+        WHEN UPPER(ATC_NAME) LIKE 'AVERA MCKENNAN%'               THEN 'ASK KOLIN'
+        WHEN UPPER(ATC_NAME) LIKE 'TRIHEALTH%'                    THEN 'ASK KOLIN'
+
+        /* Right hospital, wrong address in the sheet. */
+        WHEN UPPER(ATC_NAME) LIKE 'NORTHWELL HEALTH%'             THEN 'PASTE WITH NOTE'
+        WHEN UPPER(ATC_NAME) LIKE 'OHIO STATE UNIVERSITY WEXNER%' THEN 'PASTE WITH NOTE'
+        WHEN UPPER(ATC_NAME) LIKE 'O NEAL COMPREHENSIVE%'         THEN 'PASTE WITH NOTE'
+
+        /* Everything else the crosswalk resolved. The four rows that scored
+           below 90 are here on purpose: in each one the facility name and the
+           HCO name match the centre exactly and only the way the address is
+           written differs. */
+        ELSE 'PASTE'
+    END AS FINAL_ACTION,
+
+    CASE
+        WHEN UPPER(ATC_NAME) LIKE 'UF HEALTH CANCER CENTER%'
+            THEN 'Use SHANDS TEACHING HOSPITAL AND CLINICS INC at 1600 SW Archer Rd, 32610. All three Shands buildings share one HCO, so the HCO is certain. 2033 Mowry Rd is the research building and Compile does not hold it.'
+        WHEN UPPER(ATC_NAME) LIKE 'UK ALBERT B CHANDLER%'
+            THEN 'Use UNIVERSITY OF KENTUCKY at 800 Rose St, 40536, which is the hospital''s real address. 1000 S Limestone in the sheet is the campus mailing address. Do not take UK HOSPITAL CLINICAL LAB, which shares the same location under a different HCO.'
+        WHEN UPPER(ATC_NAME) LIKE 'UNIVERSITY OF LOUISVILLE%'
+            THEN 'Use JEWISH HOSPITAL at 217 E Chestnut St, 40202. Same block as the 200 Abraham Flexner Way in the sheet, and the only Jewish Hospital Compile holds in Louisville.'
+
+        WHEN UPPER(ATC_NAME) LIKE 'AVERA MCKENNAN%'
+            THEN 'Two candidates under different HCOs. AVERA MCKENNAN TRANSPLANT INSTITUTE sits at 1315 S Cliff Ave, one building from the 1325 S Cliff Ave in the sheet. AVERA MCKENNAN sits at 1000 E 23rd St, a different street. Address says the transplant institute; which entity is authorized is a question for Kolin.'
+        WHEN UPPER(ATC_NAME) LIKE 'TRIHEALTH%'
+            THEN 'The 625 Eden Park Dr in the sheet is a corporate office and Compile holds no facility there. TriHealth''s two hospitals in Cincinnati are THE GOOD SAMARITAN HOSPITAL OF CINCINNATI and BETHESDA NORTH HOSPITAL. Which one is the authorized site is a question for Kolin.'
+
+        WHEN UPPER(ATC_NAME) LIKE 'NORTHWELL HEALTH%'
+            THEN 'Facility and HCO are both NORTH SHORE UNIVERSITY HOSPITAL, so the ID is right. The sheet says 800 Community Dr; the hospital is at 300 Community Dr. The sheet is the thing to correct.'
+        WHEN UPPER(ATC_NAME) LIKE 'OHIO STATE UNIVERSITY WEXNER%'
+            THEN 'Facility is OHIO STATE UNIVERSITY HOSPITALS and the HCO is The Ohio State University Wexner Medical Center, so the ID is right. The sheet says 520 W 10th Ave; the main hospital is at 410 W 10th Ave. Same street.'
+        WHEN UPPER(ATC_NAME) LIKE 'O NEAL COMPREHENSIVE%'
+            THEN 'Returns exactly the ID the business owner had already filled in by hand. The sheet says 1802 6th St in 35205; Compile says 1802 6th Ave S in 35233, and Compile is right.'
+
+        WHEN UPPER(ATC_NAME) LIKE 'BARNES-JEWISH%'
+            THEN 'Scores low only because the sheet puts the hospital''s name in the address field rather than a street. Facility and HCO are both BARNES-JEWISH HOSPITAL.'
+        WHEN UPPER(ATC_NAME) LIKE 'JERSEY SHORE%'
+            THEN 'Same building. The sheet writes 1945 State Route 33, Compile writes 1945 RTE 33.'
+        WHEN UPPER(ATC_NAME) LIKE 'MAYO CLINIC HOSPITAL-ROCHESTER%'
+            THEN 'Same building. The sheet writes 201 Center St W, Compile writes 201 W Center St.'
+        WHEN UPPER(ATC_NAME) LIKE 'CITY OF HOPE DUARTE%'
+            THEN 'Same building. Compile drops the E from 1500 E Duarte Rd. The HCO is the Helford hospital, which is the licensed hospital on that campus.'
+
+        WHEN FACILITY_TYPE <> 'HOSPITALS'
+            THEN 'Address matches exactly. Compile files this one as ' || FACILITY_TYPE || ' rather than HOSPITALS, which is its filing habit and not a bad match.'
+        ELSE NULL
+    END AS NOTE,
+
+    AS_OF_DATE
+
 FROM COMPILE_DEV.PUBLIC.ATC_XWALK_MATCHED
-ORDER BY ACTION, ATC_NAME;
-
-
-/* ---------------------------------------------------------------------------
-   T2. Reference. What Compile actually holds for the centres that found
-       nothing, with no matching logic in the way.
-
-       This is how the five blanks were worked on 2026-08-04. Four were
-       resolved by hand from this grid and one was sent back:
-
-         UF Health Cancer Center    SHANDS TEACHING HOSPITAL, 1600 SW Archer Rd.
-                                    All three Shands rows carry the same HCO, so
-                                    the HCO is certain whichever building is used.
-                                    2033 Mowry Rd is the research building and
-                                    Compile does not carry it.
-         Uk Albert B Chandler       UNIVERSITY OF KENTUCKY, 800 Rose St. The
-                                    hospital's real address; 1000 S Limestone in
-                                    the sheet is the campus mailing address. Take
-                                    the university, not UK HOSPITAL CLINICAL LAB,
-                                    which shares the location under another HCO.
-         UofL Health-Jewish         JEWISH HOSPITAL, 217 E Chestnut St. Same block
-                                    as 200 Abraham Flexner Way.
-         Avera McKennan             AVERA MCKENNAN, 1000 E 23rd St. Lower
-                                    confidence. AVERA MCKENNAN TRANSPLANT sits at
-                                    1315 S Cliff Ave, one door from the sheet's
-                                    1325, but under a different HCO, and the plain
-                                    hospital is the entity claims run through.
-         TriHealth                  Not resolved. 625 Eden Park Dr is a corporate
-                                    office and Compile has no facility there.
-                                    TriHealth's hospitals here are Good Samaritan
-                                    and Bethesda North; which one is authorized is
-                                    a question for the business owner.
-
-       Restricted to HOSPITALS to keep the grid readable. If a centre returns
-       nothing, delete that line and run again before concluding it is absent,
-       because Compile files plenty of real hospitals as CLINIC or PHYSICIAN
-       GROUP.
-   --------------------------------------------------------------------------- */
-SELECT
-    m.ATC_NAME,
-    m.ATC_ADDRESS,
-    m.ATC_CITY,
-    m.ATC_ZIP5,
-    f.D_FACILITY_COMPILE_ID,
-    f.FACILITY_NAME,
-    f.FACILITY_TYPE,
-    f.FACILITY_ADDRESS_LINE_1,
-    f.FACILITY_ZIP_5
-FROM COMPILE_DEV.PUBLIC.ATC_XWALK_MATCHED m
-INNER JOIN COMPILE_PROVIDER360.ENTITIES.IOV2501_FACILITY_ATTRIBUTES f
-        ON UPPER(TRIM(f.FACILITY_CITY))  = m.ATC_CITY
-       AND UPPER(TRIM(f.FACILITY_STATE)) = m.ATC_STATE
-WHERE m.MATCH_STATUS = 'NO MATCH'
-  AND f.FACILITY_TYPE = 'HOSPITALS'
-ORDER BY m.ATC_NAME, f.FACILITY_NAME;
+ORDER BY FINAL_ACTION, ATC_NAME;
