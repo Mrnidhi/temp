@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>P&amp;PR pipeline - column lineage</title>
+<style>
+:root{--navy:#17344F;--steel:#2F5D8A;--olive:#567A2E;--lime:#9DC13C;--ink:#1B2733;
+--muted:#5F6B77;--line:#D8DEE4;--panel:#F6F8FA;
+--src:#EEF3F8;--srcb:#9FBAD2;--srct:#12314F;
+--trn:#F0F5EA;--trnb:#B4CC95;--trnt:#31491A;
+--tgt:#FDF3E3;--tgtb:#E0C084;--tgtt:#5E4010}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:var(--ink);font:15px/1.6 "Segoe UI",system-ui,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:32px 28px 70px}
+header{border-bottom:3px solid var(--navy);padding-bottom:14px;margin-bottom:26px}
+h1{margin:0 0 6px;font-size:25px;font-weight:600;color:var(--navy)}
+.sub{color:var(--muted);font-size:15px;margin:0;max-width:90ch}
+h2{margin:44px 0 6px;font-size:20px;font-weight:600;color:var(--navy)}
+h3{margin:24px 0 8px;font-size:14.5px;font-weight:600;color:var(--steel)}
+p{margin:9px 0;max-width:92ch}
+.lede{color:var(--muted);margin-bottom:14px;max-width:92ch}
+.tw{overflow-x:auto;margin:12px 0 6px}
+.tw table{margin:0}
+code{font-family:"Cascadia Mono",Consolas,monospace;font-size:12.5px;background:var(--panel);
+padding:1px 5px;border-radius:3px;color:var(--navy)}
+
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin:14px 0 16px;align-items:center}
+.lg{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted)}
+.sw{width:15px;height:15px;border-radius:3px}
+.sw.a{background:var(--src);border:1px solid var(--srcb)}
+.sw.b{background:var(--trn);border:1px solid var(--trnb)}
+.sw.c{background:var(--tgt);border:1px solid var(--tgtb)}
+
+.lg-hd{display:grid;grid-template-columns:270px 1fr 232px;gap:12px;background:var(--navy);
+color:#fff;font-size:11.5px;font-weight:600;letter-spacing:.05em;padding:9px 14px;
+border-radius:6px 6px 0 0;text-transform:uppercase}
+.lgraph{border:1px solid var(--line);border-top:none;border-radius:0 0 6px 6px;margin-bottom:8px}
+.n-t{overflow-x:auto}
+.gr{display:grid;grid-template-columns:270px 1fr 232px;gap:12px;padding:11px 14px;
+border-top:1px solid #E7EBEF;align-items:stretch}
+.gr:first-child{border-top:none}
+.gr:nth-child(even){background:#FCFDFD}
+.nd{border-radius:4px;padding:7px 10px;font-family:"Cascadia Mono",Consolas,monospace;
+font-size:11.5px;line-height:1.55;word-break:break-word}
+.n-s{background:var(--src);border:1px solid var(--srcb);color:var(--srct)}
+.n-t{background:var(--trn);border:1px solid var(--trnb);color:var(--trnt);white-space:pre-wrap}
+.n-g{background:var(--tgt);border:1px solid var(--tgtb);color:var(--tgtt)}
+.nd .tb{color:#5D7A96;font-size:10.5px;display:block;margin-top:4px}
+.nd .tb:first-child{margin-top:0}
+.mno{display:inline-block;background:var(--navy);color:#fff;font-family:"Segoe UI",sans-serif;
+font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:3px;margin-right:6px}
+.agg{display:block;background:#E5EDF5;color:var(--steel);font-family:"Segoe UI",sans-serif;
+font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 6px;border-radius:3px;
+margin-top:6px;text-transform:uppercase}
+.wf{font-size:10.5px;color:#78889A;font-family:"Segoe UI",sans-serif;display:block;margin-top:6px}
+
+table{border-collapse:collapse;width:100%;margin:12px 0 6px;font-size:13px}
+th{background:var(--navy);color:#fff;text-align:left;padding:7px 10px;font-weight:600;font-size:12px}
+td{border:1px solid var(--line);padding:6px 10px;vertical-align:top}
+tbody tr:nth-child(even){background:#FAFBFC}
+td code{background:#EDF1F5}
+.note{background:var(--panel);border-left:4px solid var(--steel);padding:12px 16px;margin:14px 0;font-size:14px}
+.warn{background:#FDF6E8;border-left:4px solid #C79A2E;padding:12px 16px;margin:14px 0;font-size:14px}
+.hz{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin:16px 0}
+.hzi{border:1px solid var(--line);border-left:3px solid var(--lime);border-radius:0 5px 5px 0;padding:12px 15px}
+.hzi b{display:block;font-size:14px;color:var(--navy);margin-bottom:4px}
+.hzi span{font-size:13.5px;color:var(--muted);line-height:1.55}
+footer{margin-top:50px;border-top:1px solid var(--line);padding-top:14px;font-size:12.5px;
+color:var(--muted);display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+@media print{
+body{font-size:9.5pt}.wrap{padding:0;max-width:none}
+h2,h3{break-after:avoid}.gr,table,.hzi,.note,.warn{break-inside:avoid}
+.n-s,.n-t,.n-g,th,.mno,.agg,.sw{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+@media(max-width:900px){.lg-hd{display:none}.gr{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>P&amp;PR pipeline: column lineage</h1>
+  <p class="sub">Every dashboard number traced back to the source column and the expression that
+  produces it. Source on the left, transformation in the middle, target on the right.</p>
+</header>
+
+<h2>Where the tables come from</h2>
+<div class="tw"><table>
+<thead><tr><th style="width:21%">Table</th><th style="width:17%">Origin</th><th style="width:13%">Layer</th><th style="width:14%">Grain</th><th>Join</th></tr></thead>
+<tbody>
+<tr><td><code>bai_list_of_orders</code></td><td>Salesforce, via AWS</td><td>Iovance_BAI</td><td>1 row per order</td><td>the hub. ~2,300 rows. PK <code>order_request__til_order_name</code></td></tr>
+<tr><td><code>bai_infusion</code></td><td>Salesforce, via AWS</td><td>Iovance_BAI</td><td>1 row per order</td><td>1:1 on <code>til_order_name</code>. 1,032 rows</td></tr>
+<tr><td><code>bai_tumor_documentation</code></td><td>Salesforce, via AWS</td><td>Iovance_BAI</td><td>1 row per procurement</td><td>1:N on <code>til_order_name</code>, collapsed to a count. 1,189 rows</td></tr>
+<tr><td><code>veeva_komodo_atc_mapping</code></td><td>Veeva</td><td>Iovance_BAI</td><td>1 row per centre</td><td>N:1 on a normalised centre name. 93 rows</td></tr>
+<tr><td><code>LTD_Reschedules</code></td><td>derived upstream from order snapshots</td><td>uploaded files</td><td>1 row per date change</td><td>1:N on <code>ORDER_ID</code>. 715 rows. No centre column</td></tr>
+<tr><td><code>LTD_Cancellations</code></td><td>derived upstream from order snapshots</td><td>uploaded files</td><td>1 row per cancellation</td><td>1:N on <code>ORDER_ID</code>. 568 rows. No centre column</td></tr>
+</tbody>
+</table></div>
+<p style="font-size:13.5px;color:var(--muted)">The two LTD tables are pre-built inside Infinity.
+The pipeline consumes them, it does not derive them. Neither carries a centre, so the order id
+is the only way to attribute those rows to a hospital.</p>
+
+<h2>The lineage graph</h2>
+<div class="legend">
+  <div class="lg"><span class="sw a"></span>source column</div>
+  <div class="lg"><span class="sw b"></span>transformation</div>
+  <div class="lg"><span class="sw c"></span>target</div>
+  <div class="lg" style="margin-left:auto"><code>asof</code> = MAX(order_request__created_date) over all rows</div>
+</div>
+
+<div class="lg-hd"><div>Source columns</div><div>Expression</div><div>Target</div></div>
+<div class="lgraph">
+
+<div class="gr">
+<div class="nd n-s"><span class="tb">bai_list_of_orders</span>order_request__til_order_name<br>order_request__created_date</div>
+<div class="nd n-t">enrollment_date = order_request__created_date<span class="wf">windowed on enrollment_date</span></div>
+<div class="nd n-g"><span class="mno">M1</span>Enrollments<span class="agg">count distinct order name</span></div>
+</div>
+
+<div class="gr">
+<div class="nd n-s"><span class="tb">bai_list_of_orders</span>iovance_patient_id<br>order_request__created_date</div>
+<div class="nd n-t">passthrough, no derivation<span class="wf">windowed on enrollment_date</span></div>
+<div class="nd n-g"><span class="mno">M2</span>Patients enrolled<span class="agg">count distinct patient id</span></div>
+</div>
+
+<div class="gr">
+<div class="nd n-s"><span class="tb">LTD_Reschedules</span>ORDER_ID<br>TTP_DATE_PREV<br>SNAPSHOT_DATE_TIME_CURR<br>RESCHEDULED_CATEGORY<span class="tb">LTD_Cancellations</span>ORDER_ID<br>TTP_DATE<br>SNAPSHOT_DATE_TIME_CURR</div>
+<div class="nd n-t">lost_slot = COALESCE(TTP_DATE_PREV, TTP_DATE)
+recorded  = CAST(SNAPSHOT_DATE_TIME_CURR AS DATE)
+notice    = DATEDIFF(day, recorded, lost_slot)
+
+KEEP WHERE notice BETWEEN 0 AND 7<span class="wf">windowed on lost_slot</span></div>
+<div class="nd n-g"><span class="mno">M3</span>Cancelled or rescheduled within 7 days<span class="agg">count rows</span></div>
+</div>
+
+<div class="gr">
+<div class="nd n-s"><span class="tb">bai_list_of_orders</span>tumor_tissue_pick_up_date</div>
+<div class="nd n-t">completed_ttp = tumor_tissue_pick_up_date IS NOT NULL
+            AND tumor_tissue_pick_up_date &lt;= asof<span class="wf">windowed on tumor_tissue_pick_up_date</span></div>
+<div class="nd n-g"><span class="mno">M4</span>Completed TTPs<span class="agg">sum of flag</span></div>
+</div>
+
+<div class="gr">
+<div class="nd n-s"><span class="tb">bai_list_of_orders</span>tumor_tissue_pick_up_date</div>
+<div class="nd n-t">scheduled_ttp = tumor_tissue_pick_up_date IS NOT NULL
+            AND tumor_tissue_pick_up_date &gt; asof<span class="wf">windowed on tumor_tissue_pick_up_date</span></div>
+<div class="nd n-g"><span class="mno">M5</span>Scheduled TTPs<span class="agg">sum of flag</span></div>
+</div>
+
+<div class="gr">
+<div class="nd n-s"><span class="tb">bai_list_of_orders</span>iovance_patient_id<br>tumor_tissue_pick_up_date</div>
+<div class="nd n-t">GROUP BY iovance_patient_id
+HAVING COUNT(DISTINCT tumor_tissue_pick_up_date) &gt;= 2<span class="wf">windowed on tumor_tissue_pick_up_date</span></div>
+<div class="nd n-g"><span class="mno">M6</span>2nd resections<span class="agg">count qualifying patients</span></div>
+</div>
+
+<div class="gr">
+<div class="nd n-s"><span class="tb">bai_list_of_orders</span>iovance_patient_id<br>til_order_cancellation_reason<br>tumor_tissue_pick_up_date<span class="tb">bai_tumor_documentation</span>til_order_name</div>
+<div class="nd n-t">has_tumor = order EXISTS in bai_tumor_documentation
+health    = til_order_cancellation_reason IN (list A)
+
+KEEP WHERE has_tumor AND health<span class="wf">windowed on tumor_tissue_pick_up_date</span></div>
+<div class="nd n-g"><span class="mno">M7</span>Drop-outs following TTP<span class="agg">count distinct patient id</span></div>
+</div>
+
+<div class="gr">
+<div class="nd n-s"><span class="tb">bai_list_of_orders</span>oos_status<br>final_product_delivery_date</div>
+<div class="nd n-t">oos_product = oos_status = 'Confirmed OOS'<span class="wf">windowed on final_product_delivery_date</span></div>
+<div class="nd n-g"><span class="mno">M8</span>OOS products<span class="agg">sum of flag</span></div>
+</div>
+
+<div class="gr">
+<div class="nd n-s"><span class="tb">bai_list_of_orders</span>iovance_patient_id<br>fp_status<br>til_order_cancellation_reason<br>tumor_tissue_pick_up_date</div>
+<div class="nd n-t">mfg_started = fp_status IN (list C)
+drop_after  = mfg_started
+          AND til_order_cancellation_reason IN (list B)
+
+COUNT(DISTINCT patient WHERE drop_after)
+  / COUNT(DISTINCT patient WHERE mfg_started)<span class="wf">windowed on tumor_tissue_pick_up_date</span></div>
+<div class="nd n-g"><span class="mno">M9</span>Progression rate<span class="agg">ratio, 3 dp</span></div>
+</div>
+
+<div class="gr">
+<div class="nd n-s"><span class="tb">bai_infusion</span>til_order_name<br>infusion_date<br>lifileucel_infused_</div>
+<div class="nd n-t">amtagvi_infused = infusion_date IS NOT NULL
+              AND lifileucel_infused_ = 'Yes'<span class="wf">windowed on infusion_date</span></div>
+<div class="nd n-g"><span class="mno">M10</span>Infusions performed<span class="agg">sum of flag</span></div>
+</div>
+
+<div class="gr">
+<div class="nd n-s"><span class="tb">bai_list_of_orders</span>order_request__created_date<br>tumor_tissue_pick_up_date</div>
+<div class="nd n-t">days = DATEDIFF(day, order_request__created_date,
+                     tumor_tissue_pick_up_date)<span class="wf">windowed on tumor_tissue_pick_up_date</span></div>
+<div class="nd n-g"><span class="mno">M11</span>Enrolment to TTP<span class="agg">median, 1 dp</span></div>
+</div>
+
+<div class="gr">
+<div class="nd n-s"><span class="tb">bai_list_of_orders</span>tumor_tissue_pick_up_date<span class="tb">bai_infusion</span>infusion_date</div>
+<div class="nd n-t">days = DATEDIFF(day, tumor_tissue_pick_up_date,
+                     infusion_date)<span class="wf">windowed on infusion_date</span></div>
+<div class="nd n-g"><span class="mno">M12</span>TTP to infusion<span class="agg">median, 1 dp</span></div>
+</div>
+
+<div class="gr">
+<div class="nd n-s"><span class="tb">bai_list_of_orders</span>final_product_delivery_date<span class="tb">bai_infusion</span>infusion_date</div>
+<div class="nd n-t">days = DATEDIFF(day, final_product_delivery_date,
+                     infusion_date)<span class="wf">windowed on infusion_date</span></div>
+<div class="nd n-g"><span class="mno">M13</span>Delivery to infusion<span class="agg">median, 1 dp</span></div>
+</div>
+
+<div class="gr">
+<div class="nd n-s"><span class="tb">bai_list_of_orders</span>atc<br>order_request__til_order_name<span class="tb">plus the 13 outputs above</span></div>
+<div class="nd n-t">rank = RANK() OVER (ORDER BY COUNT(DISTINCT order) DESC)
+tier = CASE WHEN rank &lt;= 10 THEN 'Top 10'
+            WHEN rank &lt;= 40 THEN 'Top 40' ELSE 'Other' END
+
+value = MEDIAN(per-centre value) WITHIN tier<span class="wf">launch to date only, not windowed</span></div>
+<div class="nd n-g"><span class="mno">B</span>Top 10 and Top 40 columns<span class="agg">median across centres</span></div>
+</div>
+
+</div>
+
+<h3>Value lists referenced above</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:7%">List</th><th style="width:26%">Column</th><th>Values</th></tr></thead>
+<tbody>
+<tr><td><b>A</b></td><td><code>til_order_cancellation_reason</code></td><td><code>Patient health progressed</code>, <code>Decline in Performance Status</code>, <code>Disease Progression</code>, <code>Brain Mets</code>, <code>Patient death</code>, <code>Transition to Hospice</code></td></tr>
+<tr><td><b>B</b></td><td><code>til_order_cancellation_reason</code></td><td>list A, plus <code>Patient Choice</code>. <code>NED/MRD</code> deliberately excluded</td></tr>
+<tr><td><b>C</b></td><td><code>fp_status</code></td><td><code>MFG Start</code>, <code>MFG End</code>, <code>REP Initiation</code>, <code>REP Scale Out</code>, <code>Released for Shipment by QA</code>, <code>Shipment Ready</code>, <code>Courier Picked-Up FP</code>, <code>Courier Delivered FP</code>, <code>FP CAH</code></td></tr>
+</tbody>
+</table></div>
+<div class="warn">List C excludes five states that sit earlier in the same status column:
+<code>SM Pick-up Scheduled</code>, <code>Courier Picked-Up SM</code>,
+<code>Warehouse Received SM</code>, <code>MFG QA Released SM</code>, <code>MFG Received SM</code>.
+Including them grows the M9 denominator by roughly a third.</div>
+
+<h2>Columns read but not used in any metric</h2>
+<div class="tw"><table>
+<thead><tr><th style="width:36%">Column</th><th>Why it is read</th></tr></thead>
+<tbody>
+<tr><td><code>bai_list_of_orders.atc</code></td><td>centre attribution and tier ranking, not a metric input</td></tr>
+<tr><td><code>bai_list_of_orders.patient_zip_code</code></td><td>cleaned to valid 5 digit values, then unused</td></tr>
+<tr><td><code>bai_list_of_orders.resection_rescheduled_</code></td><td>last-resort fallback for M3 when both LTD tables are absent</td></tr>
+<tr><td><code>veeva_komodo_atc_mapping.region, territory, atc_segment</code></td><td>carried to the output for filtering, drive no calculation</td></tr>
+<tr><td><code>LTD_*.TTP_DATE_CURR, SNAPSHOT_DATE_TIME_PREV, RESCHEDULE_ORDER</code></td><td>present in the source, not consumed</td></tr>
+</tbody>
+</table></div>
+
+<h2>How this is handled</h2>
+<p class="lede">Seven things that are not obvious from the expressions alone.</p>
+
+<div class="hz">
+<div class="hzi"><b>The window filter is per metric, not global</b><span>Each metric filters on its
+own date column, shown in grey under every expression. There is no single cohort date. One order
+can land in Q4 for M1, Q1 for M4 and Q2 for M10.</span></div>
+
+<div class="hzi"><b>The grain changes twice</b><span>Order grain first. Then one row per metric
+event, because one order can lose several slots and each loss carries its own date. Then one row
+per event per column it belongs to.</span></div>
+
+<div class="hzi"><b>Distinct counts are not pre-aggregated</b><span>M2, M6, M7 and M9 count
+patients. How many distinct patients fall in a window depends on the window, so the dedup happens
+at read time. The event row carries the patient id in a <code>unit</code> column and the
+rendering layer runs COUNT DISTINCT on it.</span></div>
+
+<div class="hzi"><b>asof comes from the data</b><span><code>MAX(order_request__created_date)</code>
+over all rows, never the system clock. Same inputs give the same outputs on any day. It is
+recorded in every output file, and it is what splits M4 from M5.</span></div>
+
+<div class="hzi"><b>The fan out is deliberate</b><span>Each event is emitted once per column it
+belongs to, so a date filter in the BI layer is a filter rather than a recompute. One order
+produced 9 events and 36 rows in the worked case.</span></div>
+
+<div class="hzi"><b>Nulls are kept, not dropped</b><span>An event whose own date column is null
+still exists. It goes to an Undated bucket rather than being discarded, because missingness
+correlates with outcome. Dropping them biases every period column optimistic.</span></div>
+
+<div class="hzi"><b>M3 has a fallback chain</b><span>The two LTD tables first. If absent, walk the
+order snapshot history and derive the same thing with LAG. If that is absent too, a boolean flag
+on the order table. Which source ran is printed and recorded in the run metadata.</span></div>
+</div>
+
+<h2>Checks that gate the run</h2>
+<p class="lede">These stop the pipeline before it writes output.</p>
+<div class="tw"><table>
+<thead><tr><th style="width:29%">Check</th><th>Assertion</th></tr></thead>
+<tbody>
+<tr><td>Column reconciliation</td><td>for every centre and metric, period columns plus Undated plus after-asof equal the launch to date figure</td></tr>
+<tr><td>Cross implementation</td><td>the event table and an independently computed scorecard agree cell for cell</td></tr>
+<tr><td>Vocabulary</td><td>every value of <code>til_order_cancellation_reason</code> maps to a known category, or is named in the output</td></tr>
+<tr><td>Disjointness</td><td>no order satisfies both <code>completed_ttp</code> and <code>scheduled_ttp</code></td></tr>
+<tr><td>Funnel</td><td>rows kept by the 7 day rule, plus each excluded bucket, equal rows in</td></tr>
+<tr><td>Benchmark shape</td><td>benchmark row count equals 13 metrics times centres times arms</td></tr>
+<tr><td>Date parsing</td><td>a date column that fails to parse raises with sample values rather than silently zeroing the metric</td></tr>
+</tbody>
+</table></div>
+
+<h2>Notes for a port</h2>
+<p>Everything above is expressible in SQL. The two that look procedural are not: the 7 day rule
+becomes a <code>LAG</code> over the snapshot history if the LTD tables are ever unavailable, and
+the tier assignment is a <code>RANK</code>. Current implementation is Python, pandas and numpy
+only, one command end to end, roughly two minutes on ~2,300 orders.</p>
+<p>The cross-implementation check is the natural migration test. Move one metric at a time and
+compare against the existing output before moving the next.</p>
+<div class="note"><b>Three rules are not settled with the business yet.</b> Whether a change with
+<code>RESCHEDULED_CATEGORY = 'Moved Up'</code> counts, which is roughly half the M3 population.
+Whether M3 counts rows or distinct <code>ORDER_ID</code>. And a third benchmark tier that has no
+source column anywhere, so it cannot currently be derived. Each is a single named constant.</div>
+
+<footer>
+  <span>P&amp;PR scorecard pipeline &middot; column lineage</span>
+  <span>Iovance Biotherapeutics &middot; confidential, internal use only</span>
+</footer>
+
+</div>
+</body>
+</html>
