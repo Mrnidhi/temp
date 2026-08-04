@@ -471,7 +471,15 @@ paired AS (
         JAROWINKLER_SIMILARITY(a.ENTITY_NAME, f.ENTITY_NAME) AS NAME_SIM,
         JAROWINKLER_SIMILARITY(a.ADDR_NORM,   f.ADDR_NORM)   AS ADDR_SIM,
         CASE
-            WHEN a.NPI IS NOT NULL AND a.NPI = f.NPI                  THEN 1
+            -- An NPI is registered to an ORGANISATION, not to a building, so on
+            -- its own it cannot prove the ID belongs to this physical location.
+            -- It is only tier 1 when the zip corroborates it. Run of 2026-08-04
+            -- is why: UC San Diego matched on NPI alone at tier 1 and landed on
+            -- 16950 VIADUCT TAZON against a sheet address of 200 W ARBOR DR,
+            -- address similarity 47. That is the Gilbert-versus-Phoenix failure
+            -- the exercise exists to prevent.
+            WHEN a.NPI IS NOT NULL AND a.NPI = f.NPI
+                 AND a.ZIP5 = f.ZIP5                                  THEN 1
             WHEN a.ZIP5 = f.ZIP5 AND a.ADDR_NORM = f.ADDR_NORM        THEN 2
             WHEN a.ZIP5 = f.ZIP5
                  AND a.HOUSE_NUM    = f.HOUSE_NUM
@@ -482,8 +490,11 @@ paired AS (
             WHEN a.HOUSE_NUM = f.HOUSE_NUM
                  AND JAROWINKLER_SIMILARITY(a.ADDR_NORM, f.ADDR_NORM)
                      >= $min_addr_similarity                          THEN 5
+            -- NPI agrees but the address does NOT. Kept so the row is visible
+            -- and never silently dropped, but it is a review, not an answer.
+            WHEN a.NPI IS NOT NULL AND a.NPI = f.NPI                  THEN 6
             WHEN JAROWINKLER_SIMILARITY(a.ENTITY_NAME, f.ENTITY_NAME)
-                     >= $min_name_similarity                          THEN 6
+                     >= $min_name_similarity                          THEN 7
         END AS MATCH_TIER
     FROM atc a
     INNER JOIN fac f ON a.STATE = f.STATE
@@ -518,10 +529,15 @@ WITH picked AS (
     QUALIFY ROW_NUMBER() OVER (
         PARTITION BY SHEET_ROW
         ORDER BY MATCH_TIER,
+                 -- ADDRESS BEFORE NAME. The whole point of the exercise is that
+                 -- names do not agree across the two systems and locations do.
+                 -- This was the wrong way round on the 2026-08-04 run, which is
+                 -- how a candidate scoring 86 on name and 47 on address beat
+                 -- better-located ones.
+                 ADDR_SIM DESC,
                  -- A preference, not a filter. C4 reports what it cost.
                  CASE WHEN FACILITY_TYPE = 'HOSPITALS' THEN 0 ELSE 1 END,
                  NAME_SIM DESC,
-                 ADDR_SIM DESC,
                  FACILITY_ID
     ) = 1
 ),
@@ -578,7 +594,8 @@ SELECT
     p.FAC_ADDR_NORM,
     CASE
         WHEN p.FACILITY_ID IS NULL          THEN 'NO MATCH'
-        WHEN p.MATCH_TIER = 6               THEN 'NAME SUGGESTION ONLY - DO NOT PASTE'
+        WHEN p.MATCH_TIER = 7               THEN 'NAME SUGGESTION ONLY - DO NOT PASTE'
+        WHEN p.MATCH_TIER = 6               THEN 'ADDRESS MISMATCH - NPI agrees, location does not'
         WHEN p.MATCH_TIER = 5               THEN 'REVIEW - fuzzy address'
         WHEN h.HCO_ID IS NULL               THEN 'REVIEW - facility found, no HCO'
         WHEN p.FACILITY_TYPE <> 'HOSPITALS' THEN 'REVIEW - non-hospital type'
@@ -612,13 +629,14 @@ LEFT JOIN hco    h ON p.FACILITY_ID  = h.FACILITY_ID;
 SELECT
     SHEET_ROW,
     ATC_NAME,
-    -- Tier 6 is a name guess, so it is withheld from the paste block and shown
-    -- in B2 instead. Everything else that matched is here.
-    CASE WHEN MATCH_TIER = 6 THEN NULL ELSE D_FACILITY_COMPILE_ID END AS D_FACILITY_COMPILE_ID, -- N
-    CASE WHEN MATCH_TIER = 6 THEN NULL ELSE FACILITY_NAME         END AS FACILITY_NAME,         -- O
-    CASE WHEN MATCH_TIER = 6 THEN NULL ELSE FACILITY_TYPE         END AS FACILITY_TYPE,         -- P
-    CASE WHEN MATCH_TIER = 6 THEN NULL ELSE D_HCO_COMPILE_ID      END AS D_HCO_COMPILE_ID,      -- Q
-    CASE WHEN MATCH_TIER = 6 THEN NULL ELSE HCO_NAME              END AS HCO_NAME,              -- R
+    -- Tiers 6 and 7 are not location-confirmed: 6 is an NPI match whose address
+    -- disagrees, 7 is a name guess. Both are withheld from the paste block and
+    -- shown in B2 instead. Everything else that matched is here.
+    CASE WHEN MATCH_TIER >= 6 THEN NULL ELSE D_FACILITY_COMPILE_ID END AS D_FACILITY_COMPILE_ID, -- N
+    CASE WHEN MATCH_TIER >= 6 THEN NULL ELSE FACILITY_NAME         END AS FACILITY_NAME,         -- O
+    CASE WHEN MATCH_TIER >= 6 THEN NULL ELSE FACILITY_TYPE         END AS FACILITY_TYPE,         -- P
+    CASE WHEN MATCH_TIER >= 6 THEN NULL ELSE D_HCO_COMPILE_ID      END AS D_HCO_COMPILE_ID,      -- Q
+    CASE WHEN MATCH_TIER >= 6 THEN NULL ELSE HCO_NAME              END AS HCO_NAME,              -- R
     MATCH_TIER,
     MATCH_STATUS
 FROM COMPILE_DEV.PUBLIC.ATC_XWALK_MATCHED
@@ -703,7 +721,7 @@ SELECT
     END AS DISAGREEMENT
 FROM COMPILE_DEV.PUBLIC.ATC_XWALK_MATCHED
 WHERE D_FACILITY_COMPILE_ID IS NOT NULL
-  AND MATCH_TIER < 6
+  AND MATCH_TIER < 6   -- tiers 6 and 7 are not location-confirmed
   AND (ATC_CITY <> FAC_CITY OR ATC_ZIP5 <> FAC_ZIP5)
 ORDER BY SHEET_ROW;
 
@@ -720,7 +738,8 @@ SELECT
         WHEN 3 THEN 'zip + number + street'
         WHEN 4 THEN 'city + number + street'
         WHEN 5 THEN 'state + number + close address'
-        WHEN 6 THEN 'name suggestion only, not pasted'
+        WHEN 6 THEN 'NPI agrees, address does not - not pasted'
+        WHEN 7 THEN 'name suggestion only, not pasted'
     END AS TIER_MEANING,
     COUNT(*) AS ATCS,
     ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS PCT_OF_LIST
