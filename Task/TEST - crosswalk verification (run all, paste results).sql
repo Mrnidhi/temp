@@ -79,7 +79,7 @@ WITH src AS (
        the sheet has TWO header rows, the merged section banners and then the
        real names, so every field came in as c1 to c18. Read off the load
        preview. The uploader created them as QUOTED LOWERCASE, so every
-       reference below needs double quotes: "c1", not c1.
+       reference below needs double quotes: c1, not c1.
 
        preview:
 
@@ -97,20 +97,20 @@ WITH src AS (
        through untouched and used by T9 to check our work against his.
        #################################################################### */
     SELECT
-        "c1"  AS NAME_RAW,
-        "c2"  AS NPI_RAW,
-        "c4"  AS STATUS_RAW,
-        "c10" AS ADDRESS_RAW,
-        "c11" AS CITY_RAW,
-        "c12" AS STATE_RAW,
-        "c13" AS ZIP_RAW,
-        "c6"  AS NAVY_ADDRESS,
-        "c7"  AS NAVY_CITY,
-        "c9"  AS NAVY_ZIP,
-        "c14" AS OWNER_FACILITY_ID,
-        "c15" AS OWNER_FACILITY_NAME,
-        "c17" AS OWNER_HCO_ID,
-        "c18" AS OWNER_HCO_NAME
+        c1  AS NAME_RAW,
+        c2  AS NPI_RAW,
+        c4  AS STATUS_RAW,
+        c10 AS ADDRESS_RAW,
+        c11 AS CITY_RAW,
+        c12 AS STATE_RAW,
+        c13 AS ZIP_RAW,
+        c6  AS NAVY_ADDRESS,
+        c7  AS NAVY_CITY,
+        c9  AS NAVY_ZIP,
+        c14 AS OWNER_FACILITY_ID,
+        c15 AS OWNER_FACILITY_NAME,
+        c17 AS OWNER_HCO_ID,
+        c18 AS OWNER_HCO_NAME
     FROM COMPILE_DEV.PUBLIC.ATC_CHECK_EXCERSISE
 ),
 kept AS (
@@ -532,17 +532,17 @@ SELECT
       - (SELECT COUNT(*) FROM COMPILE_DEV.PUBLIC.ATC_XWALK_INPUT) AS ROWS_DROPPED;
 
 SELECT
-    "c1" AS DROPPED_NAME,
-    "c12" AS DROPPED_STATE,
-    CASE WHEN "c1" IS NULL                                        THEN 'no name'
-         WHEN UPPER(TRIM("c1")) IN ('NAME','CURRENT ATC SITE INFORMATION')
+    c1 AS DROPPED_NAME,
+    c12 AS DROPPED_STATE,
+    CASE WHEN c1 IS NULL                                        THEN 'no name'
+         WHEN UPPER(TRIM(c1)) IN ('NAME','CURRENT ATC SITE INFORMATION')
                                                                 THEN 'header row'
          ELSE 'state not two characters'
     END AS WHY_DROPPED
 FROM COMPILE_DEV.PUBLIC.ATC_CHECK_EXCERSISE
-WHERE "c1" IS NULL
-   OR UPPER(TRIM("c1")) IN ('NAME','CURRENT ATC SITE INFORMATION')
-   OR LENGTH(TRIM(COALESCE("c12",''))) <> 2;
+WHERE c1 IS NULL
+   OR UPPER(TRIM(c1)) IN ('NAME','CURRENT ATC SITE INFORMATION')
+   OR LENGTH(TRIM(COALESCE(c12,''))) <> 2;
 
 
 /* ---------------------------------------------------------------------------
