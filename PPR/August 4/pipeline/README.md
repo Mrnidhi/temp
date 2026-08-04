@@ -7,7 +7,7 @@ the reconciliation and additivity gates inside them define what counts as equal.
 
 ## Where this runs today
 
-Office laptop, in PowerShell:
+In PowerShell:
 
     cd "C:\Users\SGowda\OneDrive - Iovance Biotherapeutics\Desktop\PPR Automation\VS Code"
     python RUN_ALL.py
@@ -31,4 +31,4 @@ The Infinity exports sit in data\ next to RUN_ALL.py. If the default python is
 
 In the target architecture the same transformation runs inside the Glue job
 from the raw Redshift tables; these files stay as the reference and as the
-office fallback until cutover.
+local fallback until cutover.

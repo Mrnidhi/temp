@@ -30,7 +30,7 @@ flowchart LR
     I["ppr_datewindow_long.csv"]
     J["Stage 5: build_hyper.py"]
     K["tableau/ppr_datewindow.hyper<br>table Events"]
-    L["P&PR Dashboard workbook<br>Tableau Desktop, office laptop"]
+    L["P&PR Dashboard workbook<br>Tableau Desktop"]
     A1 --> B
     A2 --> B
     A3 --> B
@@ -97,6 +97,6 @@ flowchart LR
    into `dashboard/ppr_scorecard.html`, a self-contained page mirroring the
    same metric logic (its M3 window mode still uses the proxy flag - a known
    implementation difference).
-10. **Refresh Tableau.** On the office laptop: close Tableau while the
+10. **Refresh Tableau.** Close Tableau while the
     pipeline runs (it locks the .hyper files), reopen the workbook, and
     refresh each data source. The workbook itself never changes on refresh.

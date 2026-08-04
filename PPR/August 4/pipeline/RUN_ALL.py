@@ -2,7 +2,7 @@ r"""
 PPR pipeline - runs every stage in order.
 
 This copy ships with the data engineering handoff. It is the reference
-implementation the Glue job must match. Today it runs on the office laptop at:
+implementation the Glue job must match. It runs from:
     C:\Users\SGowda\OneDrive - Iovance Biotherapeutics\Desktop\PPR Automation\VS Code
 Open a PowerShell terminal in that folder (VS Code: Terminal > New Terminal).
 
@@ -16,8 +16,8 @@ Six files. Four build the order table, two carry metric 3:
     LTD_Reschedules, LTD_Cancellations
 data\README.md lists what each one feeds and what is optional.
 
-Input resolution, first match wins: PPR_INPUT_DIR, then data\, then the synthetic
-sample. To read from elsewhere:
+Input resolution, first match wins: PPR_INPUT_DIR, then data\, then the local
+test sample. To read from elsewhere:
     PowerShell:  $env:PPR_INPUT_DIR="C:\path\to\exports"
     CMD:         set PPR_INPUT_DIR=C:\path\to\exports
 
@@ -54,7 +54,7 @@ def main() -> int:
     # First match wins; stage 1 resolves the same way.
     candidates = [os.environ.get("PPR_INPUT_DIR"),
                   os.path.join(HERE, "data"),
-                  os.path.join(HERE, "..", "..", "..", "PPR Automation", "synthetic_data", "out")]
+                  os.path.join(HERE, "synthetic_data", "out")]
     src = next((p for p in candidates if p and os.path.isdir(p)
                 and any(f.endswith(".xlsx") for f in os.listdir(p))), None)
     if not src:
@@ -71,10 +71,10 @@ def main() -> int:
     print(f"found: {len(xlsx)} .xlsx files", flush=True)
     print("=" * 62, flush=True)
 
-    # A synthetic run that reads like a real one is the dangerous case.
+    # A test-sample run that reads like a real one is the dangerous case.
     if "synthetic" in src.lower():
         print("!" * 62, flush=True)
-        print("  SYNTHETIC DATA. Every number this run produces is made up.", flush=True)
+        print("  TEST SAMPLE DATA. Every number this run produces is made up.", flush=True)
         print("  For real numbers put the seven Infinity exports in:", flush=True)
         print("     " + os.path.abspath(os.path.join(HERE, "data")), flush=True)
         print("!" * 62, flush=True)

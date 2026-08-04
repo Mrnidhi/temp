@@ -1,13 +1,13 @@
 """
 PPR pipeline - Stage 1: build the analysis table.
 
-Reads the 7 Infinity files (synthetic here, real on the office laptop), joins them
-to ONE order-grain analysis table, cleans the known DQ issues, and derives every
-field the scorecard needs (stage flags, timeline day-diffs, ATC tier, time buckets).
+Reads the 7 Infinity files, joins them to ONE order-grain analysis table, cleans
+the known DQ issues, and derives every field the scorecard needs (stage flags,
+timeline day-diffs, ATC tier, time buckets).
 
-This is the portable automation: point INPUT_DIR at the real files and rerun.
+Point INPUT_DIR at the current Infinity exports and rerun.
 
-Out: analysis/ppr_analysis.csv  (one row per order, 2,250 rows on synthetic data)
+Out: analysis/ppr_analysis.csv  (one row per order, 2,250 rows on the test sample)
 """
 import json
 import os
@@ -20,8 +20,8 @@ from cancellations import norm_center   # shared name normalizer (also used by s
 HERE = os.path.dirname(__file__)
 # Input resolution, first match wins:
 #   1. PPR_INPUT_DIR env var
-#   2. data/ next to RUN_ALL.py (office laptop: drop the 7 Infinity .xlsx there)
-#   3. synthetic sample (Mac dev only)
+#   2. data/ next to RUN_ALL.py (drop the 7 Infinity .xlsx there)
+#   3. the test sample
 _CANDIDATES = [os.environ.get("PPR_INPUT_DIR"),
                os.path.join(HERE, "..", "data"),
                os.path.join(HERE, "..", "synthetic_data", "out")]
@@ -31,7 +31,7 @@ print("input:", os.path.abspath(INPUT_DIR))
 OUT_DIR = os.path.join(HERE, "..", "analysis")
 os.makedirs(OUT_DIR, exist_ok=True)
 
-HEADER_ROW = 2  # real files carry a title banner; true header is row index 2
+HEADER_ROW = 2  # the Infinity exports carry a title banner; true header is row index 2
 
 # As-of date. Never read the clock: same inputs must give the same outputs on any day.
 # PPR_ASOF (YYYY-MM-DD) wins when set; otherwise the newest order-creation date in the
@@ -65,8 +65,8 @@ REASON_CATEGORY = {
     "Peer to Peer Consult":              "access",
     "Quality Status: Do Not Proceed":    "quality",
     "Other":                             "other",
-    # Exact strings seen in the REAL picklist (10 values). Kept alongside the synthetic
-    # spellings above because the two sets do not match.
+    # Exact strings seen in the source picklist (10 values). Kept alongside the test
+    # sample spellings above because the two sets do not match.
     "Quality: Do Not Proceed":           "quality",
     "Clinical Trial/IST":                "physician",
     "Peer-to-Peer":                      "access",
@@ -89,7 +89,7 @@ HEALTH_DROPOUT = {r for r, c in REASON_CATEGORY.items() if c == "health"}
 # so counting it as progression would report a good outcome as a failure.
 PATIENT_RELATED = {r for r, c in REASON_CATEGORY.items() if c in ("health", "choice")}
 # Manufacturing actually started. SM = starting material (the tumour courier leg), which
-# happens BEFORE manufacturing, so the two SM states are deliberately excluded. On real
+# happens BEFORE manufacturing, so the two SM states are deliberately excluded. In the
 # data "SM Pick-up Scheduled" alone is 305 orders, so including it would inflate metric 9's
 # denominator by roughly a third and understate the progression rate.
 MFG_STARTED = {"MFG Start", "MFG End", "REP Initiation", "REP Scale Out",
@@ -161,7 +161,7 @@ _meta = {"asof": TODAY.strftime("%Y-%m-%d"),
          "synthetic": "synthetic" in os.path.abspath(INPUT_DIR).lower()}
 with open(os.path.join(OUT_DIR, "run_meta.json"), "w") as _f:
     json.dump(_meta, _f, indent=1)
-print(f"as-of: {_meta['asof']} ({_meta['asof_source']})  synthetic: {_meta['synthetic']}")
+print(f"as-of: {_meta['asof']} ({_meta['asof_source']})  test sample: {_meta['synthetic']}")
 
 # ------------------------------------------------------------------ clean orders
 o = orders.copy()

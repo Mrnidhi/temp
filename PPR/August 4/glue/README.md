@@ -8,7 +8,7 @@ Redshift copy and as a per run audit trail.
 
 The transformation code (ppr_transform.py) was ported from the reference
 pipeline in ../pipeline/ and verified byte for byte against it on the
-synthetic dataset, on both the normal path and the lost slot path. The
+test sample, on both the normal path and the lost slot path. The
 additivity gate and the cell by cell reconciliation gate run inside every
 call; a failed gate stops the job before ppr_events is touched.
 
@@ -49,8 +49,8 @@ extract only after this job succeeds. On failure nothing is published and
 ppr_events keeps the last good run. Check MEDIAN support if someone insists
 on a live connection, extracts always support it.
 
-The .hyper extract is no longer produced by this job; the office laptop
-reference pipeline still writes one when needed for Desktop work.
+The .hyper extract is no longer produced by this job; the reference
+pipeline in ../pipeline/ still writes one when needed for Desktop work.
 
 ## One time setup
 

@@ -15,7 +15,7 @@ TWO SOURCES, ONE RULE
     Preferred: the LTD_Reschedules and LTD_Cancellations exports. Maintained upstream, current
     to the present, and they already carry a direction flag and a cancellation reason.
     Fallback: walking the order snapshot history. Kept because that export is what the
-    synthetic set has, and because it covers the period before the LTD tables were available.
+    test sample has, and because it covers the period before the LTD tables were available.
     Both feed apply_rule() below, so there is still one definition of the threshold.
 
 GRAIN AND DIRECTION

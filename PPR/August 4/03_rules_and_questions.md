@@ -14,7 +14,7 @@ Confirmed / Inferred / TBD / Needs TWBX verification.
 | 5 | Aggregation | tumor documentation | `tpf_count` = count of tumor rows per `til_order_name`, 0 when absent; `has_tumor` = tpf_count > 0. | per-order counts | `build_analysis_table.py:177-180`. Confirmed |
 | 6 | Join | infusion export | Infusion fields mapped one-to-one on `til_order_name`; `amtagvi_infused` = order has an infusion row AND `lifileucel_infused_` = "Yes" AND `infusion_date` is not null. | infusion flags | `build_analysis_table.py:188-194`. Confirmed |
 | 7 | Deduplication + Join | Veeva mapping | Mapping deduplicated on `center_key` (keep first), then orders LEFT JOIN mapping on `center_key` = normalized center name (lowercase, legal suffixes and punctuation stripped, whitespace collapsed). Unmatched orders keep null region/segment. | region, territory, atc_segment | `build_analysis_table.py:197-202`; `pipeline/cancellations.py:44-52`. Confirmed |
-| 8 | Calculation | tumor_pickup_date | `completed_ttp` = pickup date not null AND <= as-of; `scheduled_ttp` = pickup date > as-of. Asserted mutually exclusive. (Kolin's 2026-07-31 ruling: Scheduled means still upcoming.) | M4, M5 flags | `build_analysis_table.py:204-223`; `PPR Automation/VALIDATION LOG - dashboard.md`. Confirmed |
+| 8 | Calculation | tumor_pickup_date | `completed_ttp` = pickup date not null AND <= as-of; `scheduled_ttp` = pickup date > as-of. Asserted mutually exclusive. (The manager's 2026-07-31 ruling: Scheduled means still upcoming.) | M4, M5 flags | `build_analysis_table.py:204-223`; `PPR Automation/VALIDATION LOG - dashboard.md`. Confirmed |
 | 9 | Calculation | oos_status | `oos_product` = (oos_status = "Confirmed OOS"). | M8 flag | `build_analysis_table.py:210`. Confirmed |
 | 10 | Category mapping | til_order_cancellation_reason | Every reason maps to a category (health, choice, favourable, operational, physician, access, quality, other). Health list: Patient health progressed, Decline in Performance Status, Disease Progression, Brain Mets, Patient death, Transition to Hospice. Patient-related = health + Patient Choice. NED/MRD deliberately excluded (patient responded). Unmapped values print a WARNING but do not stop the run. | reason categories | `build_analysis_table.py:48-99,227-243`. Confirmed |
 | 11 | Calculation | fp_status | `mfg_started` = fp_status in {MFG Start, MFG End, REP Initiation, REP Scale Out, Released for Shipment by QA, Shipment Ready, Courier Picked-Up FP, Courier Delivered FP, FP CAH}. The five starting-material states are excluded (including them inflates the metric-9 denominator by roughly a third). | M9 denominator flag | `build_analysis_table.py:91-99,211`; `SOURCE TO TARGET MAPPING.md` Part D. Confirmed |
@@ -30,7 +30,7 @@ Confirmed / Inferred / TBD / Needs TWBX verification.
 | 21 | Aggregation | per-tier scorecards | Benchmark columns Top 10 / Top 40 / New = the MEDIAN across tier-member centers of each center's launch-to-date value (median so a few very large centers do not carry the comparison). The old 25th/50th/75th percentile "CurrentTemplate" rows were removed 2026-07-27. | benchmark rows | `build_scorecard.py:176-194`. Confirmed |
 | 22 | Aggregation | events | Final Events table: each event emitted once per column bucket it falls in, plus one copy tagged "Selected window" (the only copy the date parameters filter); benchmark values carried over (not recomputed) as pre-aggregated rows replicated per center; zero-value stubs added so directional cells render 0. | ppr_datewindow_long.csv | `pipeline/build_datewindow.py:118-199,259-273`. Confirmed |
 | 23 | Validation gate | scorecard | Build stops unless, per center per metric, Launch to Date = 2024 + 2025 + 2026 YTD + Undated + After as-of for additive count metrics. M2/M6/M7 are exempt: they count distinct patients and do not sum across periods (this "looks wrong" behavior is by design and must survive any port). | pass/fail | `build_scorecard.py:201-218`; `SOURCE TO TARGET MAPPING.md` lines 186-188. Confirmed |
-| 24 | Validation gate | event table vs scorecard | Stage 4 re-aggregates its own event table and compares every cell to the scorecard (tolerance 0.051); the build stops on disagreement EXCEPT for two exempt metrics: "2nd Resections (Scheduled or Completed)" (documented window-edge dedup case, 1 cell in 3,309 on synthetic data) and "Patient Progression Rate" (exempt in code, acknowledged only in a code comment - disagreements of any size on these two never stop the build). | pass/fail | `build_datewindow.py:342-343` (ALLOWED set); `ONE DASHBOARD - Tableau build.md`. Confirmed |
+| 24 | Validation gate | event table vs scorecard | Stage 4 re-aggregates its own event table and compares every cell to the scorecard (tolerance 0.051); the build stops on disagreement EXCEPT for two exempt metrics: "2nd Resections (Scheduled or Completed)" (documented window-edge dedup case, 1 cell in 3,309 on the test sample) and "Patient Progression Rate" (exempt in code, acknowledged only in a code comment - disagreements of any size on these two never stop the build). | pass/fail | `build_datewindow.py:342-343` (ALLOWED set); `ONE DASHBOARD - Tableau build.md`. Confirmed |
 
 ## Final Tableau Output
 
@@ -44,7 +44,7 @@ Confirmed / Inferred / TBD / Needs TWBX verification.
 | Important measures | value (SUM / MEDIAN / AVG depending on `agg`); unit (COUNTD target for the patient-distinct metrics) |
 | Date field | event_date (each event dated on its own metric event; see rule 17) |
 | Incremental field | None; every run is a full rebuild from the current exports. Confirmed |
-| Historical range | Launch to Date = all history in the extract (orders from 2024; LTD events from Aug 2024). Exact earliest order date: TBD. Real-data as-of at last office run: 2026-07-31 |
+| Historical range | Launch to Date = all history in the extract (orders from 2024; LTD events from Aug 2024). Exact earliest order date: TBD. Real-data as-of at last run: 2026-07-31 |
 
 The `agg` column is the aggregation contract Tableau must follow per row:
 `sum` = SUM(value); `distinct` = COUNTD(unit); `avg` = MEDIAN(value); `rate` =
@@ -54,8 +54,8 @@ Confirmed: `build_datewindow.py` docstring; `ONE DASHBOARD - Tableau build.md`.
 ## Needs TWBX Verification
 
 The build doc (`ONE DASHBOARD - Tableau build.md`) specifies the workbook, and
-a workbook existed and was partially checked on the office laptop on
-2026-08-03, but the .twbx itself is not in this environment. Verify there:
+the production workbook was partially checked on 2026-08-03, but full
+verification of the .twbx is still pending. Verify:
 
 - [ ] The three calculated fields match the build doc verbatim, especially
       `Result`: the doc's `"avg"` branch is `MEDIAN([value])`; a superseded
@@ -106,7 +106,7 @@ a workbook existed and was partially checked on the office laptop on
    golden-baseline diff tool (`pipeline/baseline.py`). They run inside the Glue
    job automatically; should any extra checks gate the Redshift load?
 8. Who owns job monitoring and failure alerts?
-9. Which environment should development and testing use? A seeded synthetic
+9. Which environment should development and testing use? A seeded sample-data
    generator exists (`PPR Automation/synthetic_data/generate_synthetic.py`)
    that matches the real schema, null rates, and join coverage.
 

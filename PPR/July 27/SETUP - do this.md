@@ -1,8 +1,8 @@
-# Office laptop, start to finish
+# SETUP - do this
 
 Windows, PowerShell. Every step says what you should see, so you know it worked before
-moving on. Real Infinity data never leaves this machine; only code and printed numbers
-travel back through git.
+moving on. Real Infinity data lives only in the `data` folder and is never committed;
+git carries code only.
 
 Steps 1 to 5 give you a working dashboard with no Tableau at all. Do those first.
 
@@ -39,51 +39,32 @@ Python 3.12 alongside it and use that instead:
 py -3.12 -m pip install -r requirements.txt
 ```
 
-and run everything below with `py -3.12` in place of `python`. Tell me which one you
-ended up on so the rest of the notes match.
+and run everything below with `py -3.12` in place of `python`. Whichever one you end up
+on, use it consistently in every command below.
 
 ---
 
-## 1. Get the latest code
+## 1. After pulling updates
 
-Your `VS Code` folder is not a git clone, so there is nothing to pull. Copy these across
-from the repo, overwriting what is there:
-
-```
-README.md
-OFFICE LAPTOP - do this.md      (this file)
-ONE DASHBOARD - Tableau build.md
-RUN_ALL.py
-requirements.txt
-metric3_cancellations.py
-data\README.md
-pipeline\metrics.py
-pipeline\cancellations.py
-pipeline\baseline.py
-pipeline\build_analysis_table.py
-pipeline\build_cancellations.py
-pipeline\build_scorecard.py
-pipeline\build_datewindow.py
-pipeline\build_hyper.py
-pipeline\build_dashboard_html.py
-```
+Whenever the code changes, three housekeeping steps keep this folder clean.
 
 Delete `pipeline\build_center_decks.py` if it is there. The PowerPoint stage was removed;
 the dashboard filters and screenshots cover it. The `decks\` folder can go too.
 
 **Leave alone:** `data\`, `analysis\`, `dashboard\`, `tableau\`, `PPR Dashboard.twbx`,
-`up.twb`. Those are yours and hold real output.
+`up.twb`. Those hold real output.
 
-Delete `pipeline\__pycache__` after copying. Stale `.pyc` files from the old versions
-are the one thing that can make a fresh script behave like the old one.
+Delete `pipeline\__pycache__`. Stale `.pyc` files from the old versions are the one thing
+that can make a fresh script behave like the old one.
 
 ---
 
 ## 2. Put the real exports in place
 
-You already have a `data` folder. Download these seven from Infinity into it as `.xlsx`.
-Only the part of the name in backticks has to match; export-date suffixes are fine, so
-`BAI - List of Orders 07.28.xlsx` matches `bai_list_of_orders`.
+Create a `data` folder here if there is not one already. Download these seven from
+Infinity into it as `.xlsx`. Only the part of the name in backticks has to match;
+export-date suffixes are fine, so `BAI - List of Orders 07.28.xlsx` matches
+`bai_list_of_orders`.
 
 | Needs to contain | Infinity report |
 |---|---|
@@ -107,15 +88,17 @@ python RUN_ALL.py
 
 The header prints the folder it is reading and how many `.xlsx` it found. It must be your
 `data` folder and it must say 7. If it found fewer it lists them, and stage 1 will stop
-and name the missing one. If it is reading the synthetic sample it prints a row of
-exclamation marks saying so; every number after that would be made up.
+and name the missing one. If it is reading the test sample it prints a row of
+exclamation marks saying so; every number after that comes from sample data, not the
+real exports.
 
 Six stages run in order. A minute or so.
 
-**Expect assertions to fire that never fired on synthetic data.** That is them working.
+**Expect assertions to fire that never fired on the test sample.** That is them working.
 If a stage stops with a message about cells not reconciling, or a column it did not
-recognise, copy the whole message and send it to me. Do not edit the script to make it
-pass. It is telling you something true about the real data.
+recognise, copy the whole message into the validation log before doing anything else.
+Do not edit the script to make it pass. It is telling you something true about the real
+data.
 
 ---
 
@@ -123,14 +106,14 @@ pass. It is telling you something true about the real data.
 
 Two prints in stage 2 matter:
 
-- `reconciles: N center/metric cells` — the year columns plus Undated plus After as-of
+- `reconciles: N center/metric cells` means the year columns plus Undated plus After as-of
   add up to Launch to Date everywhere. If this fails the run stops.
-- `events dated after the as-of date` — a list. Scheduled TTPs being in there is normal,
+- `events dated after the as-of date` is a list. Scheduled TTPs being in there is normal,
   they are future bookings. **AMTAGVI Infusions Performed being in there is not.** An
   infusion with a future date has not happened, so counting it as performed overstates
-  treated patients. Send me that number.
+  treated patients. Record that number in the validation log.
 
-Also note the `Undated` count. On synthetic data it was 7% of events, but synthetic
+Also note the `Undated` count. On the test sample it was 7% of events, but sample
 missingness is a property of the generator and tells us nothing. The real figure decides
 whether missing dates are a footnote or a problem.
 
@@ -179,7 +162,8 @@ It prints the same count (they must match, it shares one rule with the pipeline)
 built-in guard: if it comes back anywhere near 347 orders, the logic is wrong on the real
 data and the script says so. It also answers two questions off the same file: whether
 `fp_status` survives a cancellation (does the progression-rate denominator decay), and when
-each order was cancelled. Send me the printed summary. Numbers only, no rows.
+each order was cancelled. Record the printed summary in the validation log. Numbers only,
+no rows.
 
 ---
 
@@ -192,14 +176,14 @@ Close Tableau before any future `RUN_ALL.py` run. It holds the `.hyper` files op
 the run will fail with a permission error.
 
 This has never been built in the product. Anything that does not match the doc, write it
-down and I will fix the doc.
+down and fix the doc.
 
 ---
 
 ## 8. Before anyone reviews it
 
 Pick two or three centres that already have hand-built decks and compare cell by cell.
-Results go in the local validation log, not in this repo.
+Results go in the local validation log, not in the repo.
 
 Understand every difference before the review, not during. The first disputed cell decides
 whether the other twelve are believed.
@@ -210,15 +194,14 @@ whether the other twelve are believed.
 
 | Symptom | Cause |
 |---|---|
-| Row of `!!!!` saying synthetic | `data\` is missing, empty, or has no `.xlsx` |
+| Row of `!!!!` about the test sample | `data\` is missing, empty, or has no `.xlsx` |
 | `PermissionError` on a `.hyper` | Tableau Desktop is open. Close it and rerun |
 | `Could not find a file matching...` | one of the seven exports is missing or misnamed |
-| A stage stops on an assertion | real data disagrees with an assumption. Send the message |
+| A stage stops on an assertion | real data disagrees with an assumption. Note the message |
 | `ModuleNotFoundError` | rerun the `pip install` line in step 0 |
 | `pip install` fails building a wheel | Python 3.14. Use `py -3.12` (step 0) |
 | A script behaves like the old version | stale `pipeline\__pycache__`. Delete the folder |
 
 Rerunning is always safe. Every output is rebuilt from scratch.
 
-Nothing here writes outside the `VS Code` folder, and nothing sends data anywhere. Only
-what you copy into chat leaves the laptop.
+Nothing here writes outside the `VS Code` folder, and nothing sends data anywhere.

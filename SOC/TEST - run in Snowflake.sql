@@ -5,7 +5,7 @@
 
    ORDER OF WORK
      Q1 and Q7  run now. Q1 decides which roster organisations get folded in.
-                Q7 is the effort view for Tim. Send both grids back.
+                Q7 is the effort view for the field lead. Send both grids back.
      PATCH      paste the block into MAIN (3 places), rerun MAIN whole.
      Q2 to Q5   run after the rerun, before anything is shared.
      Q6         already run, internal check only, do not show a stakeholder.
@@ -20,7 +20,7 @@
 /* ============================================================================
    Q1. Site-level check on the eleven roster organisations. RUN THIS FIRST.
 
-   Tim's official roster (07/23) named eleven organisations sitting on our
+   The official roster (07/23) named eleven organisations sitting on our
    non-ATC side, about 399 patients. Seven of them are multi-state systems.
    Kaiser, Providence and St Luke's looked the same way and all three failed:
    the authorized site held zero or one patient while the volume sat at other
@@ -65,7 +65,7 @@ ORDER BY PARENT, PATIENTS DESC;
               OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%NYU LANGONE%'
               OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%WEXNER%'
               OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%HOAG%'
-              -- added 2026-07-24, Tim Logan's official roster, site-checked in Q1
+              -- added 2026-07-24, from the official roster, site-checked in Q1
               OR UPPER(TRIM(p.HCO_PARENT_NAME)) LIKE '%<passed org>%'
                 THEN 'ATC: roster gap corrected'
 
@@ -280,5 +280,5 @@ ORDER BY 3 DESC;
      2. put that csv next to build_workbook.py and run  python build_workbook.py
      3. the workbook rebuilds, Bridge tab included, no manual typing
      4. slide 3 numbers change and the name-matching footnote can come off
-     5. send to Tim
+     5. send to the field lead
    ============================================================================ */

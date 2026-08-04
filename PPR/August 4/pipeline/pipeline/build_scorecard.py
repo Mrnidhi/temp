@@ -15,7 +15,7 @@ HERE = os.path.dirname(__file__)
 OUT_DIR = os.path.join(HERE, "..", "analysis")
 A = pd.read_csv(os.path.join(OUT_DIR, "ppr_analysis.csv"), low_memory=False)
 # As-of date comes from stage 1, one definition for every stage. run_meta.json also
-# says whether this run is on the synthetic sample, so the dashboard can label itself.
+# says whether this run is on the test sample, so the dashboard can label itself.
 _META_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "analysis", "run_meta.json")
 if not os.path.exists(_META_PATH):
     raise SystemExit("analysis/run_meta.json missing. Run build_analysis_table.py (stage 1) first.")

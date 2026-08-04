@@ -1,7 +1,8 @@
 # Site of Care deck: cleanup edits
 
-Paste this whole file to the Claude add-in in the open PowerPoint deck
-("ATC vs Non-ATC Site of Care Analysis"). These are small, exact edits, not a redesign.
+Notes for applying cleanup edits to the PowerPoint deck
+("ATC vs Non-ATC Site of Care Analysis") through the Claude add-in. These are small,
+exact edits, not a redesign.
 
 ## How to work
 - Change only what each item names. Do not restyle, recolor, move, or resize anything else.

@@ -1,12 +1,12 @@
 # What was validated locally, 2026-08-04
 
-The job cannot reach Redshift or Glue from the build machine, so validation
+The job cannot reach Redshift or Glue from this machine, so validation
 covers the transformation completely and stops at the AWS boundary.
 
 Checked and passed:
 
 1. The ported transformation reproduces the reference pipeline byte for byte.
-   The synthetic source tables were loaded as DataFrames with lowercase
+   The test sample tables were loaded as DataFrames with lowercase
    column names, exactly the shape redshift-connector returns, and run
    through ppr_transform.run(). All three outputs (order master, scorecard,
    Events) came out identical to the reference pipeline files, byte for byte.
@@ -28,7 +28,7 @@ Checked and passed:
 6. ppr_daily_job.py and ppr_transform.py compile clean, and the job imports
    cleanly with stubbed AWS modules.
 
-Not checkable from here, first deployment should watch these:
+Not checkable outside AWS, first deployment should watch these:
 
 - Network path from the Glue job to the cluster, the secret shape, and the
   copy role permissions on the output bucket.

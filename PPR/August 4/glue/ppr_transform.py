@@ -5,7 +5,7 @@ reference pipeline in ../pipeline/ (build_analysis_table, build_cancellations,
 build_scorecard, build_datewindow); metrics.py and cancellations.py ship
 verbatim from there. The additivity and reconciliation gates run on every call,
 and the ported output was verified byte for byte against the reference on the
-synthetic dataset before handoff.
+test sample before handoff.
 """
 import io
 
@@ -49,8 +49,8 @@ def build_order_master(frames, asof_override=None):
         "Peer to Peer Consult":              "access",
         "Quality Status: Do Not Proceed":    "quality",
         "Other":                             "other",
-        # Exact strings seen in the REAL picklist (10 values). Kept alongside the synthetic
-        # spellings above because the two sets do not match.
+        # Exact strings from the source picklist (10 values). Kept alongside the other
+        # spellings seen in the data above because the two sets do not match.
         "Quality: Do Not Proceed":           "quality",
         "Clinical Trial/IST":                "physician",
         "Peer-to-Peer":                      "access",
@@ -73,7 +73,7 @@ def build_order_master(frames, asof_override=None):
     # so counting it as progression would report a good outcome as a failure.
     PATIENT_RELATED = {r for r, c in REASON_CATEGORY.items() if c in ("health", "choice")}
     # Manufacturing actually started. SM = starting material (the tumour courier leg), which
-    # happens BEFORE manufacturing, so the two SM states are deliberately excluded. On real
+    # happens BEFORE manufacturing, so the two SM states are deliberately excluded. In the
     # data "SM Pick-up Scheduled" alone is 305 orders, so including it would inflate metric 9's
     # denominator by roughly a third and understate the progression rate.
     MFG_STARTED = {"MFG Start", "MFG End", "REP Initiation", "REP Scale Out",

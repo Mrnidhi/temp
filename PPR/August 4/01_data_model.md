@@ -71,12 +71,12 @@ erDiagram
 ## Dataset Grain
 
 Note on numbers in this file: row counts and null rates come from the
-real-data schema profile and the live Infinity table notes (office laptop,
-2026-08-03), not from the synthetic sample in this repo. They are
+real-data schema profile and the live Infinity table notes (2026-08-03),
+not from the test sample in this repo. They are
 dataset-level only; no per-center values appear in this handoff.
 
 ```text
-bai_list_of_orders grain:        one row per TIL order (the hub; 2,290 rows in the live Infinity table, office notes 2026-08-03)
+bai_list_of_orders grain:        one row per TIL order (the hub; 2,290 rows in the live Infinity table, notes 2026-08-03)
 bai_tumor_documentation grain:   one row per procurement (an order can have several)
 bai_infusion grain:              one row per order (subset: infused orders only)
 veeva_komodo_atc_mapping grain:  one row per center

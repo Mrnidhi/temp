@@ -2,7 +2,7 @@
 
 Written 2026-08-03 from the project files in this repo. Every claim is labeled
 Confirmed / Inferred / TBD / Needs TWBX verification. The production Tableau
-workbook lives on the office laptop and is not in this environment, so nothing
+workbook has not yet been verified against this package, so nothing
 here is read from the workbook itself; workbook internals are marked
 `Needs TWBX verification`.
 
@@ -30,17 +30,17 @@ here is read from the workbook itself; workbook internals are marked
 - **Current refresh process:** manual and on demand. Download exports from
   Infinity into `data\`, close Tableau, run `python RUN_ALL.py` (6 stages),
   reopen the workbook, refresh each extract. Confirmed:
-  `git/PPR/July 27/README.md` section 8; `OFFICE LAPTOP - do this.md`.
+  `git/PPR/July 27/README.md` section 8; `SETUP - do this.md`.
 
 ## One-Sentence Architecture
 
-Current state (the laptop flow this package documents):
+Current state (the current local flow):
 
 ```text
 6 required Infinity Excel exports (+1 optional)
   -> Python pipeline (RUN_ALL.py, 6 stages: clean/join -> metric-3 events -> scorecard -> event table -> extracts -> HTML)
   -> tableau/ppr_datewindow.hyper (table Events)
-  -> P&PR Dashboard workbook (Tableau Desktop, office laptop)
+  -> P&PR Dashboard workbook (Tableau Desktop)
 ```
 
 Agreed target architecture (2026-08-03, the goal every artifact in this
@@ -83,5 +83,5 @@ Target Tableau link:     Redshift table ppr.ppr_events, refreshed only after the
    preparation, hover any column for its formula
 5. [glue/](glue/) - the daily job for the target architecture (job script, DDL, config,
    validation record)
-6. [pipeline/](pipeline/) - the reference python implementation as it runs on the office
-   laptop today; the Glue job must reproduce its output
+6. [pipeline/](pipeline/) - the reference python implementation as it runs
+   locally today; the Glue job must reproduce its output

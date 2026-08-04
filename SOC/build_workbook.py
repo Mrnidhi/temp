@@ -538,7 +538,7 @@ for net in ["Independent / Other","THE US ONCOLOGY NETWORK","ONE ONCOLOGY","AMER
 print("S9 done")
 
 # ================================================================ BRIDGE · PRIOR vs CURRENT
-# Answers the two things Tim asked for: reconcile the earlier primary-only count with
+# Answers the two things the field lead asked for: reconcile the earlier primary-only count with
 # this one, and show how much of the ATC base sits under the parent rather than at the
 # listed center. Everything reads off Patient Data, so it follows the real export.
 ws=brg; widths(ws,{"A":26,"B":13,"C":13,"D":13,"E":13,"F":13,"G":13,"H":13,"I":13,"J":13,"K":13,"L":13})

@@ -12,8 +12,8 @@ every output, then reports exactly what a later change did.
 Freeze BEFORE changing any calculation. Diff after every change. A diff of zero rows is the
 only evidence that a refactor was safe.
 
-Real patient data never leaves the office laptop, so the reference stores aggregates and
-hashes only, never order-level rows.
+Patient-level data stays out of the repository, so the reference is machine-local and
+stores aggregates and hashes only, never order-level rows.
 """
 import hashlib
 import json
@@ -61,8 +61,8 @@ def freeze(asof):
         json.dump(meta, f, indent=2)
     print(f"\nreference written to {os.path.relpath(REF, HERE)}")
     print("Diff against it after every change. Machine-local, never committed: a reference")
-    print("frozen on synthetic data says nothing about real data, and re-freezing on the")
-    print("office laptop would put real rows in the repo.")
+    print("frozen on the test sample says nothing about the data, and a reference frozen")
+    print("on the data would put patient rows in the repo.")
 
 
 def diff():

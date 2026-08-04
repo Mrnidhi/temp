@@ -15,7 +15,7 @@ Denominator = 16,246 metastatic melanoma patients on Yervoy/Opdualag (McKesson, 
 Non-ATC total = 8,643 (Non-ATC 6,832 + Community Network 1,317 + System sweep 351 +
 Unknown 143). Needs Review = 102. Grand total 16,246. Reconciles exactly.
 
-## The bridge (this is the apples-to-apples Tim asked for)
+## The bridge (this is the apples-to-apples the field lead asked for)
 
 | Step | Method | Patients | ATC share |
 |------|--------|----------|-----------|
@@ -25,7 +25,7 @@ Unknown 143). Needs Review = 102. Grand total 16,246. Reconciles exactly.
 | = | Current analysis total | 7,501 | 46.2% |
 
 Step 1 (20.0%) matches the old 19-24% range. Step 2 is exactly the "leveraging
-parent-child relationships" Tim described. Step 3 is the roster fixes. Same population
+parent-child relationships" the field lead described. Step 3 is the roster fixes. Same population
 throughout, so the old number and the new number are reconciled line by line.
 
 ## Site-split finding (corrects the earlier "closer to 50%")

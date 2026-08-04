@@ -6,9 +6,9 @@ PPR pipeline - Tableau extracts. Writes native .hyper sources for Tableau Deskto
 - tableau/ppr_analysis.hyper   (table "Orders"): order-grain rows with the derived flags and
   dates, for native calc-field builds (the 13 metrics as Tableau calcs) and custom views.
 
-Repoint story: on the office laptop, rerun the pipeline on the real Infinity files, rerun this,
-then refresh the workbook's extract. .hyper is Tableau's native format, so this is the robust
-source to build against.
+To refresh: rerun the pipeline on the current Infinity exports, rerun this, then refresh
+the workbook's extract. .hyper is Tableau's native format, so this is the robust source to
+build against.
 """
 import os
 import pandas as pd

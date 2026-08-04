@@ -92,11 +92,11 @@ That is the whole build. One source, one sheet, one dashboard.
 
 ## How it is used
 
-Pick a centre. Read the fixed columns exactly as before. When he wants a different period,
-drag the two dates and read the **Selected window** column. Nothing else moves.
+Pick a centre. Read the fixed columns exactly as before. When the manager wants a different
+period, drag the two dates and read the **Selected window** column. Nothing else moves.
 
-To reproduce one of his existing decks, set the dates to that deck's window and compare the
-Selected column against his slide.
+To reproduce one of the manager's existing decks, set the dates to that deck's window and
+compare the Selected column against the slide.
 
 ---
 
@@ -123,5 +123,5 @@ in the total — which biases every period optimistic.
 
 **2nd Resections** is deduped across all time rather than per window, so in a narrow window
 it can differ by one from the precomputed scorecard. Measured: 1 cell in 3,309 on the
-synthetic set. Rendering it correctly per window needs an LOD calculation; left alone until
+test sample. Rendering it correctly per window needs an LOD calculation; left alone until
 someone asks for that metric by window.

@@ -203,7 +203,7 @@ td.diff{background:rgba(47,93,138,.07);font-weight:600}
   </div>
 
   <div class="foot-band">Advancing Immuno-Oncology</div>
-  <div class="foot-legal">&copy; 2025 Iovance Biotherapeutics, Inc. &nbsp;|&nbsp; Confidential for Internal Use Only &nbsp;|&nbsp; Built on synthetic data matching the Infinity schema</div>
+  <div class="foot-legal">&copy; 2025 Iovance Biotherapeutics, Inc. &nbsp;|&nbsp; Confidential for Internal Use Only &nbsp;|&nbsp; Built on the test sample matching the Infinity schema</div>
 </div>
 
 <script>
@@ -214,10 +214,10 @@ const BENCH_LABEL={"Top 10":"Top 10 ATCs","Top 40":"Top 40 ATCs","New":"'New' AT
 const active={Time:true,Benchmark:true,Quarter:true};
 let center=DEFAULT;
 document.getElementById("asof").textContent=SC.asof;
-// Label the data source honestly. Synthetic numbers must never pass as real, and real
-// numbers must never carry a synthetic caption.
+// Label the data source honestly. Test-sample numbers must never pass as the data, and
+// the data must never carry a test-sample caption.
 document.getElementById("buildtag").textContent =
-  SC.synthetic ? "SYNTHETIC DATA - preview only" : "Infinity extract";
+  SC.synthetic ? "TEST SAMPLE - preview only" : "Infinity extract";
 if(SC.synthetic)document.getElementById("buildtag").style.color="#C0392B";
 
 const dl=document.getElementById("centerlist");

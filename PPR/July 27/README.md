@@ -12,7 +12,7 @@ afterwards every data refresh is just rerun + Extract > Refresh.
 
 ```
 July 27/
-  OFFICE LAPTOP - do this.md   start here on the office laptop; every step, in order
+  SETUP - do this.md   start here; setup and every run step, in order
   README.md                    this file
   RUN_ALL.py                   run this; executes the whole pipeline in order
   requirements.txt             pip install -r this first
@@ -37,7 +37,7 @@ The `data/`, `analysis/`, `dashboard/`, `baseline/` folders and the `.hyper` ext
 gitignored: all regenerable in one command, and all holding real patient rows once the
 pipeline runs on real data. Only source (code + docs) is committed.
 
-## 2. One-time setup (office laptop)
+## 2. One-time setup
 
 1. Install Python 3.9+ (check: `python --version`).
 2. `pip install -r requirements.txt`
@@ -46,7 +46,7 @@ pipeline runs on real data. Only source (code + docs) is committed.
    exports in it, filenames containing: `bai_list_of_orders`, `bai_infusion`,
    `bai_slot_data`, `bai_ttp_data`, `bai_tumor_documentation`,
    `veeva_call_activity`, `veeva_komodo_atc_mapping` (all `.xlsx`).
-   Real data stays on the office laptop; only code travels through git.
+   Real data never goes into git; only code is committed.
 
 ## 3. Run the pipeline
 
@@ -54,7 +54,7 @@ pipeline runs on real data. Only source (code + docs) is committed.
 python RUN_ALL.py
 ```
 Input is found automatically, first match wins: the `PPR_INPUT_DIR` env var if
-set, then the `data/` folder next to `RUN_ALL.py`, then the synthetic sample
+set, then the `data/` folder next to `RUN_ALL.py`, then the test sample
 (dev only). The first line of output says which input it picked - check it.
 
 The run prints each stage and ends with the three extracts written. Rerunning is
@@ -119,7 +119,7 @@ per-center decks ("timing metrics based upon the TTP or Infusion Date"):
 
 Timing rows are medians, not averages. Confirmed verbally against the existing Infinity
 scorecard: "what it shows you is essentially, like, the median for all these
-values." Medians also resist the big-center skew he flagged in Meet 4.5. The
+values." Medians also resist the big-center skew the manager flagged earlier. The
 column headers still read "Average Time ..." because that is the wording in the
 mandated template; the number underneath is a median.
 
