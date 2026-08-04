@@ -3,16 +3,24 @@
    MASTER FILE: fills columns N to R of "ATC Check_Excersise" (Active ATC List).
 
    HOW TO RUN
-       Run PART 0 on its own FIRST and read the two column lists it returns. The
-       Compile Provider360 column names in this file are ASSUMED, not verified -
-       I have never queried these two tables. If PART 0 shows different names,
-       change them in Step 2 and Step 4 and nowhere else; every other line in the
-       file reads the aliases, not the source columns.
+       Column names are now VERIFIED against both source tables, read off
+       PART 0A and 0B on 2026-08-04, so PART 0 is a re-check rather than a gate.
+       Run statements one at a time, PART 0 first, then PART A top to bottom,
+       then PART C, then PART B. Do not paste PART B output into the sheet
+       until every check in PART C says PASS.
 
-       Then paste the rest and Run All. Part A builds four transient tables,
-       Part B returns the paste-back blocks, Part C is the QA that has to pass
-       before anything goes near the workbook. Do not paste Part B output into
-       the sheet until every check in Part C says PASS.
+       Part A builds four transient tables, Part B returns the paste-back
+       blocks, Part C is the QA. If either source table ever changes shape, the
+       column names live in exactly two blocks, both marked with a #### banner,
+       one in Step 2 and one in Step 4. Every other line reads the aliases.
+
+   WHAT THIS DOES, AND ONLY THIS
+       Kolin's instruction, verbatim in scope: get facility ID and name from
+       IOV2501_FACILITY_ATTRIBUTES matching on address, likely account type
+       Hospital, then use the facility ID to get HCO ID and name from
+       IOV2501_HCO_FULL_HIERARCHY. Nothing beyond that is scored, filtered or
+       ranked here. ACTIVE_FLAG and the facility type levels exist in the
+       source and are deliberately unused.
 
    Business question:
        For each authorized treatment center, what is its McKesson Compile
@@ -113,20 +121,39 @@ ORDER BY 2 DESC;
 
 
 /* ---------------------------------------------------------------------------
-   0D. Shape of the hierarchy for one facility whose answer we already know.
-       Paste in the full facility ID from cell N3 of the sheet (the UAB row,
-       starting LOC-OL3JY922VJ2 - type it from the sheet, not from this file;
-       the screenshot cut the string off).
+   0D. Sample the hierarchy so the facility ID format is visible before the
+       join is written against it. Five rows is enough.
 
-       What this settles: whether the hierarchy returns ONE row per facility or
-       one row per level. Kolin's own answer for that row is HCO "UAB HOSPITAL",
-       not "University Of Alabama System", and the system name is already sitting
-       in sheet column C. So if several levels come back, the one we want is the
-       level nearest the facility, and $hco_level_pick in Step 4 controls that.
+       This is here because a lookup by a single pasted ID returned nothing on
+       the first attempt, and an empty grid does not say whether the ID was
+       wrong, the format differs, or the facility genuinely has no HCO row.
+       Reading five real rows answers all three at once.
+
+       What to check: does D_FACILITY_COMPILE_ID here look like the LOC-...
+       values in sheet column N, and is D_HCO_COMPILE_ID populated.
    --------------------------------------------------------------------------- */
-SELECT *
+SELECT
+    D_FACILITY_COMPILE_ID,
+    FACILITY_NAME,
+    D_HCO_COMPILE_ID,
+    HCO_NAME,
+    LEVEL_1_NAME,
+    LEVEL_2_NAME
 FROM COMPILE_PROVIDER360.RELATIONSHIPS.IOV2501_HCO_FULL_HIERARCHY
-WHERE D_FACILITY_COMPILE_ID = 'PASTE_CELL_N3_HERE';
+LIMIT 5;
+
+
+/* ---------------------------------------------------------------------------
+   0E. One row per facility, or several? The Step 4 join assumes one. If this
+       returns 0, the join cannot fan out and the dedup guard never fires.
+   --------------------------------------------------------------------------- */
+SELECT COUNT(*) AS FACILITIES_WITH_MORE_THAN_ONE_ROW
+FROM (
+    SELECT D_FACILITY_COMPILE_ID
+    FROM COMPILE_PROVIDER360.RELATIONSHIPS.IOV2501_HCO_FULL_HIERARCHY
+    GROUP BY 1
+    HAVING COUNT(*) > 1
+);
 
 
 
@@ -142,10 +169,6 @@ SET as_of_date = '2026-08-04';
 -- Two ATCs in one building is possible but rare, so a facility claimed by more
 -- than this many ATCs stops the run rather than being accepted.
 SET max_atcs_per_facility = 1;
-
--- Which hierarchy row to keep when a facility has several, counting from the
--- level nearest the facility. Set this from what 0D actually returns.
-SET hco_level_pick = 1;
 
 -- Below this, a name similarity is only ever a review suggestion, never a match.
 SET min_name_similarity = 90;
@@ -261,21 +284,30 @@ CREATE OR REPLACE TRANSIENT TABLE COMPILE_DEV.PUBLIC.ATC_XWALK_NORM AS
 WITH fac_raw AS (
     /* ####################################################################
        THE ONLY PLACE COMPILE FACILITY COLUMN NAMES APPEAR IN THIS FILE.
-       These names are ASSUMED from the sheet headers Kolin used, not read
-       off the table. Reconcile against PART 0A and fix here only.
+       Names VERIFIED against PART 0A on 2026-08-04: the table returns 18
+       columns and the address block is prefixed FACILITY_, not bare.
+       Notes from that column list:
+         - FACILITY_ZIP_5 is already five digits, with ZIP_4 held separately,
+           so the LPAD downstream is a no-op on this side and only does work
+           on the ATC side where Excel ate Yale's leading zero.
+         - FACILITY_ADDRESS_LINE_2 exists, so suites and floors are unlikely
+           to be sitting in line 1. Line 1 alone is the right match key.
+         - ACTIVE_FLAG and FACILITY_TYPE_LEVEL_1/2/3 also exist and are NOT
+           used. Kolin asked for a match on address with the account type
+           likely Hospital, and nothing else. Left here as a note only.
        #################################################################### */
     SELECT
         D_FACILITY_COMPILE_ID          AS FACILITY_ID,
         FACILITY_NAME                  AS FACILITY_NAME,
         FACILITY_TYPE                  AS FACILITY_TYPE,
-        ADDRESS_LINE_1                 AS RAW_ADDRESS,
-        CITY                           AS RAW_CITY,
-        STATE                          AS RAW_STATE,
-        ZIP                            AS RAW_ZIP,
-        NPI                            AS FACILITY_NPI
+        FACILITY_ADDRESS_LINE_1        AS RAW_ADDRESS,
+        FACILITY_CITY                  AS RAW_CITY,
+        FACILITY_STATE                 AS RAW_STATE,
+        FACILITY_ZIP_5                 AS RAW_ZIP,
+        D_FACILITY_NPI                 AS FACILITY_NPI
     FROM COMPILE_PROVIDER360.ENTITIES.IOV2501_FACILITY_ATTRIBUTES
-    WHERE UPPER(TRIM(STATE)) IN (SELECT DISTINCT ATC_STATE
-                                 FROM COMPILE_DEV.PUBLIC.ATC_XWALK_INPUT)
+    WHERE UPPER(TRIM(FACILITY_STATE)) IN (SELECT DISTINCT ATC_STATE
+                                          FROM COMPILE_DEV.PUBLIC.ATC_XWALK_INPUT)
 ),
 both_sides AS (
     SELECT
@@ -496,25 +528,32 @@ WITH picked AS (
 hco_raw AS (
     /* ####################################################################
        THE ONLY PLACE COMPILE HIERARCHY COLUMN NAMES APPEAR IN THIS FILE.
-       ASSUMED, same as the facility block. Reconcile against 0B and 0D.
-       If the table has no level column, drop HCO_LEVEL and the QUALIFY
-       below, then rely on C3B to prove no facility returns two HCOs.
+       Names VERIFIED against PART 0B on 2026-08-04. The table is WIDE, not
+       long: 29 columns, one row per facility, carrying D_HCO_COMPILE_ID and
+       HCO_NAME directly plus a twelve-level parent chain in
+       D_LEVEL_1_COMPILE_ID / LEVEL_1_NAME through LEVEL_12.
+
+       There is NO level column, so there is nothing to pick a level from -
+       the HCO is simply on the row. The dedup below is a guard, not a
+       choice: if the table really is one row per facility it changes
+       nothing, and C3B proves whether that holds. Ordered by HCO_ID so the
+       guard is deterministic if it ever does fire.
+
+       LEVEL_1_NAME through LEVEL_12_NAME are the parent chain, which is
+       where sheet column C, "ATC HCO Parent Name (McKesson Claims)", would
+       be found. Not pulled through: the sheet asks for five columns and
+       already has the parent. Worth revisiting as a cross-check.
        #################################################################### */
     SELECT
         D_FACILITY_COMPILE_ID AS FACILITY_ID,
         D_HCO_COMPILE_ID      AS HCO_ID,
-        HCO_NAME              AS HCO_NAME,
-        HCO_LEVEL             AS HCO_LEVEL
+        HCO_NAME              AS HCO_NAME
     FROM COMPILE_PROVIDER360.RELATIONSHIPS.IOV2501_HCO_FULL_HIERARCHY
 ),
 hco AS (
-    -- One HCO per facility, the level nearest the facility. Kolin's own filled
-    -- rows point this way: the UAB facility carries HCO "UAB HOSPITAL", while
-    -- the system name "University Of Alabama System" already sits in column C.
     SELECT *
     FROM hco_raw
-    QUALIFY ROW_NUMBER() OVER (PARTITION BY FACILITY_ID
-                               ORDER BY HCO_LEVEL, HCO_ID) = $hco_level_pick
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY FACILITY_ID ORDER BY HCO_ID) = 1
 )
 SELECT
     i.SHEET_ROW,
@@ -791,7 +830,7 @@ ORDER BY 3 DESC;
    --------------------------------------------------------------------------- */
 SELECT
     COUNT(*)                                       AS FACILITIES_WITH_MULTIPLE_HCOS,
-    CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'REVIEW - see 0D and $hco_level_pick' END AS CHECK_RESULT
+    CASE WHEN COUNT(*) = 0 THEN 'PASS' ELSE 'REVIEW - see 0E' END AS CHECK_RESULT
 FROM (
     SELECT D_FACILITY_COMPILE_ID
     FROM COMPILE_DEV.PUBLIC.ATC_XWALK_MATCHED
@@ -867,9 +906,8 @@ ORDER BY e.SHEET_ROW;
        Provider360 hierarchy at all.
 
        Two routes to the same value exist here on purpose, and this is the check
-       that proves they agree. Where they disagree, $hco_level_pick is the first
-       thing to look at: it usually means the hierarchy is returning the parent
-       system where the claims return the hospital.
+       that proves they agree. A disagreement usually means the hierarchy is
+       returning the parent system where the claims return the hospital.
 
        The NPI list is pushed into the claims scan so this stays cheap - without
        it this reads the whole claims table.
@@ -897,7 +935,7 @@ SELECT
     CASE WHEN c.CLAIMS_HCO_ID IS NULL              THEN 'no claims for this NPI'
          WHEN m.D_HCO_COMPILE_ID IS NULL           THEN 'hierarchy returned nothing'
          WHEN m.D_HCO_COMPILE_ID = c.CLAIMS_HCO_ID THEN 'AGREE'
-         ELSE 'DISAGREE - check $hco_level_pick'
+         ELSE 'DISAGREE - hierarchy and claims give different HCOs'
     END AS CHECK_RESULT
 FROM COMPILE_DEV.PUBLIC.ATC_XWALK_MATCHED m
 LEFT JOIN claims_hco c ON m.ATC_NPI = c.NPI
@@ -913,7 +951,6 @@ SELECT
     'ATC Check_Excersise / Active ATC List, orange columns J to M' AS INPUT_SOURCE,
     'COMPILE_PROVIDER360.ENTITIES.IOV2501_FACILITY_ATTRIBUTES'     AS FACILITY_SOURCE,
     'COMPILE_PROVIDER360.RELATIONSHIPS.IOV2501_HCO_FULL_HIERARCHY' AS HCO_SOURCE,
-    $hco_level_pick                                                AS HCO_LEVEL_PICK,
     $min_name_similarity                                           AS MIN_NAME_SIMILARITY,
     $min_addr_similarity                                           AS MIN_ADDR_SIMILARITY,
     (SELECT COUNT(*) FROM COMPILE_DEV.PUBLIC.ATC_XWALK_INPUT)      AS ATCS_IN,
