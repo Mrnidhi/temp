@@ -80,8 +80,8 @@ select count(*)                                      as snapshot_rows_in_65_day_
        count(distinct order_request__til_order_name) as orders_in_65_day_window
 from bai_list_of_orders_hist
 where order_request__til_order_name is not null
-  and substr(load_datetime, 1, 8) >= '20240803'
-  and substr(load_datetime, 1, 8) <  '20241007';
+  and substring(load_datetime, 1, 8) >= '20240803'
+  and substring(load_datetime, 1, 8) <  '20241007';
 
 
 -- A3. Raw snapshot export for local non-null-to-null / date-change detection.
