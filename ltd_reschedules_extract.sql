@@ -1,6 +1,0 @@
-select
-    ORDER_ID,
-    TTP_DATE_PREV,
-    SNAPSHOT_DATE_TIME_CURR,
-    RESCHEDULED_CATEGORY
-from LTD_Reschedules;

@@ -1,28 +1,37 @@
 # Message for Vinay
 
-Hi Vinay — I put together a small package with two separate LTD extraction queries and the
-Metric 3 CSV endpoint.
+Hi Vinay — I investigated the apparent 65-day cancellation gap and put together a complete
+runnable PPR package, including the full transformation logic and `RUN_ALL.py`.
 
-Could you test it with the same LTD exports and as-of date used by the current approved
-LTD-only process? Run each extraction query separately, export both results, and run the command
-below. Then send the generated CSV through the existing flow and compare the final
-analysis-ready table with the current LTD-only output.
+What I found:
 
-If the column order, row count, and row-level values all match, we can use this optimised flow.
-The history table is intentionally not part of this test or a fallback source.
+- Measured: LTD starts recording on 3-Aug-2024, while `bai_list_of_orders_hist` starts on
+  7-Oct-2024. This is a 65-day coverage gap, not two competing cancellation logics.
+- Measured: in that 3-Aug-to-6-Oct window, LTD has 32 cancellation rows across 31 orders; the
+  history query returns zero rows.
+- Measured: LTD has 575 cancellation rows across 528 orders overall, and 245 rows meet the
+  existing short-notice condition.
+- Measured: history contains 12,361 snapshots across 1,295 orders and begins only after the
+  gap. It is snapshot history, so using it to fill the gap would infer events and could duplicate
+  the direct LTD events.
 
-Both LTD exports are required. The endpoint stops if either export is missing or invalid, rather
-than producing a partial Metric 3 file.
+The decision in the package is therefore simple: Metric 3 uses only `LTD_Reschedules` and
+`LTD_Cancellations`. History is retained only for archive/reconciliation checks; it is not used as
+an analytics input or a fallback.
+
+Could you test the package with the same source exports and as-of date used by the current
+approved LTD-only process? Run the full flow below and compare the resulting analysis-ready table
+with the current LTD-only output. If the column order, row count, and row-level values all match,
+we can use this optimised flow.
+
+The four order-level exports plus both LTD exports are required. The pipeline stops if any
+required input is missing or invalid, rather than producing a partial result.
 
 ## Run command
 
 ```bash
-python build_ltd_metric3_csv.py \
-  --reschedules /path/LTD_Reschedules.csv \
-  --cancellations /path/LTD_Cancellations.csv \
-  --as-of-date 2026-08-07 \
-  --output /path/ltd_metric3_events.csv
+PPR_INPUT_DIR=/path/to/source_exports python "PPR/July 27/RUN_ALL.py"
 ```
 
-The generated CSV is the Metric 3 input; the existing pipeline still produces the final
-analysis-ready table.
+The final output is `PPR/July 27/ppr_events.csv`. The standalone Metric 3 CSV endpoint is also
+included if it is useful separately, but it is not needed to run the full flow.
