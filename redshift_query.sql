@@ -6,4 +6,4 @@ SELECT
     TTP_DATE as ttp_date, 
     SNAPSHOT_DATE_TIME_CURR as snapshot_date, 
     CANCELLATION_REASON as cancellation_reason
-FROM baiods_reports.ltd_cancellations_ltd_cancellations;
+FROM LTD_Cancellations;
