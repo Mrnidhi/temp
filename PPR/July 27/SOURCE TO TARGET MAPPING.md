@@ -29,7 +29,7 @@ Everything the pipeline reads. Columns not listed are ignored.
 | `oos_status` | out-of-spec flag |
 | `fp_status` | manufacturing-started flag |
 | `til_order_cancellation_reason` | drop-out classification for metrics 7 and 9 |
-| `resection_rescheduled_` | fallback only, superseded by the LTD tables |
+| `resection_rescheduled_` | retained for reference only; never used for metric 3 |
 | `patient_zip_code` | cleaned but drives no metric |
 
 ### bai_tumor_documentation

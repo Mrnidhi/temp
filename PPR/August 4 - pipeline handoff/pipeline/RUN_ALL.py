@@ -50,7 +50,7 @@ def main() -> int:
                   os.path.join(HERE, "data"),
                   os.path.join(HERE, "synthetic_data", "out")]
     src = next((p for p in candidates if p and os.path.isdir(p)
-                and any(f.endswith(".xlsx") for f in os.listdir(p))), None)
+                and any(f.lower().endswith((".xlsx", ".csv")) for f in os.listdir(p))), None)
     if not src:
         print("No input found. Put the 7 Infinity .xlsx exports in:", flush=True)
         print("   " + os.path.abspath(os.path.join(HERE, "data")), flush=True)
@@ -58,11 +58,11 @@ def main() -> int:
         return 1
 
     src = os.path.abspath(src)
-    xlsx = sorted(f for f in os.listdir(src) if f.endswith(".xlsx"))
+    exports = sorted(f for f in os.listdir(src) if f.lower().endswith((".xlsx", ".csv")))
     print("=" * 62, flush=True)
     print("PPR pipeline", flush=True)
     print("input:", src, flush=True)
-    print(f"found: {len(xlsx)} .xlsx files", flush=True)
+    print(f"found: {len(exports)} .xlsx/.csv files", flush=True)
     print("=" * 62, flush=True)
 
     # A test-sample run that reads like a real one is the dangerous case.
@@ -82,11 +82,11 @@ def main() -> int:
     if missing:
         print(f"\nMissing required export(s): {missing}", flush=True)
         print("Stage 1 will stop. See data\\README.md.\n", flush=True)
-    if not any(any(s in f for f in present) for s in METRIC3):
-        print("\nNeither LTD export is here, so metric 3 falls back to the snapshot history "
-              "or the proxy.", flush=True)
-        print("The source used is printed at stage 2 and recorded in run_meta.json.\n",
-              flush=True)
+    missing_m3 = [s for s in METRIC3 if not any(s in f for f in present)]
+    if missing_m3:
+        print(f"\nMissing required metric-3 export(s): {missing_m3}", flush=True)
+        print("Stage 2 will stop. bai_list_of_orders_hist is archive-only and is not a "
+              "fallback. See data\\README.md.\n", flush=True)
 
     # Pass the resolved folder down so no stage can pick a different one.
     env = {**os.environ, "PPR_INPUT_DIR": src}

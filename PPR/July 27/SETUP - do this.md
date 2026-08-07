@@ -133,37 +133,15 @@ periods and hit Apply. The table becomes period A, period B, difference.
 
 ---
 
-## 6. Metric 3 from the snapshot history
+## 6. Metric 3 from LTD events
 
-Metric 3 (TTPs cancelled or rescheduled within 7 days) is now counted from Infinity's
-snapshot history, not a proxy, as long as that export is in `data\`.
+Metric 3 (TTPs cancelled or rescheduled within 7 days) is counted from the two LTD event
+exports in `data\`: `LTD_Reschedules` and `LTD_Cancellations`. Export both; stage 2 stops if
+either is missing so a partial event feed cannot look like a valid metric.
 
-In Infinity, run this and export into the same `data` folder, filename containing `hist`:
-
-```sql
-SELECT order_request__til_order_name, record_number, load_datetime,
-       tumor_tissue_pick_up_date, atc, fp_status, til_order_cancellation_reason
-FROM bai_list_of_orders_hist
-```
-
-With that file present, `RUN_ALL.py` counts it automatically at **step 2**
-(`build_cancellations.py`): it walks each order's snapshots and flags a booked pickup date
-that moved or was cleared within 7 days. You will see it print
-`metric 3: N short-notice cancellation events`. Without the file, metric 3 falls back to the
-proxy and the run still completes.
-
-**Before trusting the number, run the standalone sanity check:**
-
-```
-python metric3_cancellations.py
-```
-
-It prints the same count (they must match, it shares one rule with the pipeline) plus a
-built-in guard: if it comes back anywhere near 347 orders, the logic is wrong on the real
-data and the script says so. It also answers two questions off the same file: whether
-`fp_status` survives a cancellation (does the progression-rate denominator decay), and when
-each order was cancelled. Record the printed summary in the validation log. Numbers only,
-no rows.
+`bai_list_of_orders_hist` is snapshot history, not an analytics input. It may be retained for
+an archive/reconciliation check, but it must not be substituted for LTD or added to LTD events.
+The `resection_rescheduled_` proxy is not used for metric 3.
 
 ---
 

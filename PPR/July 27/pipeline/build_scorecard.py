@@ -26,11 +26,10 @@ import json as _json
 RUN_META = _json.load(open(_META_PATH))
 TODAY = RUN_META["asof"]
 
-# Metric 3 source: 'ltd' and 'hist' both mean count real cancellation events (dated on
-# the lost slot); 'proxy' means the resection_rescheduled_ flag. Stage 2 decides and
-# records it.
-M3_SOURCE = RUN_META.get("m3_source", "proxy")
-M3_EVENTS = M3_SOURCE in ("ltd", "hist")
+M3_SOURCE = RUN_META.get("m3_source")
+if M3_SOURCE != "ltd":
+    raise SystemExit(f"Metric 3 requires LTD events, received source {M3_SOURCE!r}.")
+M3_EVENTS = True
 CANC = pd.read_csv(os.path.join(OUT_DIR, "ppr_cancellations.csv"))
 if len(CANC):
     CANC["event_date"] = pd.to_datetime(CANC["event_date"], errors="coerce")
@@ -95,9 +94,7 @@ def compute(df, start=None, end=None, avg="median", undated=False, future=False,
         return round(float(v), 1) if pd.notna(v) else np.nan
 
     # Metric 3 from real cancellation events (dated on the lost slot) when an event
-    # source produced them - the LTD exports or the snapshot history; the
-    # resection_rescheduled_ proxy otherwise. The window logic mirrors the buckets in
-    # build_datewindow so the two implementations reconcile.
+    # source produced them. The window logic mirrors build_datewindow.
     if M3_EVENTS and canc is not None:
         ed = canc["event_date"]
         if undated:

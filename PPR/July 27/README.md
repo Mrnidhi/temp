@@ -16,14 +16,14 @@ July 27/
   README.md                    this file
   RUN_ALL.py                   run this; executes the whole pipeline in order
   requirements.txt             pip install -r this first
-  metric3_cancellations.py     standalone metric-3 sanity check on the snapshot history
+  metric3_cancellations.py     archive-only snapshot-history diagnostic (not an analytics input)
   ONE DASHBOARD - Tableau build.md   the Tableau build recipe (one time)
-  data/                        drop the 7 Infinity exports (+ hist) here; gitignored, see data/README.md
+  data/                        drop the required Infinity exports here; gitignored, see data/README.md
   pipeline/
     metrics.py                 the 13 metric names, groups and event dates - one definition
     cancellations.py           the 7-day cancellation rule - one definition, shared
     build_analysis_table.py    step 1: joins the 7 Infinity .xlsx into one order-grain table
-    build_cancellations.py     step 2: counts metric 3 from the snapshot history
+    build_cancellations.py     step 2: counts metric 3 from LTD event exports
     build_scorecard.py         step 3: computes the 13 metrics for every center + benchmark
     build_datewindow.py        step 4: one row per metric event with its own event date
     build_hyper.py             step 5: writes the three native Tableau .hyper extracts
@@ -126,10 +126,11 @@ mandated template; the number underneath is a median.
 Because of event dating, Launch-to-Date does NOT have to equal 2024+2025+2026 for a
 metric (events missing a date sit in Launch-to-Date only). That is correct behavior.
 
-Metric 3 now counts real cancellations from the Infinity snapshot history when the
-`bai_list_of_orders_hist` export is in `data/` (step 2, `build_cancellations.py`); without
-that file it falls back to a proxy and the run still completes. The "New" benchmark tier
-still needs each center's onboarding year (flagged in `build_analysis_table.py`).
+Metric 3 uses `LTD_Reschedules` and `LTD_Cancellations` only (step 2,
+`build_cancellations.py`). It stops if either export is missing. `bai_list_of_orders_hist`
+is archive-only and must not be unioned with LTD events; the order-level proxy is not used.
+The "New" benchmark tier still needs each center's onboarding year (flagged in
+`build_analysis_table.py`).
 
 ## 8. Refresh cadence
 

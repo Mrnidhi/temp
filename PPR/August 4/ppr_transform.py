@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 from cancellations import (COUNT_DIRECTIONS, COUNT_GRAIN, THRESHOLD_DAYS,
-                           apply_rule, norm_center, _dates)
+                           _dates, _required_direction, _required_order, apply_rule, norm_center)
 
 
 def build_order_master(frames, asof_override=None):
@@ -159,8 +159,7 @@ def build_order_master(frames, asof_override=None):
     # Patient Progression Rate = (patient-related drop-offs AFTER mfg start) / (mfg starts)
     o["patient_related_dropout"] = o["til_order_cancellation_reason"].isin(PATIENT_RELATED)
     o["drop_after_mfg"] = o["mfg_started"] & o["patient_related_dropout"]
-    # Fallback only. The real rule needs the snapshot history; resection_rescheduled_ is the
-    # closest flag available from the file exports and fires far too often to be trusted.
+    # Retained for reference only. Metric 3 is built from LTD events below.
     o["ttp_cancel_le7"] = o["resection_rescheduled_"] == True
 
     _both = int((o["completed_ttp"] & o["scheduled_ttp"]).sum())
@@ -239,35 +238,36 @@ def build_m3_events(frames, A):
 
     r = frames.get("ltd_reschedules")
     c = frames.get("ltd_cancellations")
+    missing = [name for frame, name in ((r, "ltd_reschedules"),
+                                        (c, "ltd_cancellations")) if frame is None]
+    if missing:
+        raise ValueError("Metric 3 requires both LTD event tables. Missing: " + ", ".join(missing))
     parts, files = [], []
-    if r is not None and len(r):
+    if "rescheduled_category" not in r.columns:
+        raise KeyError("ltd_reschedules is missing rescheduled_category")
+    if r is not None:
         parts.append(pd.DataFrame({
-            "order":       r["order_id"].astype(str).str.strip(),
+            "order":       _required_order(r["order_id"]),
             "lost_slot":   _dates(r["ttp_date_prev"], "TTP_DATE_PREV"),
             "recorded_on": _dates(r["snapshot_date_time_curr"], "SNAPSHOT_DATE_TIME_CURR"),
             "kind":        "rescheduled",
-            "direction":   (r["rescheduled_category"].astype(str).str.strip()
-                            if "rescheduled_category" in r.columns else np.nan),
+            "direction":   _required_direction(r["rescheduled_category"]),
             "reason":      np.nan,
         }))
         files.append("ltd_reschedules")
-    if c is not None and len(c):
+    if "cancellation_reason" not in c.columns:
+        raise KeyError("ltd_cancellations is missing cancellation_reason")
+    if c is not None:
         parts.append(pd.DataFrame({
-            "order":       c["order_id"].astype(str).str.strip(),
+            "order":       _required_order(c["order_id"]),
             # a cancellation clears the date, so its single TTP_DATE is the lost slot
             "lost_slot":   _dates(c["ttp_date"], "TTP_DATE"),
             "recorded_on": _dates(c["snapshot_date_time_curr"], "SNAPSHOT_DATE_TIME_CURR"),
             "kind":        "cancelled",
             "direction":   np.nan,
-            "reason":      (c["cancellation_reason"].astype(str).str.strip()
-                            if "cancellation_reason" in c.columns else np.nan),
+            "reason":      c["cancellation_reason"].astype("string").str.strip(),
         }))
         files.append("ltd_cancellations")
-
-    if not parts:
-        print("metric 3: no reschedule or cancellation table in the source schema; "
-              "using the resection_rescheduled_ proxy from stage 1")
-        return pd.DataFrame(columns=COLS), {"m3_source": "proxy"}
 
     ev = apply_rule(pd.concat(parts, ignore_index=True), THRESHOLD_DAYS, COUNT_DIRECTIONS)
 
@@ -290,7 +290,9 @@ def build_m3_events(frames, A):
     if len(lost):
         print(f"  WARNING: {len(lost)} event(s) at order(s) not in the order table, "
               f"EXCLUDED from metric 3: {sorted(lost['order'].astype(str).unique())[:5]}")
+    before_mapping = len(ev)
     ev = ev.dropna(subset=["center_disp"]).reindex(columns=COLS)
+    assert len(ev) + len(lost) == before_mapping, "Metric 3 centre-mapping funnel did not reconcile."
 
     meta = {"m3_source": "ltd", "m3_files": files,
             "m3_directions": sorted(COUNT_DIRECTIONS), "m3_grain": COUNT_GRAIN}
@@ -323,11 +325,10 @@ def build_scorecard(A, canc, meta):
     # As-of date comes from stage 1, one definition for every stage.
     TODAY = meta["asof"]
 
-    # Metric 3 source: 'ltd' and 'hist' both mean count real cancellation events (dated on
-    # the lost slot); 'proxy' means the resection_rescheduled_ flag. Stage 2 decides and
-    # records it.
-    M3_SOURCE = meta.get("m3_source", "proxy")
-    M3_EVENTS = M3_SOURCE in ("ltd", "hist")
+    M3_SOURCE = meta.get("m3_source")
+    if M3_SOURCE != "ltd":
+        raise ValueError(f"Metric 3 requires LTD events, received source {M3_SOURCE!r}.")
+    M3_EVENTS = True
     if len(CANC):
         CANC["event_date"] = pd.to_datetime(CANC["event_date"], errors="coerce")
     elif M3_EVENTS:
@@ -404,9 +405,7 @@ def build_scorecard(A, canc, meta):
             return round(float(v), 1) if pd.notna(v) else np.nan
 
         # Metric 3 from real cancellation events (dated on the lost slot) when an event
-        # source produced them - the LTD exports or the snapshot history; the
-        # resection_rescheduled_ proxy otherwise. The window logic mirrors the buckets in
-        # build_datewindow so the two implementations reconcile.
+        # source produced them. The window logic mirrors build_datewindow.
         if M3_EVENTS and canc is not None:
             ed = canc["event_date"]
             if undated:
@@ -596,15 +595,15 @@ def build_events(A, canc, tidy, meta):
         procurement cancelled so never performed). Dropping them here is what made the period
         columns silently exclude failures."""
         d = df[df[valcol].notna()] if valcol else df
-        for _, r in d.iterrows():
-            dt = r[datecol]
+        for r in d.itertuples(index=False):
+            dt = getattr(r, datecol)
             if pd.isna(dt):
-                undated.append((r["atc"], metric,
-                                r.get("order_request__til_order_name", ""), datecol))
-            rows.append((r["atc"], GROUPS[order], metric, order, agg,
+                undated.append((r.atc, metric,
+                                getattr(r, "order_request__til_order_name", ""), datecol))
+            rows.append((r.atc, GROUPS[order], metric, order, agg,
                          dt.strftime("%Y-%m-%d") if pd.notna(dt) else "",
-                         float(r[valcol]) if valcol else 1.0,
-                         str(r[unitcol]) if unitcol else ""))
+                         float(getattr(r, valcol)) if valcol else 1.0,
+                         str(getattr(r, unitcol)) if unitcol else ""))
 
     # 1-2: enrollments by enrollment date; patients deduped to first enrollment per center
     emit(A, 1, NAME[1], "sum", "enrollment_date")
@@ -615,21 +614,15 @@ def build_events(A, canc, tidy, meta):
          unitcol="iovance_patient_id")
 
     # 3-7: TTP metrics by pickup date
-    # 3: cancellations. Real rule from an event source when present - the LTD exports or the
-    # snapshot history (event-grained, dated on the lost slot); the resection_rescheduled_
-    # proxy on the order table otherwise. Stage 2 decides the source and records it in
-    # run_meta.json.
-    _M3SRC = meta.get("m3_source", "proxy")
-    if _M3SRC in ("ltd", "hist"):
-        _cev = canc
-        if not len(_cev):
-            print(f"WARNING: run_meta.json says m3_source={_M3SRC!r} but "
-                  "ppr_cancellations.csv has no rows; metric 3 emits no events.")
-        _cev["event_date"] = pd.to_datetime(_cev["event_date"], errors="coerce")
-        _cev = _cev.rename(columns={"center_disp": "atc"})
-        emit(_cev, 3, NAME[3], "sum", "event_date")
-    else:
-        emit(A[A.ttp_cancel_le7 == 1], 3, NAME[3], "sum", "tumor_pickup_date")
+    _M3SRC = meta.get("m3_source")
+    if _M3SRC != "ltd":
+        raise ValueError(f"Metric 3 requires LTD events, received source {_M3SRC!r}.")
+    _cev = canc
+    if not len(_cev):
+        print("Metric 3 LTD inputs produced zero short-notice events.")
+    _cev["event_date"] = pd.to_datetime(_cev["event_date"], errors="coerce")
+    _cev = _cev.rename(columns={"center_disp": "atc"})
+    emit(_cev, 3, NAME[3], "sum", "event_date")
     emit(A[A.completed_ttp == 1], 4, NAME[4], "sum", "tumor_pickup_date")
     emit(A[A.scheduled_ttp == 1], 5, NAME[5], "sum", "tumor_pickup_date")
     ttp = A[A.tumor_pickup_date.notna()].sort_values("tumor_pickup_date")

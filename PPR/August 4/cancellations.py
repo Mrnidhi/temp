@@ -11,18 +11,16 @@ THE RULE
     the slot could not realistically be refilled, so it counts. The event belongs to the LOST
     slot date, not to the day the change was entered.
 
-TWO SOURCES, ONE RULE
-    Preferred: the LTD_Reschedules and LTD_Cancellations exports. Maintained upstream, current
-    to the present, and they already carry a direction flag and a cancellation reason.
-    Fallback: walking the order snapshot history. Kept because that export is what the
-    test sample has, and because it covers the period before the LTD tables were available.
-    Both feed apply_rule() below, so there is still one definition of the threshold.
+ONE EVENT SOURCE
+    LTD_Reschedules and LTD_Cancellations are the only analytics inputs for metric 3. They
+    record the cancellation or reschedule itself, including its recorded timestamp and lost
+    slot. bai_list_of_orders_hist is snapshot history and may be retained only for archive
+    diagnosis; it is never an event-source fallback and is never added to the LTD events.
 
 GRAIN AND DIRECTION
     Both are open business questions, so both are named constants here rather than decisions
     buried in the code.
 """
-import glob
 import os
 import re
 
@@ -103,15 +101,34 @@ def _has(df, *names):
 
 
 def _dates(s, label):
-    """Parse a date column and stop if it mostly failed. A silently unparsed date column would
-    zero the metric instead of raising."""
-    # format="mixed" because the exports carry a date column and a timestamp column side by
-    # side, in whatever display format the download produced.
-    out = pd.to_datetime(s, errors="coerce", format="mixed")
-    if len(out) and out.isna().mean() > 0.5:
-        raise ValueError(f"{label} did not parse; sample values: "
-                         f"{s.dropna().astype(str).head(3).tolist()}")
+    """Parse dates while allowing genuinely blank lost-slot dates only."""
+    raw = s.astype("string").str.strip()
+    missing = raw.isna() | raw.eq("")
+    out = pd.to_datetime(raw, errors="coerce")
+    bad = ~missing & out.isna()
+    if bad.any():
+        raise ValueError(f"{label} has {int(bad.sum())} non-blank value(s) that did not parse; "
+                         f"sample values: {raw[bad].head(3).tolist()}")
     return out.dt.normalize()
+
+
+def _required_order(s, label="ORDER_ID"):
+    out = s.astype("string").str.strip()
+    bad = out.isna() | out.eq("")
+    if bad.any():
+        raise ValueError(f"{label} has {int(bad.sum())} blank order id(s); cannot map an event "
+                         "to a centre.")
+    return out
+
+
+def _required_direction(s):
+    out = s.astype("string").str.strip()
+    bad = out.isna() | out.eq("") | ~out.isin(COUNT_DIRECTIONS)
+    if bad.any():
+        raise ValueError("RESCHEDULED_CATEGORY contains blank or unmapped value(s): "
+                         f"{sorted(out[bad].dropna().unique().tolist())[:10]}. "
+                         f"Allowed values: {sorted(COUNT_DIRECTIONS)}")
+    return out
 
 
 # -------------------------------------------------------------------------------- the rule
@@ -150,7 +167,7 @@ def apply_rule(df, threshold_days=THRESHOLD_DAYS, directions=None):
         "kind":        d["kind"].values,
         "direction":   (d["direction"] if "direction" in d.columns else blank).values,
         "reason":      (d["reason"] if "reason" in d.columns else blank).values,
-    })
+    }, index=d.index)
     out.attrs["drops"] = {
         "rows in":                     int(len(df)),
         "no slot was ever booked":     int(no_slot.sum()),
@@ -162,9 +179,9 @@ def apply_rule(df, threshold_days=THRESHOLD_DAYS, directions=None):
     return out
 
 
-# ------------------------------------------------------- source 1: LTD exports (preferred)
+# ------------------------------------------------------- source: LTD event exports
 def find_ltd(input_dir):
-    """(reschedules path, cancellations path). Either may be None."""
+    """Return the required (reschedules path, cancellations path)."""
     return (_find(input_dir, "ltd_reschedules", "reschedules"),
             _find(input_dir, "ltd_cancellations", "cancellations"))
 
@@ -172,18 +189,25 @@ def find_ltd(input_dir):
 def ltd_events(input_dir):
     """Normalize both LTD exports into the rule's input shape. Returns (frame, filenames)."""
     resch_path, canc_path = find_ltd(input_dir)
+    missing = [name for path, name in ((resch_path, "LTD_Reschedules"),
+                                       (canc_path, "LTD_Cancellations")) if path is None]
+    if missing:
+        raise FileNotFoundError("Metric 3 requires both LTD event exports. Missing: "
+                                + ", ".join(missing)
+                                + ". bai_list_of_orders_hist is archive-only and is not a fallback.")
     parts, files = [], []
 
     if resch_path:
         r = _read_any(resch_path, ["ORDER_ID", "TTP_DATE_PREV"])
+        if not _has(r, "RESCHEDULED_CATEGORY"):
+            raise KeyError("LTD_Reschedules is missing required RESCHEDULED_CATEGORY")
         parts.append(pd.DataFrame({
-            "order":       _col(r, "ORDER_ID").astype(str).str.strip(),
+            "order":       _required_order(_col(r, "ORDER_ID")),
             "lost_slot":   _dates(_col(r, "TTP_DATE_PREV"), "TTP_DATE_PREV"),
             "recorded_on": _dates(_col(r, "SNAPSHOT_DATE_TIME_CURR"),
                                   "SNAPSHOT_DATE_TIME_CURR"),
             "kind":        "rescheduled",
-            "direction":   (_col(r, "RESCHEDULED_CATEGORY").astype(str).str.strip()
-                            if _has(r, "RESCHEDULED_CATEGORY") else np.nan),
+            "direction":   _required_direction(_col(r, "RESCHEDULED_CATEGORY")),
             "reason":      np.nan,
         }))
         files.append(os.path.basename(resch_path))
@@ -191,7 +215,7 @@ def ltd_events(input_dir):
     if canc_path:
         c = _read_any(canc_path, ["ORDER_ID", "TTP_DATE"])
         parts.append(pd.DataFrame({
-            "order":       _col(c, "ORDER_ID").astype(str).str.strip(),
+            "order":       _required_order(_col(c, "ORDER_ID")),
             # A cancellation clears the date, so its single TTP_DATE is the lost slot.
             "lost_slot":   _dates(_col(c, "TTP_DATE"), "TTP_DATE"),
             "recorded_on": _dates(_col(c, "SNAPSHOT_DATE_TIME_CURR"),
@@ -208,69 +232,11 @@ def ltd_events(input_dir):
     return pd.concat(parts, ignore_index=True), files
 
 
-# ------------------------------------------- source 2: walking the snapshot history (fallback)
-def find_hist_file(input_dir):
-    """The order snapshot history export: any file whose name contains 'hist'."""
-    pats = ["*hist*.csv", "*hist*.xlsx", "*orders_hist*.csv", "*orders_hist*.xlsx"]
-    hits = [f for p in pats for f in glob.glob(os.path.join(input_dir, p))
-            if not os.path.basename(f).startswith("~$")]
-    return sorted(set(hits), key=os.path.getmtime)[-1] if hits else None
-
-
-def _parse_load(s):
-    """load_datetime is a string like 20241007T024217; take the date part."""
-    t = s.astype(str).str.strip().str.replace("-", "", regex=False)
-    return pd.to_datetime(t.str[:8], format="%Y%m%d", errors="coerce")
-
-
-def hist_events(input_dir):
-    """Walk each order's snapshots and normalize the changes into the rule's input shape."""
-    path = find_hist_file(input_dir)
-    if path is None:
-        return None, []
-    h = _read_any(path, ["record_number"])
-
-    d = pd.DataFrame({
-        "order":  _col(h, "order_request__til_order_name", "til_order_name",
-                       "til_order_number").astype(str).str.strip(),
-        "rec":    pd.to_numeric(_col(h, "record_number"), errors="coerce"),
-        "snap":   _parse_load(_col(h, "load_datetime")),
-        "ttp":    pd.to_datetime(_col(h, "tumor_tissue_pick_up_date", "tumor_pickup_date"),
-                                 errors="coerce"),
-        "center": _col(h, "atc").astype(str).str.strip(),
-    })
-    if d["snap"].isna().mean() > 0.5:
-        raise ValueError("load_datetime did not parse in the history file; print a few raw "
-                         "values and adjust cancellations._parse_load().")
-
-    d = d.sort_values(["order", "rec"])
-    d["prev_ttp"] = d.groupby("order")["ttp"].shift(1)
-    moved = d[d.prev_ttp.notna() & (d.ttp.isna() | (d.ttp != d.prev_ttp))].copy()
-
-    return pd.DataFrame({
-        "center":      moved["center"].values,
-        "order":       moved["order"].values,
-        "lost_slot":   moved["prev_ttp"].values,
-        "recorded_on": moved["snap"].values,
-        "kind":        np.where(moved["ttp"].isna(), "cancelled", "rescheduled"),
-        # No direction flag in this export, so derive it the same way the LTD table labels it.
-        "direction":   np.where(moved["ttp"].isna(), None,
-                                np.where(moved["ttp"] > moved["prev_ttp"],
-                                         "Postponed", "Moved Up")),
-        "reason":      np.nan,
-    }), [os.path.basename(path)]
-
-
 # ------------------------------------------------------------------------------ entry point
 def cancellation_events(input_dir, threshold_days=THRESHOLD_DAYS,
                         directions=COUNT_DIRECTIONS):
-    """One row per short-notice lost slot. Prefers the LTD exports, falls back to the snapshot
-    history. Returns (events, source, filenames); source is 'ltd', 'hist' or 'none'."""
+    """One row per short-notice LTD event. Returns source 'ltd' or 'none'."""
     frame, files = ltd_events(input_dir)
-    source = "ltd"
-    if frame is None:
-        frame, files = hist_events(input_dir)
-        source = "hist"
     if frame is None:
         return None, "none", []
-    return apply_rule(frame, threshold_days, directions), source, files
+    return apply_rule(frame, threshold_days, directions), "ltd", files

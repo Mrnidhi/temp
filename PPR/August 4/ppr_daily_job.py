@@ -30,9 +30,20 @@ SOURCES = ["bai_list_of_orders", "bai_tumor_documentation", "bai_infusion",
            "ltd_reschedules", "ltd_cancellations"]
 OPTIONAL = {"bai_slot_data"}
 LTD = {"ltd_reschedules", "ltd_cancellations"}
+LTD_COLUMNS = {
+    "ltd_reschedules": ["order_id", "ttp_date_prev", "snapshot_date_time_curr",
+                          "rescheduled_category"],
+    "ltd_cancellations": ["order_id", "ttp_date", "snapshot_date_time_curr",
+                            "cancellation_reason"],
+}
 
 EVENTS_TABLE = "ppr_events"
 ORDER_TABLE = "ppr_order_master"
+
+EVENT_COLUMNS = [
+    "center", "metric_group", "metric", "metric_order", "agg", "event_date", "value",
+    "unit", "col_label", "col_order", "cell_color", "col_group", "col_group_order",
+]
 
 # The reference table carries the fields a metric can be traced back through.
 ORDER_COLUMNS = [
@@ -92,28 +103,29 @@ def connect(secret_arn):
         user=c["username"], password=c["password"])
 
 
-def fetch_frames(conn, schema, allow_proxy_m3):
+def fetch_frames(conn, schema):
     frames = {}
     cur = conn.cursor()
     for table in SOURCES:
         try:
-            cur.execute(f'select * from "{schema}"."{table}"')
+            projection = ", ".join(LTD_COLUMNS.get(table, ["*"]))
+            cur.execute(f'select {projection} from "{schema}"."{table}"')
         except Exception as e:
             conn.rollback()
             if table in OPTIONAL:
                 print(f"optional table {schema}.{table} not readable, skipping ({e})")
                 frames[table] = None
                 continue
-            if table in LTD and allow_proxy_m3:
-                print(f"{schema}.{table} not readable, proxy run allowed ({e})")
-                continue
             raise
         df = cur.fetch_dataframe()
         print(f"{schema}.{table}: {len(df)} rows")
-        if table in LTD and len(df) == 0 and not allow_proxy_m3:
-            sys.exit(f"{schema}.{table} is empty. Metric 3 would degrade to the "
-                     "proxy flag. Fix the load, or pass --allow_proxy_m3 true if "
-                     "a proxy run is explicitly accepted.")
+        if table in LTD:
+            missing = set(LTD_COLUMNS[table]) - set(df.columns)
+            if missing:
+                sys.exit(f"{schema}.{table} is missing required column(s): {sorted(missing)}")
+        if table in LTD and len(df) == 0:
+            sys.exit(f"{schema}.{table} is empty. Check the LTD load before publishing "
+                     "a metric-3 result.")
         frames[table] = df
     cur.close()
     return frames
@@ -151,24 +163,26 @@ def main():
         sys.exit("required arguments: --secret_arn --output_prefix --copy_role_arn")
     source_schema = arg("source_schema", "infinity")
     reporting_schema = arg("reporting_schema", "ppr")
-    allow_proxy_m3 = arg("allow_proxy_m3", "false").lower() == "true"
     with_order_master = arg("with_order_master", "true").lower() == "true"
     asof_override = arg("asof")
 
     conn = connect(secret_arn)
-    frames = fetch_frames(conn, source_schema, allow_proxy_m3)
+    frames = fetch_frames(conn, source_schema)
 
     # The additivity and reconciliation gates live inside the transformation.
     # A failed gate raises here, before anything is written.
     events, tidy, order_master, canc, undated, meta = ppr_transform.run(
         frames, asof_override)
 
+    if events.columns.tolist() != EVENT_COLUMNS:
+        raise ValueError("ppr_events column contract changed. Expected "
+                         f"{EVENT_COLUMNS}, received {events.columns.tolist()}")
+
     asof = meta["asof"]
-    m3 = meta.get("m3_source", "proxy")
+    m3 = meta.get("m3_source")
     print(f"transformed. asof={asof} m3_source={m3} events={len(events)} rows")
-    if m3 == "proxy" and not allow_proxy_m3:
-        sys.exit("metric 3 fell back to the proxy flag. Pass --allow_proxy_m3 true "
-                 "only if that is an accepted run.")
+    if m3 != "ltd":
+        sys.exit(f"Metric 3 source must be 'ltd', received {m3!r}.")
 
     bucket, out_key = split_s3(output_prefix)
     events_url = stage(events, bucket, f"{out_key}/asof={asof}/{EVENTS_TABLE}.csv")

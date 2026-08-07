@@ -81,8 +81,8 @@ infusion date. Not a single cohort date across the board.
 ## If it becomes SQL
 
 Most of the 13 metrics are counts and medians with a date filter, so they translate directly.
-The two that look procedural are not: the 7 day rule is a `LAG` over the snapshot history, and
-the Top 10 and Top 40 tiers are a `RANK` over enrolment counts.
+The two that look procedural are not: the 7 day rule compares the LTD event's recorded date to
+its lost-slot date, and the Top 10 and Top 40 tiers are a `RANK` over enrolment counts.
 
 The cell-by-cell reconciliation in stage 4 is the natural migration test. Move one metric at a
 time and check it against the Python output before moving the next.

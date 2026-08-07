@@ -45,7 +45,6 @@ Refresh Tableau only after the job succeeds.
     --reporting_schema     default ppr
     --with_order_master    default true, set false for the final table only
     --asof YYYY-MM-DD      rerun an older cut
-    --allow_proxy_m3 true  accept a run where metric 3 falls back to the proxy
 
 ## Source tables
 

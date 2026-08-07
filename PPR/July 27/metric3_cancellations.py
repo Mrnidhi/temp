@@ -1,8 +1,8 @@
 """
-Metric 3 diagnostic: TTPs Cancelled or Rescheduled within 7 Days.
+History archive diagnostic: TTP changes within 7 days.
 
-Standalone check on the snapshot history, run before the pipeline figure is trusted. Shares
-the rule with pipeline/cancellations.py so the two cannot drift.
+This script is for one-time history checks only. It does not feed Metric 3, the dashboard, or
+the LTD endpoint.
 
 Walk each order's snapshots in record_number order. Whenever the booked pickup date moves or
 is cleared, measure from that snapshot's load date back to the date that had been booked. A
@@ -25,16 +25,6 @@ import pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
 THRESHOLD_DAYS = 7
-
-# Shared rule, imported so this script can prove it agrees with the pipeline. Compared
-# against the history walk specifically, since that is what this script does; the pipeline
-# itself prefers the LTD exports when they are present.
-try:
-    sys.path.insert(0, os.path.join(HERE, "pipeline"))
-    from cancellations import apply_rule as _shared_rule
-    from cancellations import hist_events as _shared_hist
-except Exception:
-    _shared_rule = _shared_hist = None
 
 # Accept any of the spellings these columns appear under.
 ALIASES = {
@@ -130,36 +120,22 @@ def main():
     fwd = moved[moved.days_notice >= 0]
     late = fwd[fwd.days_notice <= THRESHOLD_DAYS]
 
-    # The pipeline and this script must return the same count. directions=None compares the
-    # threshold alone, so narrowing COUNT_DIRECTIONS does not read as a rule mismatch.
-    if _shared_hist is not None:
-        _frame, _ = _shared_hist(DATA)
-        _n = len(_shared_rule(_frame, THRESHOLD_DAYS, directions=None))
-        print(f"\n[shared-rule check] pipeline/cancellations.py returns {_n} events; "
-              f"this script returns {len(late)} -> "
-              + ("match" if _n == len(late) else "MISMATCH, investigate before trusting either"))
-
     print("\n" + "=" * 64)
     print("CHANGES TO A BOOKED PICKUP DATE")
     print(f"  any change            {len(moved):,}")
     print(f"  made before the date  {len(fwd):,}")
     print(f"  within 3 days         {(fwd.days_notice <= 3).sum():,}")
-    print(f"  within 7 days         {len(late):,}   <- METRIC 3")
+    print(f"  within 7 days         {len(late):,}   <- archive observation only")
     print(f"  of which cancelled    {(late.kind == 'cancelled').sum():,}")
     print(f"  of which rescheduled  {(late.kind == 'rescheduled').sum():,}")
     print(f"  distinct orders hit   {late.ord.nunique():,}")
 
-    print("\nSANITY CHECK")
-    print("  The old proxy (resection_rescheduled_) flags 347 orders / 26.8%.")
-    print(f"  This returns {late.ord.nunique():,} orders. If it is anywhere near 347,")
-    print("  the logic is wrong, not the data. Send the numbers back before trusting them.")
-
     per = (late.groupby("atc").size().sort_values(ascending=False)
-           .rename("ttps_cancelled_or_resched_le7"))
+           .rename("history_changes_le7"))
     print("\nPER CENTRE (non-zero only)")
     print(per.to_string() if len(per) else "  none")
 
-    out = os.path.join(HERE, "metric3_by_center.csv")
+    out = os.path.join(HERE, "history_snapshot_diagnostic_by_center.csv")
     per.to_csv(out)
     print(f"\nwrote {out}")
 

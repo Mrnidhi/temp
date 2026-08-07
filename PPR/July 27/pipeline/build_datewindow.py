@@ -34,15 +34,15 @@ def emit(df, order, metric, agg, datecol, valcol=None, unitcol=None):
     procurement cancelled so never performed). Dropping them here is what made the period
     columns silently exclude failures."""
     d = df[df[valcol].notna()] if valcol else df
-    for _, r in d.iterrows():
-        dt = r[datecol]
+    for r in d.itertuples(index=False):
+        dt = getattr(r, datecol)
         if pd.isna(dt):
-            undated.append((r["atc"], metric,
-                            r.get("order_request__til_order_name", ""), datecol))
-        rows.append((r["atc"], GROUPS[order], metric, order, agg,
+            undated.append((r.atc, metric,
+                            getattr(r, "order_request__til_order_name", ""), datecol))
+        rows.append((r.atc, GROUPS[order], metric, order, agg,
                      dt.strftime("%Y-%m-%d") if pd.notna(dt) else "",
-                     float(r[valcol]) if valcol else 1.0,
-                     str(r[unitcol]) if unitcol else ""))
+                     float(getattr(r, valcol)) if valcol else 1.0,
+                     str(getattr(r, unitcol)) if unitcol else ""))
 
 # 1-2: enrollments by enrollment date; patients deduped to first enrollment per center
 emit(A, 1, NAME[1], "sum", "enrollment_date")
@@ -53,21 +53,15 @@ emit(A, 2, NAME[2], "distinct", "enrollment_date",
      unitcol="iovance_patient_id")
 
 # 3-7: TTP metrics by pickup date
-# 3: cancellations. Real rule from an event source when present - the LTD exports or the
-# snapshot history (event-grained, dated on the lost slot); the resection_rescheduled_
-# proxy on the order table otherwise. Stage 2 decides the source and records it in
-# run_meta.json.
-_M3SRC = json.load(open(os.path.join(ANA, "run_meta.json"))).get("m3_source", "proxy")
-if _M3SRC in ("ltd", "hist"):
-    _cev = pd.read_csv(os.path.join(ANA, "ppr_cancellations.csv"))
-    if not len(_cev):
-        print(f"WARNING: run_meta.json says m3_source={_M3SRC!r} but "
-              "ppr_cancellations.csv has no rows; metric 3 emits no events.")
-    _cev["event_date"] = pd.to_datetime(_cev["event_date"], errors="coerce")
-    _cev = _cev.rename(columns={"center_disp": "atc"})
-    emit(_cev, 3, NAME[3], "sum", "event_date")
-else:
-    emit(A[A.ttp_cancel_le7 == 1], 3, NAME[3], "sum", "tumor_pickup_date")
+_M3SRC = json.load(open(os.path.join(ANA, "run_meta.json"))).get("m3_source")
+if _M3SRC != "ltd":
+    raise SystemExit(f"Metric 3 requires LTD events, received source {_M3SRC!r}.")
+_cev = pd.read_csv(os.path.join(ANA, "ppr_cancellations.csv"))
+if not len(_cev):
+    print("Metric 3 LTD inputs produced zero short-notice events.")
+_cev["event_date"] = pd.to_datetime(_cev["event_date"], errors="coerce")
+_cev = _cev.rename(columns={"center_disp": "atc"})
+emit(_cev, 3, NAME[3], "sum", "event_date")
 emit(A[A.completed_ttp == 1], 4, NAME[4], "sum", "tumor_pickup_date")
 emit(A[A.scheduled_ttp == 1], 5, NAME[5], "sum", "tumor_pickup_date")
 ttp = A[A.tumor_pickup_date.notna()].sort_values("tumor_pickup_date")

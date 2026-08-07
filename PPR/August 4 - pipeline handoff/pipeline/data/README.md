@@ -17,8 +17,8 @@ matches `bai_list_of_orders`.
 
 ## Required for metric 3
 
-Both, from the uploaded-files layer in the query explorer. Together they are the complete
-population of short-notice lost slots, current to the present.
+Both, from the uploaded-files layer in the query explorer. Together they are the only
+per-event inputs for metric 3.
 
 | filename contains   | Infinity source     | grain |
 |---------------------|---------------------|-------|
@@ -27,9 +27,9 @@ population of short-notice lost slots, current to the present.
 
 Neither carries a centre, so stage 2 joins them to the order table on the order id.
 
-Without them, stage 2 falls back to walking `bai_list_of_orders_hist` if that file is present,
-and to the `resection_rescheduled_` proxy if it is not. Either fallback still completes the
-run, and the source used is printed and recorded in `analysis/run_meta.json`.
+Stage 2 stops if either export is missing. `bai_list_of_orders_hist` is archive-only snapshot
+evidence: it must not be used as a fallback or unioned with LTD events. The
+`resection_rescheduled_` order-level flag is also not a substitute for metric 3.
 
 ## Optional
 
@@ -37,11 +37,11 @@ run, and the source used is printed and recorded in `analysis/run_meta.json`.
 |-------------------|--------------------|
 | `bai_slot_data`   | produces `has_slot`, which reaches the Tableau extract but drives no metric. Diagnostic only |
 
-## No longer needed
+## Archive-only / no pipeline use
 
 | filename contains         | why |
 |---------------------------|-----|
-| `bai_list_of_orders_hist` | superseded by the two LTD exports, which start two months earlier and run to the present |
+| `bai_list_of_orders_hist` | retained only for one-time history/reconciliation checks; no analytics stage reads it |
 | `bai_ttp_data`            | no stage reads it |
 | `veeva_call_activity`     | no stage reads it |
 
